@@ -20,11 +20,24 @@ from smartorder.storage import Store
 
 
 ROOT = Path(__file__).resolve().parent
-PRIVATE = Path(os.environ.get("SMARTORDER_HOME", ROOT / ".local")).resolve()
 DEFAULT_EXCEL = ROOT / "Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx"
 TODAY = datetime.now(ZoneInfo("America/El_Salvador")).date()
 
 st.set_page_config(page_title="SmartOrder AI | Vitali", page_icon="📦", layout="wide")
+
+
+def environment_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+PUBLIC_DEMO_FORCED = environment_flag("SMARTORDER_PUBLIC_DEMO")
+PUBLIC_DEMO = PUBLIC_DEMO_FORCED or st.query_params.get("demo") == "1"
+configured_home = os.environ.get("SMARTORDER_HOME")
+if PUBLIC_DEMO:
+    demo_root = Path(configured_home).resolve() if configured_home else ROOT
+    PRIVATE = (demo_root / "public-demo").resolve()
+else:
+    PRIVATE = Path(configured_home or ROOT / ".local").resolve()
 st.markdown("""
 <style>
   :root { --ink:#173247; --green:#397657; --paper:#f5f8f5; --line:#d6e2da; }
@@ -55,6 +68,21 @@ def local_demo_mode() -> bool:
     )
 
 
+def demo_mode() -> bool:
+    return PUBLIC_DEMO or local_demo_mode()
+
+
+def public_demo_entry() -> None:
+    if demo_mode():
+        return
+    st.caption("¿Solo quiere probar el sistema con datos de ejemplo?")
+    if st.button(
+        ":material/science: Probar demo pública", width="content", type="secondary"
+    ):
+        st.query_params["demo"] = "1"
+        st.rerun()
+
+
 @st.cache_data(show_spinner=False)
 def parsed(raw: bytes) -> SalesData:
     return load_sales(raw)
@@ -79,6 +107,7 @@ def header(role: str, data: SalesData | None = None) -> None:
 def setup_or_login(store: Store) -> dict:
     if not store.has_users():
         header("Configuración inicial")
+        public_demo_entry()
         local_setup = (os.environ.get("SMARTORDER_LOCAL_MODE") == "1"
                        and st.get_option("server.address") in ("127.0.0.1", "::1"))
         setup_code = os.environ.get("SMARTORDER_SETUP_CODE", "")
@@ -119,9 +148,10 @@ def setup_or_login(store: Store) -> dict:
     st.session_state.pop("user_id", None)
     st.session_state.pop("session_version", None)
     header("Acceso")
-    if local_demo_mode():
+    public_demo_entry()
+    if demo_mode():
         st.info(
-            "Modo de presentación local. Puede recorrer ambos perfiles sin configurar cuentas."
+            "Modo de presentación. Puede recorrer ambos perfiles sin configurar cuentas."
         )
         admin_column, seller_column = st.columns(2)
         if admin_column.button(
@@ -141,7 +171,9 @@ def setup_or_login(store: Store) -> dict:
                 st.session_state["user_id"] = candidate["id"]
                 st.session_state["session_version"] = candidate["session_version"]
                 st.rerun()
-        st.caption("El modo demo usa datos sintéticos y almacenamiento separado en este equipo.")
+        st.caption(
+            "La demo usa datos sintéticos y almacenamiento aislado. No contiene información real."
+        )
     with st.form("login"):
         username = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
@@ -783,16 +815,22 @@ def production_queue(store: Store, user: dict, data: SalesData | None) -> None:
 
 def main() -> None:
     store = Store(PRIVATE / "smartorder.sqlite3")
-    if local_demo_mode():
+    if demo_mode():
         seed_local_demo(store, PRIVATE / "uploads", TODAY)
     user = setup_or_login(store)
-    if local_demo_mode():
+    if demo_mode():
         st.sidebar.badge("Demo académica", color="blue", icon=":material/science:")
     st.sidebar.caption(f"{user['username']} · {user['role']}")
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.pop("user_id", None)
         st.session_state.pop("session_version", None)
         st.rerun()
+    if PUBLIC_DEMO and not PUBLIC_DEMO_FORCED:
+        if st.sidebar.button(":material/logout: Salir de la demo"):
+            st.session_state.pop("user_id", None)
+            st.session_state.pop("session_version", None)
+            st.query_params.clear()
+            st.rerun()
     navigation = (["Resumen", "Centro IA", "Producción", "Datos y modelo", "Usuarios", "Historial"]
                   if user["role"] == "admin" else
                   ["Mi cartera", "Recomendaciones", "Historial"])
