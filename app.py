@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from smartorder.data import SalesData, load_sales
+from smartorder.demo import DEMO_ADMIN, DEMO_SELLER, seed_local_demo
 from smartorder.forecast import DemandForecaster, ForecastReport
 from smartorder.orders import OperationalInput, export_production, suggest_order
 from smartorder.storage import Store
@@ -40,6 +41,18 @@ st.markdown("""
   .stButton > button[kind="primary"] { background:#397657; border-color:#397657; }
 </style>
 """, unsafe_allow_html=True)
+
+
+def local_demo_mode() -> bool:
+    safe_addresses = ("127.0.0.1", "::1")
+    return (
+        os.environ.get("SMARTORDER_DEMO_MODE") == "1"
+        and os.environ.get("SMARTORDER_LOCAL_MODE") == "1"
+        and (
+            st.get_option("server.address") in safe_addresses
+            or os.environ.get("STREAMLIT_SERVER_ADDRESS") in safe_addresses
+        )
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -106,6 +119,29 @@ def setup_or_login(store: Store) -> dict:
     st.session_state.pop("user_id", None)
     st.session_state.pop("session_version", None)
     header("Acceso")
+    if local_demo_mode():
+        st.info(
+            "Modo de presentación local. Puede recorrer ambos perfiles sin configurar cuentas."
+        )
+        admin_column, seller_column = st.columns(2)
+        if admin_column.button(
+            ":material/admin_panel_settings: Entrar como administración",
+            width="stretch", type="primary",
+        ):
+            candidate = store.authenticate(*DEMO_ADMIN)
+            if candidate:
+                st.session_state["user_id"] = candidate["id"]
+                st.session_state["session_version"] = candidate["session_version"]
+                st.rerun()
+        if seller_column.button(
+            ":material/badge: Entrar como vendedor", width="stretch"
+        ):
+            candidate = store.authenticate(*DEMO_SELLER)
+            if candidate:
+                st.session_state["user_id"] = candidate["id"]
+                st.session_state["session_version"] = candidate["session_version"]
+                st.rerun()
+        st.caption("El modo demo usa datos sintéticos y almacenamiento separado en este equipo.")
     with st.form("login"):
         username = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
@@ -135,10 +171,10 @@ def source_bytes(store: Store) -> tuple[bytes | None, str]:
 
 def metrics(rows: pd.DataFrame) -> None:
     cells = st.columns(4)
-    cells[0].metric("Ventas del período", f"${rows['Monto_Venta_USD'].sum():,.0f}")
-    cells[1].metric("Registros de venta", f"{len(rows):,}")
-    cells[2].metric("Clientes con ventas", rows["Cliente"].nunique())
-    cells[3].metric("Productos vendidos", rows["Producto"].nunique())
+    cells[0].metric("Ventas del período", f"${rows['Monto_Venta_USD'].sum():,.0f}", border=True)
+    cells[1].metric("Registros de venta", f"{len(rows):,}", border=True)
+    cells[2].metric("Clientes con ventas", rows["Cliente"].nunique(), border=True)
+    cells[3].metric("Productos vendidos", rows["Producto"].nunique(), border=True)
 
 
 def model_metrics(report: ForecastReport) -> None:
@@ -146,6 +182,8 @@ def model_metrics(report: ForecastReport) -> None:
     display = report.metrics_by_product.rename(columns={
         "WAPE_XGBoost": "WAPE XGBoost (%)", "WAPE_promedio": "WAPE promedio (%)",
         "MAE_XGBoost": "MAE XGBoost", "MAE_promedio": "MAE promedio",
+        "Metodo_ganador": "Método aplicado", "Mejora_WAPE_pp": "Ventaja XGBoost (pp)",
+        "Error_P80_metodo": "Error orientativo P80",
     })
     st.dataframe(display.round(1), hide_index=True, width="stretch")
     st.caption(
@@ -201,9 +239,18 @@ def admin_home(store: Store, user: dict, data: SalesData) -> None:
     decisions = store.decisions(user["id"])
     st.subheader("Pedidos internos")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Pendientes de revisión", sum(d["estado"] == "Pendiente" for d in decisions))
-    c2.metric("Listos para producción", sum(d["estado"] == "Aprobado" for d in decisions))
-    c3.metric("Exportados a producción", sum(d["estado"] == "Exportado" for d in decisions))
+    c1.metric(
+        "Pendientes de revisión", sum(d["estado"] == "Pendiente" for d in decisions),
+        border=True,
+    )
+    c2.metric(
+        "Listos para producción", sum(d["estado"] == "Aprobado" for d in decisions),
+        border=True,
+    )
+    c3.metric(
+        "Exportados a producción", sum(d["estado"] == "Exportado" for d in decisions),
+        border=True,
+    )
     active_sellers = sum(
         u["role"] == "vendedor" and u["active"] for u in store.list_users(user["id"])
     )
@@ -214,13 +261,24 @@ def admin_home(store: Store, user: dict, data: SalesData) -> None:
 def admin_data(store: Store, user: dict, data: SalesData | None, raw: bytes | None,
                filename: str) -> None:
     st.header("Datos y modelo")
-    st.write("Suba un XLSX con las diez columnas de ventas. Cada carga activada sustituye el histórico anterior.")
+    st.write(
+        "Suba un XLSX con Fecha, Cliente, Producto, Cantidad y Precio unitario. "
+        "El importador reconoce nombres equivalentes y documenta los campos de segmentación faltantes. "
+        "Cada carga activada sustituye el histórico anterior."
+    )
     if data is not None:
         st.info(f"Activo: {filename} · {len(data.rows):,} registros · "
                 f"{data.first_date:%d/%m/%Y} a {data.last_date:%d/%m/%Y}")
         if data.recalculated_amounts:
             st.warning(f"Se calcularon {data.recalculated_amounts} montos sin valor guardado en Excel.")
         st.caption(f"Hojas leídas: {', '.join(data.sheets)} · Huella SHA-256: {data.digest[:16]}…")
+        if data.normalization_notes:
+            with st.expander(
+                f"Adaptaciones aplicadas al archivo ({len(data.normalization_notes)})",
+                icon=":material/rule:",
+            ):
+                for note in data.normalization_notes:
+                    st.markdown(f"- {note}")
     uploaded = st.file_uploader("Cargar histórico de ventas", type=["xlsx"], max_upload_size=20)
     if uploaded is not None:
         try:
@@ -254,6 +312,87 @@ def admin_data(store: Store, user: dict, data: SalesData | None, raw: bytes | No
     if previous:
         st.subheader("Cargas anteriores")
         st.dataframe(pd.DataFrame(previous), hide_index=True)
+
+
+def admin_ai_center(data: SalesData, raw: bytes) -> None:
+    st.header("Centro IA", icon=":material/model_training:")
+    st.write(
+        "Evidencia del entrenamiento, desempeño fuera de muestra y demanda proyectada. "
+        "Este panel explica cuándo usar XGBoost y cuándo conservar el promedio histórico."
+    )
+    as_of = max(TODAY, data.last_date + timedelta(days=1))
+    try:
+        report = forecasted(raw, as_of)
+    except ValueError as exc:
+        st.warning(f"No es posible evaluar el modelo: {exc}")
+        return
+
+    xgboost_wins = int((report.metrics_by_product["Metodo_ganador"] == "XGBoost").sum())
+    total_products = len(report.metrics_by_product)
+    with st.container(horizontal=True):
+        st.metric("Productos evaluados", total_products, border=True)
+        st.metric("XGBoost supera al promedio", xgboost_wins, border=True)
+        st.metric(
+            "WAPE mediano aplicado",
+            "No disponible" if report.median_wape is None else f"{report.median_wape:.1f}%",
+            border=True,
+        )
+        st.metric("Calidad de preparación", f"{data.quality_score}/100", border=True)
+
+    left, right = st.columns([3, 2])
+    with left:
+        with st.container(border=True):
+            st.subheader("Demanda proyectada por producto")
+            portfolio = report.rows.groupby("Producto", as_index=False).agg(
+                Pronostico_7d=("Pronostico_7d", "sum"),
+                Rango_bajo_7d=("Rango_bajo_7d", "sum"),
+                Rango_alto_7d=("Rango_alto_7d", "sum"),
+                Clientes=("Cliente", "nunique"),
+            ).sort_values("Pronostico_7d", ascending=False)
+            st.bar_chart(
+                portfolio.set_index("Producto")["Pronostico_7d"], horizontal=True
+            )
+            st.dataframe(
+                portfolio,
+                hide_index=True,
+                column_config={
+                    "Pronostico_7d": st.column_config.NumberColumn(
+                        "Pronóstico 7 días", format="%.1f"
+                    ),
+                    "Rango_bajo_7d": st.column_config.NumberColumn(
+                        "Rango bajo", format="%.1f"
+                    ),
+                    "Rango_alto_7d": st.column_config.NumberColumn(
+                        "Rango alto", format="%.1f"
+                    ),
+                },
+            )
+    with right:
+        with st.container(border=True):
+            st.subheader("Qué impulsa el modelo")
+            st.bar_chart(
+                report.feature_importance.head(8).set_index("Variable")["Importancia"],
+                horizontal=True,
+            )
+            st.caption(
+                "Importancia relativa del último entrenamiento. Describe el modelo; no prueba "
+                "causalidad comercial."
+            )
+
+    with st.container(border=True):
+        st.subheader("Comparación de métodos por producto")
+        model_metrics(report)
+
+    with st.container(border=True):
+        st.subheader("Decisiones que permite tomar")
+        st.markdown(
+            """
+            - **Planificar abastecimiento:** concentrar revisión en productos con mayor demanda proyectada.
+            - **Elegir el método más confiable:** aplicar XGBoost solo donde superó al promedio histórico.
+            - **Dimensionar incertidumbre:** usar el rango orientativo para preparar escenarios de inventario.
+            - **Mejorar la fuente:** priorizar campos faltantes que reducen la calidad y trazabilidad del análisis.
+            """
+        )
 
 
 def admin_users(store: Store, user: dict, data: SalesData | None) -> None:
@@ -355,9 +494,9 @@ def vendor_home(store: Store, user: dict, data: SalesData) -> None:
         return
     filtered = data.rows[data.rows["Cliente"].isin(allowed)]
     c1, c2, c3 = st.columns(3)
-    c1.metric("Clientes asignados", len(allowed))
-    c2.metric("Productos con ventas", filtered["Producto"].nunique())
-    c3.metric("Ventas registradas USD", f"${filtered['Monto_Venta_USD'].sum():,.0f}")
+    c1.metric("Clientes asignados", len(allowed), border=True)
+    c2.metric("Productos con ventas", filtered["Producto"].nunique(), border=True)
+    c3.metric("Ventas registradas USD", f"${filtered['Monto_Venta_USD'].sum():,.0f}", border=True)
     client = st.selectbox("Cliente", allowed)
     comparable_products(data, client, TODAY)
     st.caption("La recomendación detallada se encuentra en ‘Recomendaciones’.")
@@ -392,7 +531,9 @@ def vendor_recommendations(store: Store, user: dict, data: SalesData, raw: bytes
     st.caption(f"Horizonte: {as_of:%d/%m/%Y}–{as_of + timedelta(days=6):%d/%m/%Y}.")
     predictions = report.rows[report.rows["Cliente"] == client]
     st.dataframe(predictions.rename(columns={
-        "Producto": "Producto", "Pronostico_7d": "Pronóstico · 7 días",
+        "Producto": "Producto", "Nivel_atencion": "Atención",
+        "Pronostico_7d": "Pronóstico · 7 días",
+        "Rango_bajo_7d": "Rango bajo", "Rango_alto_7d": "Rango alto",
         "Metodo": "Método aplicado", "XGBoost_7d": "Estimación XGBoost",
         "Mismo_periodo_ano_anterior": "Mismos días · año anterior",
         "Promedio_semanal_mismo_mes": "Promedio semanal · mismo mes anterior",
@@ -401,13 +542,29 @@ def vendor_recommendations(store: Store, user: dict, data: SalesData, raw: bytes
     product = st.selectbox("Producto para revisar", predictions["Producto"].tolist())
     selected = predictions[predictions["Producto"] == product].iloc[0]
     st.subheader(product)
+    attention_color = {
+        "Alta": "red", "Media": "orange", "Baja": "green",
+        "Revisión necesaria": "blue",
+    }.get(selected["Nivel_atencion"], "gray")
+    st.badge(
+        f"Atención {selected['Nivel_atencion'].lower()}",
+        color=attention_color,
+        icon=":material/priority_high:",
+    )
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Pronóstico · 7 días", f"{selected['Pronostico_7d']:,.1f}")
-    c2.metric("Estimación XGBoost", f"{selected['XGBoost_7d']:,.1f}")
-    previous = selected["Mismo_periodo_ano_anterior"]
-    c3.metric("Mismos días, año anterior", "Sin dato" if pd.isna(previous) else f"{previous:,.1f}")
+    c1.metric("Pronóstico · 7 días", f"{selected['Pronostico_7d']:,.1f}", border=True)
+    c2.metric("Estimación XGBoost", f"{selected['XGBoost_7d']:,.1f}", border=True)
+    c3.metric(
+        "Rango orientativo",
+        f"{selected['Rango_bajo_7d']:,.1f}–{selected['Rango_alto_7d']:,.1f}",
+        border=True,
+    )
     recent = selected["Ultimos_28_dias"]
-    c4.metric("Ventas · 28 días previos", "Sin dato reciente" if pd.isna(recent) else f"{recent:,.1f}")
+    c4.metric(
+        "Ventas · 28 días previos",
+        "Sin dato reciente" if pd.isna(recent) else f"{recent:,.1f}",
+        border=True,
+    )
     st.caption(f"Método aplicado: {selected['Metodo']}. La estimación XGBoost se muestra para comparación.")
     st.write(selected["Situacion"])
     st.caption("Cantidad en la medida original del Excel. Confirme kg, unidades o docenas antes de pedir.")
@@ -458,6 +615,32 @@ def vendor_recommendations(store: Store, user: dict, data: SalesData, raw: bytes
         st.warning("El inventario observado tiene más de siete días respecto al análisis. Verifíquelo antes de aprobar.")
     st.success(f"Pedido sugerido: {suggestion.suggested:g} {operational.unit}")
     st.caption(suggestion.reason)
+    with st.expander("Simular un escenario antes de enviar", icon=":material/tune:"):
+        st.caption("La simulación no modifica los datos guardados ni crea un pedido.")
+        scenario_left, scenario_middle, scenario_right = st.columns(3)
+        demand_change = scenario_left.slider(
+            "Cambio esperado de demanda", -40, 60, 0, 5, format="%d%%"
+        )
+        simulated_stock = scenario_middle.number_input(
+            "Inventario disponible simulado", min_value=0.0,
+            value=float(operational.stock), step=1.0,
+        )
+        simulated_pending = scenario_right.number_input(
+            "Pedidos pendientes simulados", min_value=0.0,
+            value=float(operational.pending), step=1.0,
+        )
+        scenario_operational = OperationalInput.create(
+            client, product, operational.unit, simulated_stock, simulated_pending,
+            operational.target_stock, operational.minimum, operational.pack_multiple,
+            operational.as_of,
+        )
+        scenario_prediction = float(selected["Pronostico_7d"]) * (1 + demand_change / 100)
+        scenario_order = suggest_order(scenario_prediction, scenario_operational)
+        st.metric(
+            "Pedido del escenario", f"{scenario_order.suggested:g} {operational.unit}",
+            delta=f"{float(scenario_order.suggested - suggestion.suggested):+,.0f} vs. sugerido",
+            border=True,
+        )
     with st.form(f"decision_{client}_{product}_{as_of}"):
         approved = st.number_input("Cantidad que propone solicitar", min_value=0.0,
                                    value=float(suggestion.suggested), step=1.0)
@@ -600,13 +783,17 @@ def production_queue(store: Store, user: dict, data: SalesData | None) -> None:
 
 def main() -> None:
     store = Store(PRIVATE / "smartorder.sqlite3")
+    if local_demo_mode():
+        seed_local_demo(store, PRIVATE / "uploads", TODAY)
     user = setup_or_login(store)
+    if local_demo_mode():
+        st.sidebar.badge("Demo académica", color="blue", icon=":material/science:")
     st.sidebar.caption(f"{user['username']} · {user['role']}")
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.pop("user_id", None)
         st.session_state.pop("session_version", None)
         st.rerun()
-    navigation = (["Resumen", "Producción", "Datos y modelo", "Usuarios", "Historial"]
+    navigation = (["Resumen", "Centro IA", "Producción", "Datos y modelo", "Usuarios", "Historial"]
                   if user["role"] == "admin" else
                   ["Mi cartera", "Recomendaciones", "Historial"])
     page = st.sidebar.radio("Navegación", navigation)
@@ -624,6 +811,8 @@ def main() -> None:
         production_queue(store, user, data)
     elif page == "Datos y modelo":
         admin_data(store, user, data, raw, filename)
+    elif page == "Centro IA" and data is not None and raw is not None:
+        admin_ai_center(data, raw)
     elif page == "Historial":
         history(store, user)
     elif data is None:
