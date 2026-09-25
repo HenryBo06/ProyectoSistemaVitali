@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .streamlit/secrets.toml
 .local/
+.local-demo/
+.apptest-demo/
 
 # Fuentes recibidas localmente; el repositorio público solo contiene código y documentación.
 *.pdf

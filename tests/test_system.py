@@ -8,6 +8,7 @@ import unittest
 from openpyxl import Workbook, load_workbook
 
 from smartorder.data import HEADERS, load_sales
+from smartorder.demo import DEMO_ADMIN, DEMO_SELLER, seed_local_demo
 from smartorder.forecast import DemandForecaster
 from smartorder.orders import OperationalInput, export_production, suggest_order
 from smartorder.storage import Store
@@ -59,6 +60,22 @@ class SalesTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "250,000 combinaciones"):
             load_sales(workbook_bytes(records))
 
+    def test_accepts_business_aliases_and_documents_missing_segments(self):
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "Pedidos_2025"
+        sheet.append(("Fecha", "Cliente", "Tipo_Cliente", "Producto", "Categoria",
+                      "Cantidad", "Precio_Unitario_USD", "Venta_Total_USD"))
+        sheet.append((datetime(2025, 1, 1), "Cliente A", "Distribuidor", "Pollo",
+                      "Fresco", 12, 3.5, 42))
+        stream = BytesIO()
+        book.save(stream)
+        data = load_sales(stream.getvalue())
+        self.assertEqual(data.rows.iloc[0]["Cantidad_kg_unid"], 12)
+        self.assertEqual(data.rows.iloc[0]["Canal_Venta"], "Distribuidor")
+        self.assertEqual(data.rows.iloc[0]["Zona_Geografica"], "No especificado")
+        self.assertTrue(any("Zona_Geografica" in note for note in data.normalization_notes))
+
 
 class ForecastTests(unittest.TestCase):
     def test_minimum_coverage_is_96_calendar_days(self):
@@ -92,6 +109,27 @@ class ForecastTests(unittest.TestCase):
         report = DemandForecaster().run(load_sales(workbook_bytes(records)), date(2026, 1, 1))
         self.assertEqual(set(report.metrics_by_product["Producto"]), {"Pollo", "Huevos"})
         self.assertEqual(len(report.metrics_by_product), 2)
+        self.assertIn("Metodo_ganador", report.metrics_by_product)
+        self.assertIn("Rango_bajo_7d", report.rows)
+        self.assertIn("Rango_alto_7d", report.rows)
+        self.assertAlmostEqual(report.feature_importance["Importancia"].sum(), 1.0, places=5)
+
+
+class DemoTests(unittest.TestCase):
+    def test_local_demo_seeds_isolated_roles_and_recent_data(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            store = Store(root / "demo.sqlite3")
+            today = date(2026, 9, 25)
+            self.assertTrue(seed_local_demo(store, root / "uploads", today))
+            self.assertFalse(seed_local_demo(store, root / "uploads", today))
+            self.assertEqual(store.authenticate(*DEMO_ADMIN)["role"], "admin")
+            seller = store.authenticate(*DEMO_SELLER)
+            self.assertEqual(seller["role"], "vendedor")
+            self.assertGreaterEqual(len(store.allowed_clients(seller["id"])), 4)
+            active = store.active_dataset()
+            data = load_sales(active["path"])
+            self.assertEqual(data.last_date, today - timedelta(days=1))
 
 
 class OrderTests(unittest.TestCase):

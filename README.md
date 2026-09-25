@@ -41,6 +41,7 @@ El vendedor conserva la decisión sobre la cantidad que solicita. Administració
 | --- | --- |
 | Carga y activa el Excel; consulta cobertura y calidad de los datos. | Ve solo los clientes asignados y sus productos. |
 | Filtra ventas por fecha y cliente; ve ingresos, evolución mensual, canales y productos en gráficos. | Consulta ventas comparables, pronóstico de siete días y explicación de la recomendación. |
+| Revisa el Centro IA: método ganador, WAPE, importancia de variables y demanda proyectada. | Consulta rango orientativo, nivel de atención y simula cambios de demanda e inventario. |
 | Crea cuentas, asigna clientes y restablece contraseñas. | Registra unidad, inventario, pedidos pendientes y reglas comerciales. |
 | Revisa solicitudes, documenta ajustes o rechazos y exporta el lote aprobado. | Indica la fecha requerida, envía la solicitud y sigue su estado. |
 
@@ -70,7 +71,7 @@ Para evitar pedir dos veces por la misma demanda, el sistema impide que queden v
 ## Cómo se calcula un pedido
 
 1. Se agrupan las ventas por día, cliente y producto. Las transacciones del mismo día se conservan en la carga y se suman para analizar la demanda diaria.
-2. XGBoost estima la demanda de los próximos siete días. Se compara con el promedio de los 28 días anteriores en ocho ventanas históricas no superpuestas. El error se informa por producto.
+2. XGBoost estima la demanda de los próximos siete días. Se compara con el promedio de los 28 días anteriores en ocho ventanas históricas no superpuestas. El error se informa por producto y genera un rango orientativo basado en el error absoluto P80 del método aplicado.
 3. Si hay ventas recientes, se aplica el método que obtuvo menor error para ese producto. Si no las hay y está completo el mismo mes del año anterior, se utiliza su **promedio semanal observado**; XGBoost se muestra como referencia adicional.
 4. El vendedor confirma los datos operativos y el sistema calcula:
 
@@ -88,13 +89,15 @@ El Excel entregado solo cubre 2025. Por eso una sugerencia para 2026 basada en e
 
 ## Fuente de datos
 
-El importador acepta archivos `.xlsx` de hasta 20 MB y 150,000 registros. Las hojas utilizadas deben tener estas diez columnas en la primera fila; se admiten columnas adicionales y varias hojas con el mismo esquema:
+El importador acepta archivos `.xlsx` de hasta 20 MB y 150,000 registros. Reconoce nombres equivalentes como `Cantidad`, `Venta_Total_USD` y `Tipo_Cliente`. Se admiten columnas adicionales y varias hojas compatibles:
 
-| Tipo | Columnas requeridas |
+| Tipo | Columnas |
 | --- | --- |
-| Identificación y fecha | `Fecha`, `Cliente`, `Producto` |
-| Segmentación | `Zona_Geografica`, `Canal_Distribucion`, `Canal_Venta`, `Categoria` |
-| Venta | `Cantidad_kg_unid`, `Precio_Unitario_USD`, `Monto_Venta_USD` |
+| Mínimas | `Fecha`, `Cliente`, `Producto`, cantidad y precio unitario |
+| Recomendadas | `Zona_Geografica`, `Canal_Distribucion`, `Canal_Venta`, `Categoria` |
+| Calculable | Si falta el monto, se obtiene como cantidad × precio y se informa |
+
+Los campos de segmentación que no existen se muestran como `No especificado`; el sistema no inventa una zona o canal. La pantalla **Datos y modelo** enumera todas las adaptaciones aplicadas.
 
 Se validan fechas, cantidades, precios y montos. Una fórmula de monto sin resultado guardado se recalcula como cantidad × precio y se informa. También se limita la expansión del análisis a 250,000 combinaciones diarias cliente–producto. Activar una nueva carga **reemplaza el histórico activo**, porque el archivo no contiene un identificador de transacción que permita fusionar ventas sin riesgo de duplicarlas.
 
@@ -117,6 +120,12 @@ $env:SMARTORDER_LOCAL_MODE = '1'
 ```
 
 Abra [http://127.0.0.1:8501/](http://127.0.0.1:8501/) **en el mismo equipo**. Mantenga abierta la ventana que ejecuta la aplicación; `Ctrl+C` la detiene. Esta forma de uso no requiere Streamlit Cloud, pero sí instala la biblioteca Streamlit localmente.
+
+### Demo académica de un clic
+
+Después de instalar las dependencias, ejecute [`iniciar_demo.cmd`](iniciar_demo.cmd). Se crea una instalación aislada con 15 meses de datos sintéticos, un perfil de administración y otro de vendedor. En la pantalla de acceso aparecen dos botones para cambiar de rol. Los datos reales y las cuentas normales no se modifican.
+
+El modo demo solo se habilita en `127.0.0.1`; no debe configurarse en Streamlit Cloud. Incluye tendencias, promociones simuladas y variación estacional para que el entrenamiento, el rango orientativo, el Centro IA y el flujo de aprobación puedan presentarse sin preparar un Excel previamente.
 
 Al primer inicio cree una cuenta administradora; no hay usuarios ni contraseñas predeterminadas. Las contraseñas deben tener al menos 12 caracteres. Si el Excel de demostración está en la carpeta principal, la aplicación lo lee automáticamente. Como el Excel original no se incluye en el repositorio público, en otra copia administración deberá subirlo desde **Datos y modelo**.
 
@@ -157,6 +166,7 @@ Las cuentas, cargas y solicitudes se guardan actualmente en SQLite y archivos ba
 | --- | --- |
 | `app.py` | Interfaz Streamlit y navegación según el rol. |
 | `smartorder/data.py` | `SalesData`: lectura, validación y preparación del Excel. |
+| `smartorder/demo.py` | Dataset sintético y cuentas aisladas para la presentación local. |
 | `smartorder/forecast.py` | `DemandForecaster`: entrenamiento, evaluación y pronóstico. |
 | `smartorder/orders.py` | `OperationalInput`, cálculo del pedido y exportación XLSX. |
 | `smartorder/storage.py` | `Store`: cuentas, clientes asignados, solicitudes y revisiones en SQLite. |
