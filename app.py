@@ -66,11 +66,15 @@ def header(role: str, data: SalesData | None = None) -> None:
 def setup_or_login(store: Store) -> dict:
     if not store.has_users():
         header("Configuración inicial")
-        local_setup = os.environ.get("SMARTORDER_LOCAL_MODE") == "1"
+        local_setup = (os.environ.get("SMARTORDER_LOCAL_MODE") == "1"
+                       and st.get_option("server.address") in ("127.0.0.1", "::1"))
         setup_code = os.environ.get("SMARTORDER_SETUP_CODE", "")
         if not local_setup and len(setup_code) < 20:
-            st.error("La instalación necesita SMARTORDER_SETUP_CODE en los secretos del servidor "
-                     "antes de crear el administrador inicial.")
+            st.error("Falta el código de instalación para crear el primer administrador.")
+            st.info("Si esta aplicación está en Streamlit Community Cloud, abra App settings "
+                    "→ Secrets y agregue SMARTORDER_SETUP_CODE como valor privado de al "
+                    "menos 20 caracteres. Después recargue esta página. Para uso en su "
+                    "propio equipo, iníciela con iniciar_smartorder.cmd.")
             st.stop()
         st.info("Cree la cuenta administradora inicial. Los datos se guardan en el "
                 "almacenamiento configurado para esta instalación.")

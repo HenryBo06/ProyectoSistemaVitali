@@ -138,7 +138,16 @@ El punto de entrada es `app.py` en la rama `main` de `HenryBo06/ProyectoSistemaV
 SMARTORDER_SETUP_CODE = "reemplace-por-un-codigo-privado-largo"
 ```
 
-Quien cree el primer administrador deberá introducir ese código. No lo incluya en Git. Consulte la [guía oficial de despliegue](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) y la [gestión de secretos](https://docs.streamlit.io/develop/concepts/connections/secrets-management).
+Quien cree el primer administrador deberá introducir ese código. No lo incluya en Git. `SMARTORDER_LOCAL_MODE=1` se utiliza solo con el servidor vinculado a `127.0.0.1` o `::1` para uso en el mismo equipo; no lo configure en Cloud. Consulte la [guía oficial de despliegue](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) y la [gestión de secretos](https://docs.streamlit.io/develop/concepts/connections/secrets-management).
+
+### Si aparece «Falta el código de instalación»
+
+1. Entre en [Streamlit Community Cloud](https://share.streamlit.io/) con la cuenta que desplegó la aplicación.
+2. Abra la aplicación en su espacio de trabajo y vaya a **App settings → Secrets** (también puede aparecer como **Edit Secrets**).
+3. Genere un código privado en PowerShell con `([guid]::NewGuid()).ToString('N')`. Copie el resultado en Secrets como valor de `SMARTORDER_SETUP_CODE`, en el nivel raíz del archivo TOML, y guarde el cambio. No publique ni envíe ese valor por chat.
+4. Recargue la aplicación. Introduzca el mismo valor en **Código de instalación** y cree el primer administrador.
+
+Si ya existe una cuenta administradora, acceda con ella; el código solo se solicita al crear la primera cuenta de una instalación nueva. La [documentación de Streamlit](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/app-settings#view-or-update-your-secrets) explica dónde actualizar los secretos de una aplicación ya desplegada.
 
 Las cuentas, cargas y solicitudes se guardan actualmente en SQLite y archivos bajo `.local/`. [Streamlit Community Cloud no garantiza conservar archivos locales](https://docs.streamlit.io/develop/concepts/connections/connecting-to-data). Antes de usar el despliegue con datos comerciales y varios usuarios, se necesita almacenamiento externo persistente, copias de seguridad y control de acceso al despliegue. El código de instalación protege la creación de la primera cuenta, pero no resuelve la persistencia.
 
