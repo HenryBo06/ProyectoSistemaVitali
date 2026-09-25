@@ -22,6 +22,8 @@ py -m venv .venv
 
 En el primer inicio, cree la cuenta administradora; no hay contraseñas predeterminadas. La aplicación carga automáticamente `Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx` si está en esta carpeta. En una copia del repositorio público, el administrador debe cargarlo desde **Datos y modelo**. Las cargas y la base SQLite se guardan bajo `.local/`, excluido de Git. La aplicación está pensada para ejecución local; sus cuentas no sustituyen la autenticación corporativa para un despliegue en red.
 
+Abra `http://127.0.0.1:8501/` en el mismo equipo. Para recorrer la aplicación: cree el administrador, entre a **Datos y modelo** para comprobar el Excel activo, cree un vendedor en **Usuarios** y asígnele un cliente. Cierre sesión, entre como vendedor, revise **Mi cartera** y **Recomendaciones**, guarde los datos operativos de un producto y apruebe una cantidad. En **Historial** puede descargar el XLSX del pedido.
+
 Para comprobar la lógica:
 
 ```powershell
@@ -56,3 +58,9 @@ El histórico incluido termina en 2025. Una recomendación calculada en 2026 mos
 ## Estructura
 
 `smartorder/data.py` valida la fuente; `smartorder/forecast.py` entrena y evalúa; `smartorder/orders.py` calcula y exporta pedidos; `smartorder/storage.py` gestiona cuentas, asignaciones y trazabilidad; `app.py` presenta las vistas según permisos. Los PDF, imágenes y Excel originales permanecen locales y no se publican en este repositorio.
+
+## Publicación en Streamlit Community Cloud
+
+El repositorio tiene el formato necesario para desplegar desde GitHub: seleccione `HenryBo06/ProyectoSistemaVitali`, rama `main` y archivo principal `app.py`. La publicación requiere iniciar sesión en [Streamlit Community Cloud](https://share.streamlit.io/) y conectar la cuenta de GitHub.
+
+La versión actual guarda cuentas, decisiones y archivos cargados en SQLite y carpetas locales. [Community Cloud no garantiza la permanencia de esos archivos](https://docs.streamlit.io/develop/concepts/connections/connecting-to-data); por ello, una instancia publicada podría perderlos tras un reinicio. Antes de usarla como servicio compartido y cargar datos comerciales, se necesita almacenamiento persistente externo y configurar el acceso privado. La prueba completa con el Excel recibido está disponible localmente sin publicar el archivo.
