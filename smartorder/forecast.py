@@ -17,10 +17,7 @@ class ForecastReport:
     rows: pd.DataFrame
     as_of: date
     source_end: date
-    xgboost_wape: float | None
-    baseline_wape: float | None
-    xgboost_mae: float | None
-    baseline_mae: float | None
+    metrics_by_product: pd.DataFrame
     validation_windows: int
     model_status: str
 
@@ -83,7 +80,7 @@ class DemandForecaster:
         frame = _training_frame(data)
         usable = frame.dropna(subset=["target_7"])
         if usable["Fecha"].nunique() < 90:
-            raise ValueError("Se requieren al menos 90 días de histórico para evaluar el modelo.")
+            raise ValueError("Se requieren al menos 96 días de cobertura para evaluar el modelo.")
         last_target_start = pd.Timestamp(data.last_date - timedelta(days=6))
         first_validation = last_target_start - timedelta(days=55)
         # La ventana objetivo de entrenamiento debe terminar antes de validar.
@@ -101,8 +98,29 @@ class DemandForecaster:
         actual = validation["target_7"].to_numpy(dtype=float)
         model_pred = np.maximum(0, self.model.predict(_feature_frame(validation, self.feature_columns)))
         baseline_pred = validation["prior_28"].fillna(0).to_numpy(dtype=float) / 4
-        model_wape, model_mae = _metrics(actual, model_pred)
-        baseline_wape, baseline_mae = _metrics(actual, baseline_pred)
+        measured = validation[["Producto", "target_7"]].copy()
+        measured["estimacion_xgboost"] = model_pred
+        measured["estimacion_promedio"] = baseline_pred
+        metrics = []
+        for product, group in measured.groupby("Producto", sort=True):
+            observed = group["target_7"].to_numpy(dtype=float)
+            model_wape, model_mae = _metrics(
+                observed, group["estimacion_xgboost"].to_numpy(dtype=float)
+            )
+            baseline_wape, baseline_mae = _metrics(
+                observed, group["estimacion_promedio"].to_numpy(dtype=float)
+            )
+            metrics.append({
+                "Producto": product, "WAPE_XGBoost": model_wape,
+                "WAPE_promedio": baseline_wape, "MAE_XGBoost": model_mae,
+                "MAE_promedio": baseline_mae,
+            })
+        metrics_by_product = pd.DataFrame(metrics)
+        winner_by_product = {
+            row["Producto"]: row["WAPE_XGBoost"] < row["WAPE_promedio"]
+            for row in metrics if row["WAPE_XGBoost"] is not None
+            and row["WAPE_promedio"] is not None
+        }
 
         # Reentrenar con todo lo conocido después de medir el error fuera de muestra.
         self.model = self._new_model()
@@ -148,14 +166,10 @@ class DemandForecaster:
         future["XGBoost_7d"] = np.maximum(
             0, self.model.predict(_feature_frame(future, self.feature_columns))
         ).round(2)
-        model_wins = (
-            model_wape is not None and baseline_wape is not None
-            and model_wape < baseline_wape
-        )
         def choose(row: pd.Series) -> pd.Series:
             if pd.notna(row["prior_28"]):
-                if model_wins:
-                    return pd.Series((row["XGBoost_7d"], "XGBoost validado"))
+                if winner_by_product.get(row["Producto"], False):
+                    return pd.Series((row["XGBoost_7d"], "XGBoost: menor error del producto"))
                 return pd.Series((row["prior_28"] / 4, "Promedio de 28 días"))
             if pd.notna(row["previous_year_month_week"]):
                 # ponytail: con un solo año, usar el promedio semanal observado
@@ -180,7 +194,7 @@ class DemandForecaster:
         )
         return ForecastReport(
             output.sort_values(["Cliente", "Pronostico_7d"], ascending=[True, False]).reset_index(drop=True),
-            as_of, data.last_date, model_wape, baseline_wape, model_mae, baseline_mae,
+            as_of, data.last_date, metrics_by_product,
             validation["Fecha"].nunique(), status,
         )
 

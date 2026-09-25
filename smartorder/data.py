@@ -21,6 +21,7 @@ HEADERS = (
 )
 MAX_BYTES = 20 * 1024 * 1024
 MAX_ROWS = 150_000
+MAX_DAILY_CELLS = 250_000
 
 
 @dataclass(frozen=True)
@@ -138,4 +139,11 @@ def load_sales(source: bytes | str | Path) -> SalesData:
         raise ValueError("El Excel no contiene ventas.")
     frame = pd.DataFrame.from_records(records, columns=HEADERS)
     frame["Fecha"] = pd.to_datetime(frame["Fecha"])
+    pairs = frame[["Cliente", "Producto"]].drop_duplicates().shape[0]
+    days = (frame["Fecha"].max() - frame["Fecha"].min()).days + 1
+    if pairs * days > MAX_DAILY_CELLS:
+        raise ValueError(
+            "El histórico supera el límite de 250,000 combinaciones diarias "
+            "cliente–producto; revise fechas extremas o divida el análisis."
+        )
     return SalesData(frame, sha256(raw).hexdigest(), tuple(used_sheets), recalculated)
