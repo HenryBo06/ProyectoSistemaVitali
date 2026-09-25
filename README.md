@@ -125,7 +125,19 @@ Abra [http://127.0.0.1:8501/](http://127.0.0.1:8501/) **en el mismo equipo**. Ma
 
 Después de instalar las dependencias, ejecute [`iniciar_demo.cmd`](iniciar_demo.cmd). Se crea una instalación aislada con 15 meses de datos sintéticos, un perfil de administración y otro de vendedor. En la pantalla de acceso aparecen dos botones para cambiar de rol. Los datos reales y las cuentas normales no se modifican.
 
-El modo demo solo se habilita en `127.0.0.1`; no debe configurarse en Streamlit Cloud. Incluye tendencias, promociones simuladas y variación estacional para que el entrenamiento, el rango orientativo, el Centro IA y el flujo de aprobación puedan presentarse sin preparar un Excel previamente.
+La demo incluye tendencias, promociones simuladas y variación estacional para que el entrenamiento, el rango orientativo, el Centro IA y el flujo de aprobación puedan presentarse sin preparar un Excel previamente.
+
+### Demo pública en Streamlit Cloud
+
+La pantalla de configuración o acceso incluye **Probar demo pública**. Al pulsarlo, la aplicación abre `?demo=1`, crea un almacenamiento separado y habilita los botones para entrar como administración o vendedor. Esta demo solo utiliza datos sintéticos; no modifica las cuentas o cargas de la instalación normal.
+
+Para que un despliegue abra siempre en modo demostración, agregue en **App settings → Secrets**:
+
+```toml
+SMARTORDER_PUBLIC_DEMO = "1"
+```
+
+Las cuentas de demostración son `admin.demo` y `vendedor.demo`; ambas usan `VitaliDemo2026!`. En Streamlit Community Cloud el almacenamiento sigue siendo temporal y puede reiniciarse cuando la aplicación se suspende o vuelve a desplegarse.
 
 Al primer inicio cree una cuenta administradora; no hay usuarios ni contraseñas predeterminadas. Las contraseñas deben tener al menos 12 caracteres. Si el Excel de demostración está en la carpeta principal, la aplicación lo lee automáticamente. Como el Excel original no se incluye en el repositorio público, en otra copia administración deberá subirlo desde **Datos y modelo**.
 
