@@ -21,11 +21,11 @@ SmartOrder AI ayuda a decidir **qué producto pedir, cuánto solicitar y para qu
 ## Cómo funciona
 
 ```mermaid
-flowchart LR
-    A[Excel de ventas] --> B[Validación y análisis]
-    B --> C[Panel de administración]
-    B --> D[Pronóstico por cliente y producto]
-    D --> E[Vendedor registra inventario y propone cantidad]
+flowchart TB
+    A[Excel de ventas] --> B[Validación]
+    B --> C[Panel administrativo]
+    B --> D[Pronóstico de siete días]
+    D --> E[Inventario y propuesta del vendedor]
     E --> F[Pedido interno pendiente]
     F --> G{Revisión administrativa}
     G -->|Aprobar o ajustar| H[XLSX para producción]
