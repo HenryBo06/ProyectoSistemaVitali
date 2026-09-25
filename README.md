@@ -1,62 +1,162 @@
-# SmartOrder AI — pedidos sugeridos para Vitali Alimentos
+<h1 align="center">SmartOrder AI</h1>
 
-Aplicación para analizar ventas importadas de Excel y preparar pedidos internos de productos. El vendedor ve sus clientes asignados, el histórico de cada producto, un pronóstico de siete días y una cantidad sugerida después de ingresar inventario y reglas comerciales. Administración revisa la solicitud y prepara un XLSX para producción.
+<p align="center">
+  <strong>Sistema inteligente de pedidos sugeridos para Vitali Alimentos</strong><br>
+  Ventas observadas, pronóstico de demanda y revisión humana en un solo flujo de pedidos.
+</p>
 
-La versión actual opera por **cliente y producto**. El Excel recibido no contiene sucursal/sala ni código SKU. El archivo se llama `Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx`; sus cifras describen ese archivo, no resultados operativos comprobados de Vitali.
+---
 
-## Probar en este equipo, sin Streamlit Cloud
+**Contenido:** [Flujo](#cómo-funciona) · [Indicadores](#paneles-e-indicadores) · [Cálculo](#cómo-se-calcula-un-pedido) · [Excel](#fuente-de-datos) · [Uso local](#ejecutar-en-windows) · [Despliegue](#despliegue-en-streamlit-community-cloud) · [Código y pruebas](#organización-del-código-y-verificación)
 
-En Windows, con Python instalado, ejecute una vez:
+SmartOrder AI ayuda a decidir **qué producto pedir, cuánto solicitar y para qué fecha**. Administración carga el histórico de ventas desde Excel; cada vendedor consulta sus clientes, registra inventario y envía una solicitud interna; administración la revisa y prepara un archivo para producción.
+
+| Alcance actual | Fuente | Horizonte | Salida |
+| --- | --- | --- | --- |
+| Cliente y producto | Excel de ventas cargado por administración | Pronóstico de siete días | XLSX de pedidos revisados para producción |
+
+> [!IMPORTANT]
+> El archivo recibido se llama `Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx`. Sus cifras describen ese archivo de ejemplo y **no acreditan ventas, ahorros ni reducción de mermas reales de Vitali**. Tampoco contiene sucursal, SKU ni unidad oficial por producto; esas funciones requieren fuentes adicionales.
+
+## Cómo funciona
+
+```mermaid
+flowchart LR
+    A[Excel de ventas] --> B[Validación y análisis]
+    B --> C[Panel de administración]
+    B --> D[Pronóstico por cliente y producto]
+    D --> E[Vendedor registra inventario y propone cantidad]
+    E --> F[Pedido interno pendiente]
+    F --> G{Revisión administrativa}
+    G -->|Aprobar o ajustar| H[XLSX para producción]
+    G -->|Rechazar| I[Historial con motivo]
+    H --> J[Confirmación manual de entrega]
+```
+
+El vendedor conserva la decisión sobre la cantidad que solicita. Administración puede aprobarla, cambiarla con una explicación o rechazarla. **Exportado** significa que administración confirmó haber descargado y compartido el XLSX; el sistema no recibe un acuse de la planta ni crea órdenes directamente en un ERP.
+
+### Funciones por rol
+
+| Administración | Vendedor |
+| --- | --- |
+| Carga y activa el Excel; consulta cobertura y calidad de los datos. | Ve solo los clientes asignados y sus productos. |
+| Filtra ventas por fecha y cliente; ve ingresos, evolución mensual, canales y productos en gráficos. | Consulta ventas comparables, pronóstico de siete días y explicación de la recomendación. |
+| Crea cuentas, asigna clientes y restablece contraseñas. | Registra unidad, inventario, pedidos pendientes y reglas comerciales. |
+| Revisa solicitudes, documenta ajustes o rechazos y exporta el lote aprobado. | Indica la fecha requerida, envía la solicitud y sigue su estado. |
+
+### Estados de una solicitud
+
+| Estado | Significado |
+| --- | --- |
+| **Pendiente** | El vendedor la envió y espera revisión. |
+| **Aprobado** | Administración la revisó; está lista para incluirse en un XLSX. |
+| **Rechazado** | Administración registró el motivo del rechazo. |
+| **Sustituido** | Existe una solicitud más reciente para el mismo cliente, producto e inicio de período. |
+| **Fuente sustituida** | Cambió el Excel antes de entregar ese pedido; debe generarse otro con la fuente vigente. |
+| **Exportado** | Administración confirmó manualmente que compartió el archivo con producción. |
+
+Para evitar pedir dos veces por la misma demanda, el sistema impide que queden vigentes pedidos de un mismo cliente y producto con horizontes de siete días superpuestos. Una solicitud pendiente puede reemplazarse por otra que inicie en la misma fecha. La fecha de entrega solicitada debe estar dentro del horizonte del pronóstico.
+
+## Paneles e indicadores
+
+**Resumen de administración.** Incluye filtros de período y cliente; ventas en USD, registros, clientes y productos con ventas; gráfico de evolución mensual, gráfico circular por canal de venta, barras por producto y conteos de pedidos pendientes, aprobados y exportados.
+
+**Cartera del vendedor.** Muestra productos del cliente asignado, ventas en USD, registros y cantidades dentro de la medida original del Excel. Si existe información del mismo mes del año anterior, la usa como comparación; en otro caso, muestra el histórico disponible y lo indica.
+
+**Recomendaciones.** Presenta el pronóstico, los datos comparables, el método aplicado, la cantidad sugerida y su explicación. Las métricas técnicas WAPE y MAE se mantienen aparte, en **Datos y modelo → Diagnóstico del pronóstico**, desglosadas por producto. El panel comercial muestra ventas y pedidos; el diagnóstico muestra errores de evaluación del modelo.
+
+> Las barras entre productos comparan **USD**. La columna `Cantidad_kg_unid` mezcla medidas; sumar kg y unidades en un indicador global produciría una cifra sin significado.
+
+## Cómo se calcula un pedido
+
+1. Se agrupan las ventas por día, cliente y producto. Las transacciones del mismo día se conservan en la carga y se suman para analizar la demanda diaria.
+2. XGBoost estima la demanda de los próximos siete días. Se compara con el promedio de los 28 días anteriores en ocho ventanas históricas no superpuestas. El error se informa por producto.
+3. Si hay ventas recientes, se aplica el método que obtuvo menor error para ese producto. Si no las hay y está completo el mismo mes del año anterior, se utiliza su **promedio semanal observado**; XGBoost se muestra como referencia adicional.
+4. El vendedor confirma los datos operativos y el sistema calcula:
+
+   ```text
+   necesidad = max(0, pronóstico + inventario objetivo
+                      − inventario disponible − pedidos pendientes)
+   pedido sugerido = necesidad ajustada al mínimo y al múltiplo de empaque
+   ```
+
+5. El vendedor puede cambiar la cantidad, pero debe explicar el ajuste. Administración revisa la propuesta antes de exportarla.
+
+La fecha de análisis debe ser posterior al último registro del Excel y puede elegirse hasta 30 días después de la fecha actual. La fecha requerida de entrega se selecciona dentro de los siete días analizados.
+
+El Excel entregado solo cubre 2025. Por eso una sugerencia para 2026 basada en el mismo mes de 2025 **necesita revisión comercial e inventario actual**: la precisión entre años no está validada. El sistema no atribuye a XGBoost una mejora que la evaluación no demuestre.
+
+## Fuente de datos
+
+El importador acepta archivos `.xlsx` de hasta 20 MB y 150,000 registros. Las hojas utilizadas deben tener estas diez columnas en la primera fila; se admiten columnas adicionales y varias hojas con el mismo esquema:
+
+| Tipo | Columnas requeridas |
+| --- | --- |
+| Identificación y fecha | `Fecha`, `Cliente`, `Producto` |
+| Segmentación | `Zona_Geografica`, `Canal_Distribucion`, `Canal_Venta`, `Categoria` |
+| Venta | `Cantidad_kg_unid`, `Precio_Unitario_USD`, `Monto_Venta_USD` |
+
+Se validan fechas, cantidades, precios y montos. Una fórmula de monto sin resultado guardado se recalcula como cantidad × precio y se informa. También se limita la expansión del análisis a 250,000 combinaciones diarias cliente–producto. Activar una nueva carga **reemplaza el histórico activo**, porque el archivo no contiene un identificador de transacción que permita fusionar ventas sin riesgo de duplicarlas.
+
+El archivo recibido contiene **1,294 registros de 2025, 10 clientes, 8 productos y 80 pares cliente–producto**. No incluye inventario, pedidos pendientes, pedido mínimo, múltiplo de empaque, fecha requerida, sucursal ni SKU. Los datos operativos necesarios se ingresan en la aplicación; no se inventan valores faltantes. La [auditoría de las fuentes y del sistema](docs/AUDITORIA_SISTEMA.md) detalla calidad, cobertura y requisitos pendientes.
+
+## Ejecutar en Windows
+
+**Requisitos:** Python instalado y una terminal PowerShell. Desde la carpeta del proyecto, prepare el entorno una sola vez:
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-Después, haga doble clic en [iniciar_smartorder.cmd](iniciar_smartorder.cmd) o ejecute:
+Después haga doble clic en [`iniciar_smartorder.cmd`](iniciar_smartorder.cmd), o inicie la aplicación desde PowerShell:
 
 ```powershell
 $env:SMARTORDER_LOCAL_MODE = '1'
 .\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
-Abra [http://127.0.0.1:8501/](http://127.0.0.1:8501/) en **ese mismo equipo**. Mantenga abierta la ventana de comandos; `Ctrl+C` detiene el servidor. Esta ejecución no depende de Streamlit Cloud, pero sí usa la biblioteca Streamlit instalada localmente. El primer inicio permite crear un administrador sin contraseña predefinida.
+Abra [http://127.0.0.1:8501/](http://127.0.0.1:8501/) **en el mismo equipo**. Mantenga abierta la ventana que ejecuta la aplicación; `Ctrl+C` la detiene. Esta forma de uso no requiere Streamlit Cloud, pero sí instala la biblioteca Streamlit localmente.
 
-El Excel de demostración se carga automáticamente si está en la misma carpeta. En una copia donde falte, administración debe subirlo desde **Datos y modelo**. Los archivos cargados y las cuentas se guardan en `.local/`, que no se publica en Git.
+Al primer inicio cree una cuenta administradora; no hay usuarios ni contraseñas predeterminadas. Las contraseñas deben tener al menos 12 caracteres. Si el Excel de demostración está en la carpeta principal, la aplicación lo lee automáticamente. Como el Excel original no se incluye en el repositorio público, en otra copia administración deberá subirlo desde **Datos y modelo**.
 
-## Recorrido funcional
+### Primer recorrido recomendado
 
-1. **Administración → Datos y modelo:** cargue/active el Excel y revise su cobertura. Las cargas reemplazan el histórico activo, para evitar sumar transacciones superpuestas sin identificador.
-2. **Administración → Usuarios:** cree un vendedor y asígnele al menos un cliente que figure en el Excel activo. Si reemplaza el Excel, compruebe de nuevo las asignaciones.
-3. **Vendedor → Mi cartera:** seleccione un cliente y vea sus productos, ventas en USD, cantidad en la medida original del archivo y número de registros. Si existe, la comparación corresponde al mismo mes del año anterior; si falta, aparece el histórico disponible con una advertencia.
-4. **Vendedor → Recomendaciones:** seleccione fecha y producto; revise pronóstico, referencia histórica, método y explicación. Ingrese unidad, inventario disponible, pedidos pendientes, inventario objetivo, mínimo, múltiplo y fecha de observación. Indique la fecha requerida de entrega dentro de los siete días pronosticados. Ajuste y motive la cantidad si corresponde. **Enviar pedido a revisión** crea una solicitud interna.
-5. **Administración → Producción:** revise la solicitud, apruebe o rechace; si cambia la cantidad, documente el motivo. Prepare y descargue el XLSX. Después de compartirlo por el canal operativo, registre la entrega del lote en la aplicación. La hoja incluye pedidos detallados y un resumen por producto, unidad y fecha requerida.
-6. **Historial:** ambos roles ven el estado: pendiente, aprobado, rechazado, sustituido, fuente sustituida o exportado. El vendedor solo ve sus solicitudes; solo administración puede revisar y exportar.
+1. Entre como administrador y active el Excel en **Datos y modelo**.
+2. En **Usuarios**, cree una cuenta de vendedor y asígnele al menos un cliente que figure en el archivo activo.
+3. Entre como vendedor; revise **Mi cartera** y **Recomendaciones**. Guarde unidad e inventario, seleccione fecha requerida y envíe un pedido a revisión.
+4. Vuelva como administrador; en **Producción**, apruebe o rechace el pedido. Para entregarlo, prepare el lote, descargue el XLSX y confirme que lo compartió.
+5. Compruebe el resultado en **Historial** desde ambos roles.
 
-La cantidad sugerida es `MAX(0, pronóstico + inventario objetivo − inventario disponible − pedidos pendientes)`, sujeta al mínimo y al múltiplo indicados por el vendedor. El Excel no trae unidad oficial, SKU, inventario, plazos ni reglas de empaque: no se inventan. Administración debe verificar la unidad antes de aprobar.
+**Si el vendedor no ve productos:** compruebe que hay un Excel activo y que sus clientes asignados coinciden exactamente con los nombres de ese archivo. Una carga nueva puede requerir actualizar las asignaciones en **Usuarios**.
 
-## Paneles e indicadores
+## Despliegue en Streamlit Community Cloud
 
-- **Administración:** filtros de fecha y cliente; ingresos USD, registros, clientes y productos con ventas; evolución mensual; participación por canal de venta; barras de ingresos por producto; pedidos pendientes, aprobados y exportados.
-- **Vendedor:** cartera asignada, productos del cliente y ventas comparables; tabla y barras por producto; pronóstico, referencias y pedido sugerido. Las comparaciones entre productos usan USD, porque `Cantidad_kg_unid` mezcla medidas.
-- Las métricas técnicas del modelo quedan en **Datos y modelo → Diagnóstico del pronóstico**, por producto, fuera del resumen comercial. WAPE/MAE describen error retrospectivo, no ventas, compras ni ahorro conseguido.
+El punto de entrada es `app.py` en la rama `main` de `HenryBo06/ProyectoSistemaVitali`. Antes del primer acceso a una instalación en red, configure en **Secrets** un valor privado de al menos 20 caracteres:
 
-## Excel y pronóstico
+```toml
+SMARTORDER_SETUP_CODE = "reemplace-por-un-codigo-privado-largo"
+```
 
-La carga exige `Fecha`, `Cliente`, `Zona_Geografica`, `Canal_Distribucion`, `Canal_Venta`, `Producto`, `Categoria`, `Cantidad_kg_unid`, `Precio_Unitario_USD` y `Monto_Venta_USD`. Admite varias hojas con esos encabezados y varios años. Valida fecha, cantidades y montos; una fórmula sin valor guardado se recalcula como cantidad × precio y se informa. Se conservan registros repetidos del mismo día como transacciones y se agregan para construir series diarias. El límite evita expandir más de 250,000 combinaciones diarias cliente–producto.
+Quien cree el primer administrador deberá introducir ese código. No lo incluya en Git. Consulte la [guía oficial de despliegue](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) y la [gestión de secretos](https://docs.streamlit.io/develop/concepts/connections/secrets-management).
 
-El archivo recibido contiene 1,294 registros de 2025, 10 clientes, 8 productos y 80 pares cliente–producto. Solo cubre un año. XGBoost se compara con el promedio de cuatro semanas en ocho ventanas de siete días, sin mezclar el error de productos con medidas diferentes. Para fechas de 2026 sin ventas recientes, el pedido usa el **promedio semanal observado del mismo mes de 2025** cuando existe, y XGBoost se muestra como comparación. El campo del año anterior no se puede aprender de un solo año de entrenamiento; tampoco está validada la precisión de un salto completo entre años. Toda recomendación con histórico antiguo requiere revisión comercial e inventario actual.
+Las cuentas, cargas y solicitudes se guardan actualmente en SQLite y archivos bajo `.local/`. [Streamlit Community Cloud no garantiza conservar archivos locales](https://docs.streamlit.io/develop/concepts/connections/connecting-to-data). Antes de usar el despliegue con datos comerciales y varios usuarios, se necesita almacenamiento externo persistente, copias de seguridad y control de acceso al despliegue. El código de instalación protege la creación de la primera cuenta, pero no resuelve la persistencia.
 
-## Publicación y datos
+## Organización del código y verificación
 
-Para desplegar en Streamlit Community Cloud seleccione el repositorio `HenryBo06/ProyectoSistemaVitali`, rama `main` y entrada `app.py`. En **Advanced settings → Secrets** configure un código privado de al menos 20 caracteres, por ejemplo `SMARTORDER_SETUP_CODE = "valor-largo-generado-por-usted"`, antes del primer acceso. No lo suba a Git. Quien cree el primer administrador deberá ingresar ese código. [Guía oficial de despliegue](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app) y [guía de secretos](https://docs.streamlit.io/develop/concepts/connections/secrets-management).
+| Archivo | Responsabilidad |
+| --- | --- |
+| `app.py` | Interfaz Streamlit y navegación según el rol. |
+| `smartorder/data.py` | `SalesData`: lectura, validación y preparación del Excel. |
+| `smartorder/forecast.py` | `DemandForecaster`: entrenamiento, evaluación y pronóstico. |
+| `smartorder/orders.py` | `OperationalInput`, cálculo del pedido y exportación XLSX. |
+| `smartorder/storage.py` | `Store`: cuentas, clientes asignados, solicitudes y revisiones en SQLite. |
+| `tests/test_system.py` | Comprobaciones de datos, pronóstico, permisos y flujo a producción. |
 
-La aplicación guarda cuentas, Excel y pedidos en archivos locales. [Community Cloud no garantiza su persistencia](https://docs.streamlit.io/develop/concepts/connections/connecting-to-data), y una aplicación desplegada desde un repositorio público puede ser pública. Para uso compartido con datos comerciales faltan almacenamiento persistente externo y control de acceso al despliegue. El acceso con cuentas dentro de la app no sustituye esas medidas. El repositorio no contiene el Excel ni los PDF originales.
-
-## Verificación y auditoría
+Para ejecutar las pruebas:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-La [auditoría del sistema](docs/AUDITORIA_SISTEMA.md) enumera las fuentes revisadas, hallazgos corregidos, límites del Excel y requisitos para pasar de la exportación manual a una operación de producción integrada.
+Los PDF y el Excel originales permanecen locales y están excluidos de Git. Para conocer los hallazgos, decisiones de alcance y datos que faltan, consulte la [auditoría del sistema](docs/AUDITORIA_SISTEMA.md).
