@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
@@ -130,6 +131,21 @@ class DemoTests(unittest.TestCase):
             active = store.active_dataset()
             data = load_sales(active["path"])
             self.assertEqual(data.last_date, today - timedelta(days=1))
+
+    def test_concurrent_demo_seed_is_idempotent(self):
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            database = root / "demo.sqlite3"
+            today = date(2026, 9, 25)
+            stores = (Store(database), Store(database))
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results = list(pool.map(
+                    lambda store: seed_local_demo(store, root / "uploads", today),
+                    stores,
+                ))
+            self.assertEqual(sorted(results), [False, True])
+            self.assertEqual(Store(database).authenticate(*DEMO_ADMIN)["role"], "admin")
+            self.assertEqual(Store(database).authenticate(*DEMO_SELLER)["role"], "vendedor")
 
 
 class OrderTests(unittest.TestCase):
