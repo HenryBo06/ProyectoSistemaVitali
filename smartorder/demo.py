@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
+from threading import Lock
 
 import numpy as np
 from openpyxl import Workbook
@@ -15,6 +16,7 @@ from .storage import Store
 
 DEMO_ADMIN = ("admin.demo", "VitaliDemo2026!")
 DEMO_SELLER = ("vendedor.demo", "VitaliDemo2026!")
+_SEED_LOCK = Lock()
 
 
 def demo_workbook(today: date) -> bytes:
@@ -58,18 +60,21 @@ def demo_workbook(today: date) -> bytes:
 
 def seed_local_demo(store: Store, directory: Path, today: date) -> bool:
     """Inicializa una instalación aislada; nunca modifica una instalación con usuarios."""
-    if store.has_users():
-        return False
-    directory.mkdir(parents=True, exist_ok=True)
-    raw = demo_workbook(today)
-    data = load_sales(raw)
-    path = directory / "ventas_demo_vitali.xlsx"
-    path.write_bytes(raw)
-    admin_id = store.bootstrap_admin(*DEMO_ADMIN)
-    seller_id = store.create_user(admin_id, *DEMO_SELLER, role="vendedor")
-    store.activate_dataset(
-        admin_id, data.digest, str(path), path.name, data.first_date.isoformat(),
-        data.last_date.isoformat(), len(data.rows),
-    )
-    store.set_assignments(admin_id, seller_id, data.clients)
-    return True
+    # Streamlit can execute the script concurrently for multiple first visitors.
+    # Serialize the one-time seed so both sessions cannot create the admin at once.
+    with _SEED_LOCK:
+        if store.has_users():
+            return False
+        directory.mkdir(parents=True, exist_ok=True)
+        raw = demo_workbook(today)
+        data = load_sales(raw)
+        path = directory / "ventas_demo_vitali.xlsx"
+        path.write_bytes(raw)
+        admin_id = store.bootstrap_admin(*DEMO_ADMIN)
+        seller_id = store.create_user(admin_id, *DEMO_SELLER, role="vendedor")
+        store.activate_dataset(
+            admin_id, data.digest, str(path), path.name, data.first_date.isoformat(),
+            data.last_date.isoformat(), len(data.rows),
+        )
+        store.set_assignments(admin_id, seller_id, data.clients)
+        return True

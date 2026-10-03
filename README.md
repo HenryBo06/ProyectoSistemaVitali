@@ -5,15 +5,49 @@
   Ventas observadas, pronóstico de demanda y revisión humana en un solo flujo de pedidos.
 </p>
 
+<p align="center">
+  <a href="https://smartorder-vitali-ai.streamlit.app/"><strong>Abrir la demo pública</strong></a>
+</p>
+
 ---
 
-**Contenido:** [Flujo](#cómo-funciona) · [Indicadores](#paneles-e-indicadores) · [Cálculo](#cómo-se-calcula-un-pedido) · [Excel](#fuente-de-datos) · [Uso local](#ejecutar-en-windows) · [Despliegue](#despliegue-en-streamlit-community-cloud) · [Código y pruebas](#organización-del-código-y-verificación)
+**Contenido:** [Demo pública](#demo-pública) · [Actualizaciones](#estado-actual-del-prototipo) · [Flujo](#cómo-funciona) · [Indicadores](#paneles-e-indicadores) · [Cálculo](#cómo-se-calcula-un-pedido) · [Excel](#fuente-de-datos) · [Uso local](#ejecutar-en-windows) · [Despliegue](#despliegue-en-streamlit-community-cloud) · [Código y pruebas](#organización-del-código-y-verificación)
 
 SmartOrder AI ayuda a decidir **qué producto pedir, cuánto solicitar y para qué fecha**. Administración carga el histórico de ventas desde Excel; cada vendedor consulta sus clientes, registra inventario y envía una solicitud interna; administración la revisa y prepara un archivo para producción.
 
 | Alcance actual | Fuente | Horizonte | Salida |
 | --- | --- | --- | --- |
 | Cliente y producto | Excel de ventas cargado por administración | Pronóstico de siete días | XLSX de pedidos revisados para producción |
+
+## Demo pública
+
+La versión más reciente está disponible en:
+
+**<https://smartorder-vitali-ai.streamlit.app/>**
+
+La pantalla inicial incluye botones para entrar directamente como administración o vendedor. También se puede usar el formulario con estas credenciales de demostración:
+
+| Perfil | Usuario | Contraseña |
+| --- | --- | --- |
+| Administración | `admin.demo` | `VitaliDemo2026!` |
+| Vendedor | `vendedor.demo` | `VitaliDemo2026!` |
+
+> [!NOTE]
+> Estas credenciales son exclusivamente académicas. La demo utiliza información sintética, almacenamiento aislado y no contiene datos comerciales reales. Streamlit Community Cloud puede reiniciar ese almacenamiento cuando la aplicación se suspende o se vuelve a desplegar.
+
+## Estado actual del prototipo
+
+Actualizado el **25 de septiembre de 2026**:
+
+- Panel administrativo con indicadores, filtros, evolución mensual, participación por canal y productos con mayores ventas.
+- Centro IA con entrenamiento y evaluación de XGBoost, comparación con promedio histórico, WAPE, MAE, método ganador, rango orientativo e importancia de variables.
+- Panel del vendedor con cartera asignada, productos por cliente, recomendaciones de siete días, simulación de inventario y envío de solicitudes.
+- Flujo controlado de pedidos: pendiente, aprobado, rechazado, sustituido, fuente sustituida y exportado.
+- Revisión administrativa, ajustes con motivo y exportación XLSX para producción.
+- Importación flexible de archivos Excel con validaciones, aliases de columnas y diagnóstico de datos faltantes.
+- Cuentas separadas por rol, contraseñas derivadas con PBKDF2, bloqueo temporal por intentos e invalidación de sesión al restablecer una contraseña.
+- Demo pública de un clic con datos sintéticos recientes e inicialización segura cuando entran varios usuarios al mismo tiempo.
+- **22 pruebas automáticas** para carga de datos, pronóstico, permisos, pedidos, exportación, demo y concurrencia.
 
 > [!IMPORTANT]
 > El archivo recibido se llama `Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx`. Sus cifras describen ese archivo de ejemplo y **no acreditan ventas, ahorros ni reducción de mermas reales de Vitali**. Tampoco contiene sucursal, SKU ni unidad oficial por producto; esas funciones requieren fuentes adicionales.
@@ -125,9 +159,23 @@ Abra [http://127.0.0.1:8501/](http://127.0.0.1:8501/) **en el mismo equipo**. Ma
 
 Después de instalar las dependencias, ejecute [`iniciar_demo.cmd`](iniciar_demo.cmd). Se crea una instalación aislada con 15 meses de datos sintéticos, un perfil de administración y otro de vendedor. En la pantalla de acceso aparecen dos botones para cambiar de rol. Los datos reales y las cuentas normales no se modifican.
 
-El modo demo solo se habilita en `127.0.0.1`; no debe configurarse en Streamlit Cloud. Incluye tendencias, promociones simuladas y variación estacional para que el entrenamiento, el rango orientativo, el Centro IA y el flujo de aprobación puedan presentarse sin preparar un Excel previamente.
+La demo incluye tendencias, promociones simuladas y variación estacional para que el entrenamiento, el rango orientativo, el Centro IA y el flujo de aprobación puedan presentarse sin preparar un Excel previamente.
 
-Al primer inicio cree una cuenta administradora; no hay usuarios ni contraseñas predeterminadas. Las contraseñas deben tener al menos 12 caracteres. Si el Excel de demostración está en la carpeta principal, la aplicación lo lee automáticamente. Como el Excel original no se incluye en el repositorio público, en otra copia administración deberá subirlo desde **Datos y modelo**.
+### Demo pública en Streamlit Cloud
+
+La demo oficial del prototipo está publicada en [smartorder-vitali-ai.streamlit.app](https://smartorder-vitali-ai.streamlit.app/). Abre directamente en modo de presentación, crea un almacenamiento separado y habilita los botones para entrar como administración o vendedor. Solo utiliza datos sintéticos y no modifica las cuentas o cargas de una instalación normal.
+
+En cualquier otro despliegue, la pantalla de configuración o acceso incluye **Probar demo pública**. Al pulsarlo, la aplicación abre `?demo=1` y prepara el mismo entorno aislado.
+
+Para que un despliegue abra siempre en modo demostración, agregue en **App settings → Secrets**:
+
+```toml
+SMARTORDER_PUBLIC_DEMO = "1"
+```
+
+Las cuentas de demostración son `admin.demo` y `vendedor.demo`; ambas usan `VitaliDemo2026!`. La inicialización está protegida contra accesos simultáneos durante el primer arranque. En Streamlit Community Cloud el almacenamiento sigue siendo temporal y puede reiniciarse cuando la aplicación se suspende o vuelve a desplegarse.
+
+En una instalación normal, fuera del modo de demostración, el primer inicio requiere crear una cuenta administradora; no hay usuarios ni contraseñas predeterminadas. Las contraseñas deben tener al menos 12 caracteres. Si el Excel de demostración está en la carpeta principal, la aplicación lo lee automáticamente. Como el Excel original no se incluye en el repositorio público, en otra copia administración deberá subirlo desde **Datos y modelo**.
 
 ### Primer recorrido recomendado
 
@@ -141,7 +189,13 @@ Al primer inicio cree una cuenta administradora; no hay usuarios ni contraseñas
 
 ## Despliegue en Streamlit Community Cloud
 
-El punto de entrada es `app.py` en la rama `main` de `HenryBo06/ProyectoSistemaVitali`. Antes del primer acceso a una instalación en red, configure en **Secrets** un valor privado de al menos 20 caracteres:
+El despliegue público actual usa `app.py` desde la rama `main` de [`IsaacRenderos2109/ProyectoSistemaVitali`](https://github.com/IsaacRenderos2109/ProyectoSistemaVitali), con Python 3.12. Para publicar una demo equivalente, configure en **Secrets**:
+
+```toml
+SMARTORDER_PUBLIC_DEMO = "1"
+```
+
+Para una instalación privada o de uso real, no active el modo de demo. Antes del primer acceso en red, configure en **Secrets** un valor privado de al menos 20 caracteres:
 
 ```toml
 SMARTORDER_SETUP_CODE = "reemplace-por-un-codigo-privado-largo"
@@ -166,11 +220,12 @@ Las cuentas, cargas y solicitudes se guardan actualmente en SQLite y archivos ba
 | --- | --- |
 | `app.py` | Interfaz Streamlit y navegación según el rol. |
 | `smartorder/data.py` | `SalesData`: lectura, validación y preparación del Excel. |
-| `smartorder/demo.py` | Dataset sintético y cuentas aisladas para la presentación local. |
+| `smartorder/demo.py` | Dataset sintético, cuentas aisladas e inicialización concurrente segura para la demo. |
 | `smartorder/forecast.py` | `DemandForecaster`: entrenamiento, evaluación y pronóstico. |
 | `smartorder/orders.py` | `OperationalInput`, cálculo del pedido y exportación XLSX. |
 | `smartorder/storage.py` | `Store`: cuentas, clientes asignados, solicitudes y revisiones en SQLite. |
-| `tests/test_system.py` | Comprobaciones de datos, pronóstico, permisos y flujo a producción. |
+| `tests/test_app.py` | Pruebas de los accesos de demostración y navegación de ambos perfiles. |
+| `tests/test_system.py` | Comprobaciones de datos, pronóstico, permisos, pedidos, concurrencia y flujo a producción. |
 
 Para ejecutar las pruebas:
 
