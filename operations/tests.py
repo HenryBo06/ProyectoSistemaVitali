@@ -6,6 +6,8 @@ from io import BytesIO
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import Client, TestCase, override_settings
@@ -206,6 +208,11 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertTrue(get_user_model().objects.get(username="jefe_vitali").is_staff)
         self.assertEqual(self.client.get(reverse("setup"), HTTP_HOST="localhost").status_code, 302)
+
+    def test_password_minimum_is_eight_characters(self):
+        with self.assertRaises(ValidationError):
+            validate_password("J7!mQ2#")
+        validate_password("J7!mQ2#v")
 
     @override_settings(SMARTORDER_SETUP_CODE="setup-code-for-tests-only-32-characters")
     def test_remote_setup_requires_the_configured_code(self):

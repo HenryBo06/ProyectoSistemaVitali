@@ -729,7 +729,7 @@ if not user.is_authenticated:
         st.subheader("Crear administrador inicial" if initial else "Entrar a tu cuenta")
         setup_code = st.text_input("Código de instalación", type="password") if initial and not allowed else ""
         username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password", help="Al menos 12 caracteres para una cuenta nueva.")
+        password = st.text_input("Contraseña", type="password", help="Al menos 8 caracteres para una cuenta nueva.")
         if st.form_submit_button("Crear administrador" if initial else "Entrar", type="primary"):
             if initial:
                 response = action("setup", {"username": username, "password": password,

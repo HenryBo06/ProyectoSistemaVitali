@@ -162,7 +162,7 @@ SMARTORDER_SECRET_KEY = "<clave-aleatoria-generada>"
 SMARTORDER_SETUP_CODE = "<codigo-aleatorio-de-32-caracteres-o-mas>"
 ```
 
-Al abrir la app, crea el primer administrador con ese código y una contraseña de al menos 12 caracteres. El código solo autoriza la creación de la primera cuenta; cuando ya existe un usuario, el inicio cambia al formulario de acceso. No lo escribas en Git, capturas públicas ni mensajes.
+Al abrir la app, crea el primer administrador con ese código y una contraseña de al menos 8 caracteres. El código solo autoriza la creación de la primera cuenta; cuando ya existe un usuario, el inicio cambia al formulario de acceso. No lo escribas en Git, capturas públicas ni mensajes.
 
 Esta demo usa datos sintéticos y el almacenamiento de archivos de Streamlit Community Cloud no es persistente; no cargues ventas, inventario, cuentas ni credenciales reales. El laboratorio Odoo se ejecuta localmente y no tiene una conexión pública configurada desde Cloud. Streamlit está incluido en `requirements.txt`; `requirements-streamlit.txt` es el acceso equivalente para el iniciador local.
 
