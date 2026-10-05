@@ -1,0 +1,30 @@
+{% extends 'operations/base.html' %}
+{% block title %}Ventas en Excel{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="page-eyebrow">Fuente de ventas</p><h1>Ventas en Excel</h1><p>Carga el histórico semanal completo. La aplicación valida las columnas y muestra qué productos y fechas contiene.</p></div></div>
+{% if dataset %}<div class="source-strip"><span><strong>Activo:</strong> {{ dataset.filename }}</span><span><strong>Período:</strong> {{ dataset.first_date|date:'d/m/Y' }}–{{ dataset.last_date|date:'d/m/Y' }}</span><span><strong>Filas:</strong> {{ dataset.row_count }}</span><span><strong>Origen:</strong> {% if dataset.verified %}Confirmado por administración{% else %}Referencia, pendiente de confirmar{% endif %}</span></div>{% endif %}
+<div class="row g-3">
+  <div class="col-xl-7">
+    <section class="panel" aria-labelledby="sales-file-title"><div class="panel-header"><h2 class="panel-title" id="sales-file-title">Cargar archivo de ventas</h2><p class="panel-subtitle">Formato .xlsx · un archivo completo sustituye al histórico activo después de validarse.</p></div><div class="panel-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-3"><label class="form-label" for="sales-file">Archivo Excel</label><input class="form-control" id="sales-file" type="file" name="sales_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required><div class="form-text">Se necesitan fecha, cliente, producto, cantidad y precio unitario. Los importes pueden calcularse cuando falten.</div></div>
+        <fieldset class="mb-4"><legend class="form-label mb-2">Verificación de la fuente</legend><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="verified" value="on" id="sales-verified"><label class="form-check-label" for="sales-verified">Solicito activar estas ventas como fuente operativa verificada.</label></div><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="confirmed_origin" value="on" id="sales-origin"><label class="form-check-label" for="sales-origin">Confirmo que conozco el origen de las ventas y que son registros reales de Vitali.</label></div><div class="form-check"><input class="form-check-input" type="checkbox" name="confirmed_full_snapshot" value="on" id="sales-snapshot"><label class="form-check-label" for="sales-snapshot">Confirmo que contiene el histórico completo disponible, no solo las ventas nuevas de la semana.</label></div><div class="form-text mt-2">Marca las tres casillas solo si puedes confirmarlas. Sin esa verificación, el archivo queda como referencia y los pedidos se hacen manualmente.</div></fieldset>
+        <button class="btn btn-primary" type="submit">Validar y activar ventas</button>
+      </form>
+    </div></section>
+  </div>
+  <div class="col-xl-5">
+    <aside class="panel h-100" aria-labelledby="sales-check-title"><div class="panel-header"><h2 class="panel-title" id="sales-check-title">Qué se revisa</h2></div><div class="panel-body"><ol class="mb-0 ps-3"><li class="mb-2">Columnas, fechas, cantidades y precios válidos.</li><li class="mb-2">Clientes y productos reconocibles, sin cambios silenciosos de unidad.</li><li class="mb-2">Cobertura del período y coincidencia con la fuente activa.</li><li>Filas con problemas antes de reemplazar el histórico.</li></ol></div></aside>
+  </div>
+</div>
+{% if preview %}
+<section class="panel mt-4" aria-labelledby="sales-result-title"><div class="panel-header"><h2 class="panel-title" id="sales-result-title">Resumen del archivo activo</h2><p class="panel-subtitle">{{ preview.row_count }} filas · {{ preview.clients }} clientes · {{ preview.products }} productos · {{ preview.first_date|date:'d/m/Y' }}–{{ preview.last_date|date:'d/m/Y' }}</p></div><div class="panel-body">
+  {% if preview.errors %}<div class="alert alert-danger" role="alert"><strong>No se activó el archivo.</strong> Corrige estos puntos y vuelve a cargarlo:<ul class="mb-0 mt-2">{% for item in preview.errors %}<li>{{ item }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if preview.warnings %}<div class="alert alert-warning" role="status"><strong>Observaciones:</strong><ul class="mb-0 mt-2">{% for item in preview.warnings %}<li>{{ item }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if preview.notes %}<div class="alert alert-info" role="status"><strong>Adaptaciones de la carga:</strong><ul class="mb-0 mt-2">{% for item in preview.notes %}<li>{{ item }}</li>{% endfor %}</ul></div>{% endif %}
+  {% if preview.sample_rows %}<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th class="text-end">Cantidad</th><th class="text-end">Ventas USD</th></tr></thead><tbody>{% for row in preview.sample_rows %}<tr><td>{{ row.date }}</td><td>{{ row.client }}</td><td>{{ row.product }}</td><td class="num text-end">{{ row.quantity }}</td><td class="num text-end">{{ row.amount_usd }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+</div></section>
+{% endif %}
+{% if datasets %}<div class="section-label"><h2>Archivos cargados</h2><small>Se conserva la fecha y quién activó cada fuente.</small></div><div class="panel table-responsive"><table class="table"><thead><tr><th>Archivo</th><th>Período</th><th>Filas</th><th>Origen</th><th>Activado por</th><th>Estado</th></tr></thead><tbody>{% for item in datasets %}<tr><td>{{ item.filename }}</td><td>{{ item.first_date|date:'d/m/Y' }}–{{ item.last_date|date:'d/m/Y' }}</td><td class="num">{{ item.row_count }}</td><td>{% if item.verified %}Confirmado{% else %}Referencia{% endif %}</td><td>{{ item.uploaded_by }}</td><td>{% if item.active %}<span class="badge-status status-approved">Activo</span>{% else %}<span class="badge-status status-neutral">Anterior</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% endblock %}

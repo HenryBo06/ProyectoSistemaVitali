@@ -1,0 +1,13 @@
+// ponytail: native Odoo screens and workflows; only the brand colors are customized.
+.o_main_navbar {
+    background: #ffffff !important;
+    border-bottom: 4px solid transparent !important;
+    border-image: linear-gradient(90deg, #5ba744 0% 16.66%, #f6cd28 16.66% 33.33%, #ee9233 33.33% 50%, #dd3a42 50% 66.66%, #42b7d3 66.66% 83.33%, #1479a5 83.33% 100%) 1 !important;
+    color: #20364a !important;
+    .o_menu_brand, .o_nav_entry, .dropdown-toggle, .o_menu_toggle { color: #20364a !important; }
+    .o_menu_sections > .dropdown-toggle { background-color: transparent !important; }
+    .o_menu_sections > .dropdown-toggle:hover { background-color: #eef6f8 !important; }
+}
+.o_web_client .btn-primary { background-color: #12688b; border-color: #12688b; color: #fff; }
+.o_web_client .btn-primary:hover { background-color: #105675; border-color: #105675; }
+.o_web_client .btn-primary:focus-visible { outline: 3px solid #42b7d3; outline-offset: 2px; }

@@ -1,0 +1,18 @@
+{% extends 'operations/base.html' %}
+{% block title %}Venta {{ order.id }}{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Venta #{{ order.id }}</h1><p>{{ order.client }} · Entrega comprometida: {{ order.required_date|date:'d/m/Y' }}</p></div><a class="btn btn-outline-primary" href="{% url 'orders' %}">Volver</a></div>
+<section class="panel panel-body mb-4"><p>{% if order.sale_confirmed %}<strong>Venta confirmada sin aprobación administrativa.</strong> La producción se autoriza por separado.{% else %}Solicitud anterior al nuevo flujo comercial.{% endif %}</p>
+<p>Autor: {{ order.seller.username }} · {{ order.created_at|date:'d/m/Y H:i' }}</p>
+{% if order.payment_terms %}<p>Condiciones comerciales: {{ order.payment_terms }}</p>{% endif %}
+{% if order.note %}<p>{{ order.note }}</p>{% endif %}</section>
+{% for line in lines %}<section class="product-line panel-body"><h2>{{ line.product }}</h2><dl class="sale-summary"><div><dt>Cantidad vendida</dt><dd>{{ line.requested_qty }} {{ line.unit }}</dd></div><div><dt>Precio unitario</dt><dd>USD {{ line.unit_price }}</dd></div><div><dt>Descuento</dt><dd>{{ line.discount_percent }} %</dd></div></dl>
+<p>Producción: {{ line.get_status_display }}</p>
+{% if line.approved_qty != None %}<p>Cantidad autorizada para producción: {{ line.approved_qty }} {{ line.unit }}</p>{% endif %}
+{% if line.review_note %}<p>Respuesta de administración: {{ line.review_note }}</p>{% endif %}
+{% if line.future_quantity == None %}<p>Disponibilidad por confirmar; entrega futura pendiente de planificación.</p>{% elif line.future_quantity > 0 %}<p>Compromiso futuro: {{ line.future_quantity }} {{ line.unit }} según inventario al confirmar.</p>{% else %}<p>Existencia suficiente según inventario al confirmar.</p>{% endif %}
+<p class="form-text">La existencia observada no constituye una reserva ni confirma entrega.</p>
+{% if line.suggested_qty != None %}<p>Sugerencia: {{ line.suggested_qty }} {{ line.unit }}</p>{% endif %}{% if line.reason %}<p>Motivo: {{ line.reason }}</p>{% endif %}</section>{% endfor %}
+{% include 'operations/sale_changes.html' %}
+{% include 'operations/odoo_order_panel.html' %}
+{% endblock %}

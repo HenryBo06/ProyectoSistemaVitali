@@ -1,0 +1,10 @@
+{% extends 'operations/base.html' %}
+{% block title %}Mi trabajo{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="page-eyebrow">Vendedor</p><h1>Mi trabajo</h1><p>Consulta disponibilidad, confirma ventas y sigue tus entregas.</p></div><a class="btn btn-primary" href="{% url 'recommendations' %}">Productos y sugerencias</a></div>
+<div class="row g-3 mb-4"><div class="col-sm-6"><div class="stat"><span class="stat-label">Clientes asignados</span><strong class="stat-value">{{ clients|length }}</strong></div></div><div class="col-sm-6"><div class="stat"><span class="stat-label">Pedidos de mi cartera</span><strong class="stat-value">{{ order_count }}</strong></div></div></div>
+<div class="seller-workspace">
+<section class="panel panel-body next-sale"><p class="page-eyebrow">Tu siguiente venta</p><h2>De tu cartera a una entrega comprometida.</h2><p class="muted">Revisa la disponibilidad y acuerda cantidades y condiciones con tu cliente.</p><a class="btn btn-primary" href="{% url 'order_create' %}">Preparar venta</a><a class="btn btn-outline-primary" href="{% url 'orders' %}">Seguir mis pedidos</a></section>
+<section class="panel panel-body"><h2>Mi cartera</h2><p class="panel-subtitle mb-3">Clientes asignados a tu cuenta</p><ul class="client-list">{% for client in clients %}<li><a href="{% url 'recommendations' %}?client={{ client|urlencode }}">{{ client }}<span>Consultar productos →</span></a></li>{% empty %}<li>Administración debe asignarte clientes para empezar.</li>{% endfor %}</ul></section>
+</div>
+{% endblock %}

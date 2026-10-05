@@ -1,0 +1,68 @@
+{% extends 'operations/base.html' %}
+{% load static %}
+{% block title %}Resumen{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><p class="page-eyebrow">{% if role == 'admin' or request.user.is_staff %}Administración{% else %}Mi cartera{% endif %}</p><h1>Resumen de ventas</h1><p>El comportamiento de tus ventas y el siguiente paso de la operación.</p></div>
+  {% if role == 'admin' or request.user.is_staff %}<a class="btn btn-outline-primary" href="{% url 'sales_upload' %}">Cargar ventas</a>{% else %}<a class="btn btn-primary" href="{% url 'order_create' %}">Crear pedido</a>{% endif %}
+</div>
+<section class="workbench {% if kpis.pending_orders_display == 0 %}workbench-empty{% endif %}" aria-labelledby="workbench-title">
+  <div class="workbench-count"><strong>{{ kpis.pending_orders_display|default:'0' }}</strong><span>pedidos pendientes</span></div>
+  <div class="workbench-copy"><h2 id="workbench-title">{% if role == 'admin' or request.user.is_staff %}Tu mesa de revisión{% else %}Seguimiento de tus solicitudes{% endif %}</h2><p>{% if role == 'admin' or request.user.is_staff %}Revisa cantidades y fechas antes de enviar productos a producción.{% else %}Consulta la respuesta de administración o prepara tu siguiente pedido.{% endif %}</p><small>Este conteo no cambia con los filtros de ventas.</small></div>
+  <a class="workbench-link" href="{% url 'orders' %}">{% if role == 'admin' or request.user.is_staff %}Ir a revisión{% else %}Ver mis pedidos{% endif %}<span aria-hidden="true"> →</span></a>
+</section>
+{% if dataset %}
+{% if source_status == 'reference' %}<div class="data-notice" role="status"><span class="notice-mark" aria-hidden="true">!</span><div><strong>Histórico de referencia · pedidos manuales</strong><p>El origen de las ventas está pendiente de confirmar. Las cifras no autorizan producción.</p></div></div>{% elif source_status == 'stale' %}<div class="data-notice" role="status"><span class="notice-mark" aria-hidden="true">!</span><div><strong>Ventas pendientes de actualizar</strong><p>Confirma la cantidad con inventario e información actual antes de pedir.</p></div></div>{% endif %}
+<form class="filter-bar" method="get" aria-label="Filtrar resumen de ventas">
+  <div class="filter-title"><strong>Período de ventas</strong><span>Selecciona qué cifras comparar</span></div>
+  <div><label class="form-label" for="filter-start">Desde</label><input class="form-control" id="filter-start" type="date" name="start_date" value="{{ period_start|date:'Y-m-d' }}"></div>
+  <div><label class="form-label" for="filter-end">Hasta</label><input class="form-control" id="filter-end" type="date" name="end_date" value="{{ period_end|date:'Y-m-d' }}"></div>
+  <div><label class="form-label" for="filter-client">Cliente</label><select class="form-select" id="filter-client" name="client"><option value="">Todos los visibles</option>{% for client in clients %}<option value="{{ client }}" {% if selected_client == client %}selected{% endif %}>{{ client }}</option>{% endfor %}</select></div>
+  <button class="btn btn-outline-primary" type="submit">Aplicar filtros</button>
+</form>
+<div class="scope-line"><span>{{ period_start|date:'d/m/Y' }} — {{ period_end|date:'d/m/Y' }}</span><span>{{ selected_client|default:'Todos los clientes visibles' }}</span></div>
+<div class="sales-overview" aria-label="Indicadores de ventas">
+  <div class="sales-total"><span class="stat-label">Ventas observadas</span><strong>{{ kpis.sales_usd_display|default:'—' }}</strong><span class="stat-note">USD registrados en el período seleccionado</span></div>
+  <div class="overview-metric"><span class="stat-label">Productos con ventas</span><strong>{{ kpis.products_display|default:'0' }}</strong><span class="stat-note">Productos distintos del período</span></div>
+  <div class="overview-metric"><span class="stat-label">{% if role == 'admin' or request.user.is_staff %}Clientes con ventas{% else %}Clientes de tu cartera{% endif %}</span><strong>{{ kpis.clients_display|default:'0' }}</strong><span class="stat-note">{% if role == 'admin' or request.user.is_staff %}En el período seleccionado{% else %}Asignados a tu cuenta, sin filtrar{% endif %}</span></div>
+</div>
+<details class="source-details"><summary><span>Fuente y cobertura</span><span>Última venta: {{ latest_sale_date|date:'d/m/Y' }}</span></summary><div class="source-details-body"><span><strong>Archivo:</strong> {{ source_name }}</span><span><strong>Origen:</strong> {% if source_status == 'reference' %}Sin verificación, solo referencia{% else %}Confirmado por administración{% endif %}</span><span><strong>Cobertura del archivo:</strong> {{ dataset.first_date|date:'d/m/Y' }}–{{ dataset.last_date|date:'d/m/Y' }}</span>{% if role == 'admin' or request.user.is_staff %}<a href="{% url 'sales_upload' %}">Revisar o actualizar ventas</a>{% endif %}</div></details>
+{% if has_sales %}
+<div class="section-label"><h2>Ventas del período</h2><small>Las cantidades de distintos productos no se suman entre sí.</small></div>
+<div class="row g-3">
+  <div class="col-xl-7"><section class="panel h-100" aria-labelledby="trend-title"><div class="panel-header"><h3 class="panel-title" id="trend-title">Evolución mensual</h3><p class="panel-subtitle">USD registrados en el Excel activo.</p></div><div class="panel-body"><div class="chart-box"><canvas id="monthlyChart" role="img" aria-label="Gráfico de barras de ventas mensuales en dólares"></canvas></div><details class="chart-fallback"><summary>Ver valores del gráfico</summary><div class="table-responsive mt-2"><table class="table table-sm"><thead><tr><th>Mes</th><th class="text-end">Ventas USD</th></tr></thead><tbody>{% for row in monthly_sales %}<tr><td>{{ row.label }}</td><td class="num text-end">{{ row.value_display }}</td></tr>{% endfor %}</tbody></table></div></details></div></section></div>
+  <div class="col-xl-5"><section class="panel h-100" aria-labelledby="channel-title"><div class="panel-header"><h3 class="panel-title" id="channel-title">Canales de venta</h3><p class="panel-subtitle">Participación en USD del mismo período.</p></div><div class="panel-body"><div class="chart-box chart-box-small"><canvas id="channelChart" role="img" aria-label="Gráfico circular de participación de ventas por canal"></canvas></div><details class="chart-fallback"><summary>Ver valores del gráfico</summary><div class="table-responsive mt-2"><table class="table table-sm"><thead><tr><th>Canal</th><th class="text-end">Ventas USD</th></tr></thead><tbody>{% for row in channel_sales %}<tr><td>{{ row.label }}</td><td class="num text-end">{{ row.value_display }}</td></tr>{% endfor %}</tbody></table></div></details></div></section></div>
+</div>
+<div class="row g-3 mt-1">
+  <div class="col-xl-7"><section class="panel h-100" aria-labelledby="products-title"><div class="panel-header"><h3 class="panel-title" id="products-title">Productos con más ventas</h3><p class="panel-subtitle">Barras en USD. “Días con venta” cuenta fechas distintas, no tickets de compra.</p></div><div class="panel-body"><div class="chart-box chart-box-products"><canvas id="productsChart" role="img" aria-label="Gráfico de barras de ventas en dólares por producto"></canvas></div></div></section></div>
+  <div class="col-xl-5"><section class="panel h-100" aria-labelledby="ranking-title"><div class="panel-header"><h3 class="panel-title" id="ranking-title">Detalle por producto</h3><p class="panel-subtitle">Ventas en USD y frecuencia observada en este período.</p></div><div class="panel-body table-responsive"><table class="table table-sm ranking-table"><thead><tr><th>Producto</th><th class="text-end">Ventas USD</th><th class="text-end">Días con venta</th></tr></thead><tbody>{% for row in top_products %}<tr><td>{{ row.label }}</td><td class="num text-end">{{ row.value_display }}</td><td class="num text-end">{{ row.days_with_sale }}</td></tr>{% endfor %}</tbody></table><p class="form-text mt-3 mb-0">La frecuencia cuenta fechas distintas con ventas; no representa tickets de compra.</p></div></section></div>
+</div>
+{% else %}
+<div class="empty-state"><h2>Sin ventas para estos filtros</h2><p class="muted">El archivo sigue activo. Prueba otro período o consulta todos los clientes visibles.</p><a class="btn btn-outline-primary" href="{% url 'dashboard' %}">Restablecer filtros</a></div>
+{% endif %}
+{% else %}
+<div class="empty-state"><h2>Aún no hay ventas activas</h2><p class="muted">{% if role == 'admin' or request.user.is_staff %}Carga el Excel de ventas para ver productos, cifras y gráficos.{% else %}Administración debe cargar el histórico y asignarte clientes para mostrar tu cartera.{% endif %}</p>{% if role == 'admin' or request.user.is_staff %}<a class="btn btn-primary" href="{% url 'sales_upload' %}">Cargar Excel de ventas</a>{% endif %}</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if has_sales %}
+{{ chart_monthly|json_script:'chart-monthly-data' }}
+{{ chart_channels|json_script:'chart-channel-data' }}
+{{ chart_products|json_script:'chart-product-data' }}
+<script src="{% static 'operations/vendor/chart.umd.min.js' %}"></script>
+<script>
+  (() => {
+    const colors = ['#1479a5', '#5ba744', '#ee9233', '#42b7d3', '#dd3a42', '#f6cd28'];
+    const data = id => JSON.parse(document.getElementById(id).textContent);
+    const monthly = data('chart-monthly-data'), channels = data('chart-channel-data'), products = data('chart-product-data');
+    const money = new Intl.NumberFormat('es-SV', {style: 'currency', currency: 'USD'});
+    Chart.defaults.font.family = 'Segoe UI, Arial, sans-serif';
+    Chart.defaults.color = '#506577';
+    const common = {responsive: true, maintainAspectRatio: false, animation: false, plugins: {legend: {display: false}, tooltip: {callbacks: {label: c => money.format(c.chart.options.indexAxis === 'y' ? c.parsed.x : c.parsed.y)}}}};
+    if (monthly && monthly.labels && monthly.labels.length) new Chart(document.getElementById('monthlyChart'), {type: 'bar', data: {labels: monthly.labels, datasets: [{label: 'Ventas USD', data: monthly.values, backgroundColor: '#12688b', borderRadius: 5}]}, options: {...common, scales: {y: {beginAtZero: true, title: {display: true, text: 'USD'}, grid: {color: '#edf0ea'}}, x: {grid: {display: false}}}}});
+    if (channels && channels.labels && channels.labels.length) new Chart(document.getElementById('channelChart'), {type: 'doughnut', data: {labels: channels.labels, datasets: [{data: channels.values, backgroundColor: colors, borderWidth: 2, borderColor: '#fff'}]}, options: {responsive: true, maintainAspectRatio: false, animation: false, cutout: '72%', plugins: {legend: {position: 'bottom', labels: {usePointStyle: true, padding: 16}}, tooltip: {callbacks: {label: c => `${c.label}: ${money.format(c.parsed)}`}}}}});
+    if (products && products.labels && products.labels.length) new Chart(document.getElementById('productsChart'), {type: 'bar', data: {labels: products.labels, datasets: [{label: 'Ventas USD', data: products.values, backgroundColor: '#12688b', borderRadius: 5}]}, options: {...common, indexAxis: 'y', scales: {x: {beginAtZero: true, title: {display: true, text: 'USD'}, grid: {color: '#edf0ea'}}, y: {grid: {display: false}}}}});
+  })();
+</script>
+{% endif %}
+{% endblock %}

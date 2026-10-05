@@ -1,0 +1,22 @@
+{% extends 'operations/base.html' %}
+{% block title %}Productos y sugerencias{% endblock %}
+{% block content %}
+<div class="page-heading"><div><h1>Productos y sugerencias</h1><p>Consulta disponibilidad y confirma las cantidades con tu cliente.</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Crear venta</a>{% endif %}</div>
+{% if role == 'admin' and dataset %}
+{% if source_status == 'reference' %}<div class="alert alert-warning" role="status">Fuente sin verificar: las cifras son referencia y la cantidad se decide manualmente.</div>{% elif source_status == 'stale' %}<div class="alert alert-warning" role="status">El histórico no tiene ventas recientes. Revisa las fechas antes de decidir un pedido.</div>{% endif %}
+<details class="source-details"><summary>Fuente y cobertura</summary><div class="source-details-body"><span>{{ dataset.filename }}</span><span>{{ dataset.first_date|date:'d/m/Y' }}–{{ dataset.last_date|date:'d/m/Y' }}</span><span>Última venta: {{ latest_sale_date|date:'d/m/Y' }}</span></div></details>
+{% endif %}
+<form class="filter-bar" method="get"><div><label for="client">Cliente</label><select class="form-select" id="client" name="client">{% for client in clients %}<option {% if client == selected_client %}selected{% endif %}>{{ client }}</option>{% endfor %}</select></div><div><label for="delivery">Entrega comprometida</label><input class="form-control" type="date" id="delivery" name="required_date" value="{{ required_date|date:'Y-m-d' }}" min="{{ min_date|date:'Y-m-d' }}" max="{{ max_date|date:'Y-m-d' }}"></div><button class="btn btn-outline-primary">Consultar</button></form>
+<div class="product-grid">
+{% for item in recommendations %}
+<article class="panel product-summary decision-{{ item.state }}">
+  <div class="product-summary-heading"><div><p class="page-eyebrow">{{ item.category|default:'Producto' }}</p><h2>{{ item.product }}</h2></div><span class="badge-status {% if item.suggested == None %}status-manual{% else %}status-approved{% endif %}">{% if item.suggested == None %}Cantidad manual{% else %}Con sugerencia{% endif %}</span></div>
+  <dl class="product-summary-facts"><div><dt>Existencia disponible</dt><dd>{% if item.available != None %}{{ item.available }} <small>{{ item.unit }}</small>{% else %}Por confirmar{% endif %}</dd></div><div><dt>Cantidad sugerida</dt><dd>{% if item.suggested != None %}{{ item.suggested }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div></dl>
+  {% if item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
+  {% if item.inventory_warning %}<div class="alert alert-warning" role="status">{{ item.inventory_warning }}</div>{% endif %}
+  <p class="muted">{{ item.explanation }}</p>
+  {% if role == 'admin' %}<details class="product-evidence"><summary>Histórico y datos de cálculo</summary><p>Ventas: {{ item.sales_usd_display }} · Días con venta: {{ item.days_with_sale }}</p><p>Referencia: {{ item.reference_qty|default_if_none:'Sin dato' }} · {{ item.reference_period }}</p><p>Entradas antes de entrega: {{ item.incoming }} · Compromisos previos: {{ item.commitments_before }} · Compromisos de la semana: {{ item.commitments }}</p></details>{% endif %}
+</article>
+{% empty %}<div class="empty-state"><h2>No hay productos para esta cartera</h2><p>Selecciona otro cliente o consulta a administración.</p></div>{% endfor %}
+</div>
+{% endblock %}

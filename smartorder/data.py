@@ -37,7 +37,7 @@ COLUMN_ALIASES = {
     "Canal_Distribucion": (
         "canal_distribucion", "tipo_cliente", "segmento", "customer_type",
     ),
-    "Canal_Venta": ("canal_venta", "canal", "tipo_cliente", "segmento"),
+    "Canal_Venta": ("canal_venta", "canal"),
     "Producto": (
         "producto", "nombre_producto", "descripcion_producto", "product", "sku",
     ),

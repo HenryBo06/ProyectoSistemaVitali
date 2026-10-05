@@ -5,8 +5,11 @@ __pycache__/
 .streamlit/secrets.toml
 .local/
 .local-demo/
-.public-demo/
+.local-web/
+.local-web-lab/
+.venv-web/
 .apptest-demo/
+.local-odoo/
 
 # Fuentes recibidas localmente; el repositorio público solo contiene código y documentación.
 *.pdf

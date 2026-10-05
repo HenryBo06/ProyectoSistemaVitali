@@ -1,236 +1,209 @@
+> **Estado local, 4 de octubre de 2026:** Django y Streamlit comparten funciones y permisos. El laboratorio integra Odoo Community con operación física, compras, calidad administrativa, mantenimiento y cierre contable simulados comprobados. Incluye diez clientes, ocho productos, tres puntos y 18 meses de historia sintética reconciliada. El inventario nativo revisado tiene corte local del 4 de octubre; el historial y las verificaciones relevantes están resumidos en este README. Las cuentas y archivos previos se preservan; no se acredita operación real ni validación fiscal salvadoreña.
+
 <h1 align="center">SmartOrder AI</h1>
-
-<p align="center">
-  <strong>Sistema inteligente de pedidos sugeridos para Vitali Alimentos</strong><br>
-  Ventas observadas, pronóstico de demanda y revisión humana en un solo flujo de pedidos.
-</p>
-
-<p align="center">
-  <a href="https://smartorder-vitali-ai.streamlit.app/"><strong>Abrir la demo pública</strong></a>
-</p>
+<p align="center"><strong>Vitali Alimentos · Ventas y seguimiento operativo</strong><br>Dos interfaces con autorización de producción e integración local Odoo Community.</p>
 
 ---
 
-**Contenido:** [Demo pública](#demo-pública) · [Actualizaciones](#estado-actual-del-prototipo) · [Flujo](#cómo-funciona) · [Indicadores](#paneles-e-indicadores) · [Cálculo](#cómo-se-calcula-un-pedido) · [Excel](#fuente-de-datos) · [Uso local](#ejecutar-en-windows) · [Despliegue](#despliegue-en-streamlit-community-cloud) · [Código y pruebas](#organización-del-código-y-verificación)
+**Guía rápida:** [Qué resuelve](#qué-resuelve) · [Historial](#historial-de-implementación) · [Laboratorio](#laboratorio-integrado-con-odoo) · [Flujo](#flujo-de-trabajo) · [Datos](#archivos-excel) · [Recomendaciones](#cómo-se-obtiene-una-recomendación) · [Instalación local](#ejecutar-en-windows) · [Probar Streamlit Cloud](#probar-en-streamlit-community-cloud) · [Pruebas](#verificación)
 
-SmartOrder AI ayuda a decidir **qué producto pedir, cuánto solicitar y para qué fecha**. Administración carga el histórico de ventas desde Excel; cada vendedor consulta sus clientes, registra inventario y envía una solicitud interna; administración la revisa y prepara un archivo para producción.
+## Qué resuelve
 
-| Alcance actual | Fuente | Horizonte | Salida |
-| --- | --- | --- | --- |
-| Cliente y producto | Excel de ventas cargado por administración | Pronóstico de siete días | XLSX de pedidos revisados para producción |
+El vendedor consulta productos, disponibilidad y sugerencias de sus clientes asignados; confirma una venta con cantidad, precio, descuento, condiciones y **fecha comprometida de entrega**, incluida una entrega futura. No consulta históricos, fuentes ni finanzas internas. Administración autoriza fabricación por producto, independientemente de la confirmación comercial.
 
-## Demo pública
+Django y Streamlit usan la misma fecha inicial de entrega, dentro del plazo de 365 días. Cuando el historial ya incluye hoy, empiezan en el día siguiente para disponer de un horizonte futuro. El vendedor puede elegir hoy expresamente; si la fecha no admite una sugerencia válida, puede confirmar cantidad manual con motivo. La explicación del vendedor no revela fechas del histórico ni archivos internos.
 
-La versión más reciente está disponible en:
+Odoo mantiene existencias, reservas, fabricación, entregas y documentos financieros. SmartOrder presenta el avance en las dos interfaces. Administración también puede descargar un XLSX y registrar que lo compartió; ese registro de archivo no sustituye las operaciones físicas de Odoo.
 
-**<https://smartorder-vitali-ai.streamlit.app/>**
-
-La pantalla inicial incluye botones para entrar directamente como administración o vendedor. También se puede usar el formulario con estas credenciales de demostración:
-
-| Perfil | Usuario | Contraseña |
-| --- | --- | --- |
-| Administración | `admin.demo` | `VitaliDemo2026!` |
-| Vendedor | `vendedor.demo` | `VitaliDemo2026!` |
-
-> [!NOTE]
-> Estas credenciales son exclusivamente académicas. La demo utiliza información sintética, almacenamiento aislado y no contiene datos comerciales reales. Streamlit Community Cloud puede reiniciar ese almacenamiento cuando la aplicación se suspende o se vuelve a desplegar.
-
-## Estado actual del prototipo
-
-Actualizado el **25 de septiembre de 2026**:
-
-- Panel administrativo con indicadores, filtros, evolución mensual, participación por canal y productos con mayores ventas.
-- Centro IA con entrenamiento y evaluación de XGBoost, comparación con promedio histórico, WAPE, MAE, método ganador, rango orientativo e importancia de variables.
-- Panel del vendedor con cartera asignada, productos por cliente, recomendaciones de siete días, simulación de inventario y envío de solicitudes.
-- Flujo controlado de pedidos: pendiente, aprobado, rechazado, sustituido, fuente sustituida y exportado.
-- Revisión administrativa, ajustes con motivo y exportación XLSX para producción.
-- Importación flexible de archivos Excel con validaciones, aliases de columnas y diagnóstico de datos faltantes.
-- Cuentas separadas por rol, contraseñas derivadas con PBKDF2, bloqueo temporal por intentos e invalidación de sesión al restablecer una contraseña.
-- Demo pública de un clic con datos sintéticos recientes e inicialización segura cuando entran varios usuarios al mismo tiempo.
-- **22 pruebas automáticas** para carga de datos, pronóstico, permisos, pedidos, exportación, demo y concurrencia.
-
-> [!IMPORTANT]
-> El archivo recibido se llama `Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx`. Sus cifras describen ese archivo de ejemplo y **no acreditan ventas, ahorros ni reducción de mermas reales de Vitali**. Tampoco contiene sucursal, SKU ni unidad oficial por producto; esas funciones requieren fuentes adicionales.
-
-## Cómo funciona
-
-```mermaid
-flowchart TB
-    A[Excel de ventas] --> B[Validación]
-    B --> C[Panel administrativo]
-    B --> D[Pronóstico de siete días]
-    D --> E[Inventario y propuesta del vendedor]
-    E --> F[Pedido interno pendiente]
-    F --> G{Revisión administrativa}
-    G -->|Aprobar o ajustar| H[XLSX para producción]
-    G -->|Rechazar| I[Historial con motivo]
-    H --> J[Confirmación manual de entrega]
-```
-
-El vendedor conserva la decisión sobre la cantidad que solicita. Administración puede aprobarla, cambiarla con una explicación o rechazarla. **Exportado** significa que administración confirmó haber descargado y compartido el XLSX; el sistema no recibe un acuse de la planta ni crea órdenes directamente en un ERP.
-
-### Funciones por rol
+El proyecto ofrece dos interfaces: Django con Bootstrap y Streamlit nativo, disponible localmente y en la demo Cloud. Ambas usan las mismas cuentas, permisos, Excel, inventario y pedidos. No hace falta ejecutar el servidor Django para utilizar Streamlit. La creación inicial del administrador local desde su iniciador no requiere código secreto.
 
 | Administración | Vendedor |
 | --- | --- |
-| Carga y activa el Excel; consulta cobertura y calidad de los datos. | Ve solo los clientes asignados y sus productos. |
-| Filtra ventas por fecha y cliente; ve ingresos, evolución mensual, canales y productos en gráficos. | Consulta ventas comparables, pronóstico de siete días y explicación de la recomendación. |
-| Revisa el Centro IA: método ganador, WAPE, importancia de variables y demanda proyectada. | Consulta rango orientativo, nivel de atención y simula cambios de demanda e inventario. |
-| Crea cuentas, asigna clientes y restablece contraseñas. | Registra unidad, inventario, pedidos pendientes y reglas comerciales. |
-| Revisa solicitudes, documenta ajustes o rechazos y exporta el lote aprobado. | Indica la fecha requerida, envía la solicitud y sigue su estado. |
+| Carga Excel y consulta históricos, filtros y gráficos administrativos. | Consulta productos, disponibilidad y sugerencias de su cartera, sin datos históricos. |
+| Gestiona cuentas, carteras, sesiones y correcciones de inventario. | Confirma cantidades, precio, descuento, condiciones y entrega futura. |
+| Revalida fuentes y autoriza o rechaza producción por producto. | Edita/cancela con motivo antes de ejecución cuando la configuración lo permite. |
+| Relaciona catálogos y gestiona sincronización, compras, fabricación y entrega Odoo. | Consulta autorización, respuesta administrativa y seguimiento de sus ventas. |
+| Consulta facturas, créditos, cobros, saldos e informes operativos. | Solicita correcciones de inventario; no consulta finanzas, costos ni credenciales. |
 
-### Estados de una solicitud
+## Historial de implementación
 
-| Estado | Significado |
-| --- | --- |
-| **Pendiente** | El vendedor la envió y espera revisión. |
-| **Aprobado** | Administración la revisó; está lista para incluirse en un XLSX. |
-| **Rechazado** | Administración registró el motivo del rechazo. |
-| **Sustituido** | Existe una solicitud más reciente para el mismo cliente, producto e inicio de período. |
-| **Fuente sustituida** | Cambió el Excel antes de entregar ese pedido; debe generarse otro con la fuente vigente. |
-| **Exportado** | Administración confirmó manualmente que compartió el archivo con producción. |
+- **28–29 de septiembre de 2026:** se construyó el flujo local Django con inicio seguro, ventas, inventario, pedidos y una jerarquía visual enfocada en la operación.
+- **29 de septiembre:** se añadió la interfaz Streamlit nativa. Comparte las cuentas, reglas de negocio, permisos y sesiones de Django mediante el puente interno; no duplica reglas comerciales.
+- **4 de octubre:** se incorporaron ventas confirmadas, autorización administrativa de fabricación por producto y seguimiento del laboratorio Odoo Community. Se ampliaron las pantallas de vendedor y administración, reportes, recuperaciones y escenarios sintéticos.
+- **Estado verificado al 4 de octubre:** 83 pruebas compartidas y nueve comprobaciones de interfaz pasaron localmente. El laboratorio conserva 18 meses sintéticos, 41,680 ventas, 4,168 flujos reconciliados y el recorrido de compra, producción, entrega, devolución, facturación y cobro descrito abajo.
+- **Publicación para probar Streamlit:** la app de Streamlit Community Cloud usa `app.py` como punto de entrada; ese archivo inicia la interfaz compartida de `streamlit_app.py`. El alta del primer administrador en Cloud exige un código privado en Secrets.
 
-Para evitar pedir dos veces por la misma demanda, el sistema impide que queden vigentes pedidos de un mismo cliente y producto con horizontes de siete días superpuestos. Una solicitud pendiente puede reemplazarse por otra que inicie en la misma fecha. La fecha de entrega solicitada debe estar dentro del horizonte del pronóstico.
+Las pruebas del conector Odoo se ejecutaron contra el laboratorio local y revirtieron los documentos sintéticos. No se inició Odoo HTTP en esa comprobación ni se validó una conexión pública desde Cloud.
 
-## Paneles e indicadores
+## Laboratorio integrado con Odoo
 
-**Resumen de administración.** Incluye filtros de período y cliente; ventas en USD, registros, clientes y productos con ventas; gráfico de evolución mensual, gráfico circular por canal de venta, barras por producto y conteos de pedidos pendientes, aprobados y exportados.
+Abre [`iniciar_laboratorio.cmd`](iniciar_laboratorio.cmd), elige Odoo y vuelve a abrirlo para elegir una interfaz. Django simulado usa **8001**, Streamlit simulado **8502** y Odoo **8079**. Las cuentas y contraseñas de prueba están en `.local-web-lab/credentials.json`; Odoo usa `vitali_admin` y la contraseña guardada en el campo `admin` de `.local-odoo/credentials.json`.
 
-**Cartera del vendedor.** Muestra productos del cliente asignado, ventas en USD, registros y cantidades dentro de la medida original del Excel. Si existe información del mismo mes del año anterior, la usa como comparación; en otro caso, muestra el histórico disponible y lo indica.
+El laboratorio contiene **18 meses calendario, 41,680 ventas y 4,168 flujos diarios reconciliados**, diez clientes, ocho productos y tres puntos con tránsito. Son datos sintéticos editables, separados de las fuentes originales y de sus 2,605 filas de la primera semilla. Se conservan cinco cuentas de dos roles, con carteras 4/3/3 para los vendedores. La historia concilia compras, consumo, empaques, producción, existencias, entregas, devoluciones y pagos; no significa que se hayan importado 41,680 ventas históricas como documentos Odoo.
 
-**Recomendaciones.** Presenta el pronóstico, los datos comparables, el método aplicado, la cantidad sugerida y su explicación. Las métricas técnicas WAPE y MAE se mantienen aparte, en **Datos y modelo → Diagnóstico del pronóstico**, desglosadas por producto. El panel comercial muestra ventas y pedidos; el diagnóstico muestra errores de evaluación del modelo.
+Conserva el recorrido **S00011 / pedido #6**: venta de 8 kg, fabricación autorizada de 3 kg, compra de reposición de 3 kg, entrega y devolución de 1 kg; factura USD 30.40, crédito USD 3.80 y cobros conciliados. El resultado es **saldo cero, 7 kg netos entregados y 1 kg pendiente** tras la devolución.
 
-> Las barras entre productos comparan **USD**. La columna `Cantidad_kg_unid` mezcla medidas; sumar kg y unidades en un indicador global produciría una cifra sin significado.
+Se comprobaron ocho escenarios operativos iniciales, siete ampliados y nueve contables, además de cinco sesiones, duplicados concurrentes, caída/reintento, PDF y restauraciones. La batería compartida pasó **83 pruebas** y las pantallas **nueve**. El cierre mensual controlado genera balance y resultados desde partidas Odoo y se revierte al terminar: es una simulación del 31 de octubre, no un cierre real ya transcurrido.
 
-## Cómo se calcula un pedido
+La API sincroniza ventas, reservas y seguimiento. Las **ubicaciones, existencias y movimientos previstos** se exportan en un XLSX nativo fechado, que administración revisa e importa mediante el mismo servicio en ambas interfaces. El snapshot importado actualmente contiene 80 pares cliente/producto y cero stock en los tres puntos; las existencias de la bodega central se conservan en su hoja de trazabilidad y no se repiten como stock de cada cliente. No hay actualización automática de inventario ni validez fiscal/DTE salvadoreña.
 
-1. Se agrupan las ventas por día, cliente y producto. Las transacciones del mismo día se conservan en la carga y se suman para analizar la demanda diaria.
-2. XGBoost estima la demanda de los próximos siete días. Se compara con el promedio de los 28 días anteriores en ocho ventanas históricas no superpuestas. El error se informa por producto y genera un rango orientativo basado en el error absoluto P80 del método aplicado.
-3. Si hay ventas recientes, se aplica el método que obtuvo menor error para ese producto. Si no las hay y está completo el mismo mes del año anterior, se utiliza su **promedio semanal observado**; XGBoost se muestra como referencia adicional.
-4. El vendedor confirma los datos operativos y el sistema calcula:
+## Organización de las pantallas
 
-   ```text
-   necesidad = max(0, pronóstico + inventario objetivo
-                      − inventario disponible − pedidos pendientes)
-   pedido sugerido = necesidad ajustada al mínimo y al múltiplo de empaque
-   ```
+El resumen distingue **operación pendiente** de **ventas filtradas**: el número de pedidos por revisar no cambia al elegir cliente o período. El importe de ventas ocupa el nivel principal, seguido de productos y clientes; los gráficos y la tabla muestran los valores del mismo período. La fecha de la última venta está visible y los detalles del archivo se consultan en “Fuente y cobertura”. Un filtro sin resultados conserva el archivo activo y permite restablecer los filtros.
 
-5. El vendedor puede cambiar la cantidad, pero debe explicar el ajuste. Administración revisa la propuesta antes de exportarla.
+Las fichas del vendedor priorizan **cantidad a vender**, disponibilidad y compromiso futuro, con explicaciones permitidas para su cartera. Los históricos, archivos de origen y detalle del cálculo permanecen en administración. La lista cuenta productos pendientes, autorizados y enviados dentro de las 100 solicitudes recientes; la autorización se toma por línea.
 
-La fecha de análisis debe ser posterior al último registro del Excel y puede elegirse hasta 30 días después de la fecha actual. La fecha requerida de entrega se selecciona dentro de los siete días analizados.
+Ambas interfaces muestran el último avance Odoo con fecha, cantidades y unidades. Una caída conserva el resultado anterior con aviso, sin afirmar actualización nueva. Un dato desconocido aparece como **Por confirmar**. Administración consulta también relaciones de catálogo, estado del conector, facturación, sugerencia frente a fabricación y diferencias de inventario importado. La diferencia de producción es producido menos sugerido; las correcciones se encadenan contra la lectura anterior del mismo archivo, cliente y producto. Sus fuentes y fechas se conservan, y las unidades se muestran por separado. Las fechas se presentan en hora de El Salvador.
 
-El Excel entregado solo cubre 2025. Por eso una sugerencia para 2026 basada en el mismo mes de 2025 **necesita revisión comercial e inventario actual**: la precisión entre años no está validada. El sistema no atribuye a XGBoost una mejora que la evaluación no demuestre.
+## Flujo de trabajo
 
-## Fuente de datos
+```mermaid
+flowchart LR
+    A[Excel de ventas] --> C[Validación y carga completa]
+    B[Excel de inventario] --> C
+    C --> D[Disponibilidad y sugerencias por cartera]
+    D --> E[Venta confirmada por vendedor]
+    E --> F[Venta Odoo y reservas]
+    E --> G[Autorización administrativa de fabricación]
+    G --> H[Fabricación Odoo]
+    F --> I[Entrega y devolución]
+    H --> I
+    I --> J[Factura, cobro y crédito]
+    J --> K[Seguimiento e informes en ambas interfaces]
+```
 
-El importador acepta archivos `.xlsx` de hasta 20 MB y 150,000 registros. Reconoce nombres equivalentes como `Cantidad`, `Venta_Total_USD` y `Tipo_Cliente`. Se admiten columnas adicionales y varias hojas compatibles:
+1. Administración carga el histórico **completo** de ventas. Cada carga reemplaza la fuente activa; los archivos anteriores permanecen para trazabilidad. También puede cargar el inventario oficial y movimientos con fecha.
+2. Asigna cada cliente a un vendedor y relaciona clientes, productos y unidades con Odoo. El vendedor elige su cartera y fecha de entrega; la planificación considera siete días desde esa fecha.
+3. El vendedor confirma cantidades, precio, descuento y condiciones. Una referencia de demanda no ejecuta una orden por sí sola. El sistema conserva su confirmación comercial y el compromiso futuro.
+4. El conector sincroniza una venta con referencia única y revisión. Odoo registra reservas de stock compartido; la venta no autoriza fabricación automáticamente.
+5. Administración revisa cada línea y decide la cantidad a fabricar, con motivo al ajustarla o rechazarla. Si cambió la fuente debe revalidarla antes de autorizar.
+6. Administración realiza compras, fabricación, entregas, devoluciones y cobros en Odoo. SmartOrder recupera cantidades y documentos; vendedor y administrador ven el contexto permitido en ambas interfaces.
+7. El XLSX sigue disponible como alternativa de comunicación. Compartirlo registra ese paso manual; no declara mercancía producida o entregada.
 
-| Tipo | Columnas |
-| --- | --- |
-| Mínimas | `Fecha`, `Cliente`, `Producto`, cantidad y precio unitario |
-| Recomendadas | `Zona_Geografica`, `Canal_Distribucion`, `Canal_Venta`, `Categoria` |
-| Calculable | Si falta el monto, se obtiene como cantidad × precio y se informa |
+## Archivos Excel
 
-Los campos de segmentación que no existen se muestran como `No especificado`; el sistema no inventa una zona o canal. La pantalla **Datos y modelo** enumera todas las adaptaciones aplicadas.
+### Ventas
 
-Se validan fechas, cantidades, precios y montos. Una fórmula de monto sin resultado guardado se recalcula como cantidad × precio y se informa. También se limita la expansión del análisis a 250,000 combinaciones diarias cliente–producto. Activar una nueva carga **reemplaza el histórico activo**, porque el archivo no contiene un identificador de transacción que permita fusionar ventas sin riesgo de duplicarlas.
+El Excel de ventas debe contener, como mínimo, `Fecha`, `Cliente`, `Producto`, `Cantidad_kg_unid` y `Precio_Unitario_USD`. Se admiten nombres equivalentes comunes; la carga registra las normalizaciones. Si faltan `Zona_Geografica`, `Canal_Distribucion`, `Canal_Venta` o `Categoria`, se marcan como no especificados. `Monto_Venta_USD` puede calcularse como cantidad × precio cuando no llega con valor guardado. Un importe presente que no coincide se rechaza.
 
-El archivo recibido contiene **1,294 registros de 2025, 10 clientes, 8 productos y 80 pares cliente–producto**. No incluye inventario, pedidos pendientes, pedido mínimo, múltiplo de empaque, fecha requerida, sucursal ni SKU. Los datos operativos necesarios se ingresan en la aplicación; no se inventan valores faltantes. La [auditoría de las fuentes y del sistema](docs/AUDITORIA_SISTEMA.md) detalla calidad, cobertura y requisitos pendientes.
+**Cada Excel semanal debe contener todo el histórico que se quiere conservar**, no solo la semana nueva. El sistema valida el archivo completo y lo activa como nueva versión. No agrega silenciosamente filas de distintas entregas.
+
+El archivo recibido `Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx` tiene 1,294 registros de 2025, 10 clientes y 8 productos. Sus cifras son datos del archivo de ejemplo; no prueban ventas, ahorros ni disminución de merma de Vitali. Al utilizarlo en 2026, la aplicación muestra referencias con fecha y deja las cantidades para decisión manual.
+
+### Inventario y movimientos
+
+Descarga la **plantilla desde “Inventario en Excel”**. La hoja `Inventario` usa `Cliente`, `Producto`, `Existencia_Disponible`, `Fecha_Corte` y `Unidad`. La hoja opcional `Movimientos` usa `Tipo`, `Cliente`, `Producto`, `Cantidad` y `Fecha`; `Tipo` admite `Entrada` y `Compromiso_Cliente`.
+
+Hoy el cruce se hace por **cliente y producto**. El Excel de ventas no contiene sucursal, SKU ni unidad oficial. Administración solo debe marcar la equivalencia de unidades cuando la haya comprobado. Sin unidad confirmada o inventario con fecha de corte de hoy, la aplicación no propone una cantidad automática. Las correcciones de stock aprobadas se guardan como ajustes, sin alterar el Excel importado.
+
+En el laboratorio, [`exportar_inventario_odoo.py`](scripts/exportar_inventario_odoo.py) agrega hojas administrativas con identificadores, ubicaciones, unidades, stock físico/reservado/disponible y trazas de asignación. Las hojas `Inventario`/`Movimientos` son compatibles con el importador común. El archivo se revisa antes de activarlo; una importación posterior conserva las fuentes y pedidos anteriores y requiere revalidarlos cuando corresponda. El Excel histórico con cuotas de planificación de 2 por cliente sigue conservado; esas cuotas no se presentan como stock físico del punto.
+
+## Cómo se obtiene una recomendación
+
+La demanda corresponde a los **siete días que empiezan en la fecha de entrega**. La app compara cinco métodos: ventas de los últimos 7 días, promedios de 28 y 56 días, mismos días del año anterior cuando existen, y XGBoost. XGBoost es un candidato, no una elección forzada.
+
+Cuando hay ventas recientes, completas y verificadas, se prueban los métodos en 16 semanas comparables: ocho para escoger y ocho posteriores para auditar. La selección se evalúa por producto con error absoluto, WAPE y exceso de pronóstico frente al promedio de 28 días. Solo se permite una sugerencia automática para un producto que supera el control independiente y dispone de inventario actual con unidad confirmada. Una serie sin evidencia suficiente queda en modo manual.
+
+La cantidad orientativa cubre la mayor entre demanda prevista y compromisos de clientes en la semana, restando inventario proyectado a la entrega (existencia actual + entradas previas − compromisos previos). La cantidad nunca baja de cero. El vendedor recibe cantidad orientativa y explicación permitida; administración conserva fuentes y detalle histórico. Los códigos, unidades y receta del laboratorio están identificados como simulados; no se atribuyen a la planta real.
+
+**Interpretación:** el Excel registra ventas, no ventas perdidas por agotados ni merma. Por eso el sistema no afirma que una recomendación haya reducido sobreproducción. Tampoco suma cantidades de productos con unidades distintas en un indicador global.
 
 ## Ejecutar en Windows
 
-**Requisitos:** Python instalado y una terminal PowerShell. Desde la carpeta del proyecto, prepare el entorno una sola vez:
+**Requisitos:** Windows, Python 3.10 o posterior y conexión a Internet para la instalación inicial de dependencias.
+
+1. Descarga o abre esta carpeta en la PC.
+2. Haz doble clic en [`iniciar_smartorder.cmd`](iniciar_smartorder.cmd). La primera vez crea `.venv-web`, instala dependencias y prepara la base local.
+3. Abre la dirección que muestra la ventana: normalmente [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Si Windows reserva ese puerto o ya está ocupado, el iniciador utiliza [http://127.0.0.1:8050/](http://127.0.0.1:8050/). Mantén abierta la ventana del servidor mientras uses la aplicación. Para detenerla, pulsa `Ctrl+C`.
+4. Si no hay cuentas anteriores, crea el administrador inicial en la pantalla de configuración. Después entra, carga ventas, crea un vendedor y asígnale clientes.
+
+La base, los archivos cargados y la clave local se guardan en `.local-web/`, que Git ignora. Si existe la antigua `.local/smartorder.sqlite3` y solo contiene cuentas y asignaciones, el inicio importa esas cuentas **en modo lectura** y conserva sus contraseñas. La base anterior no se modifica. Si contiene pedidos u otros datos operativos, el inicio se detiene para evitar una migración incompleta; conserva ambos directorios y revisa el mensaje mostrado.
+
+Para elegir otro puerto al usar el iniciador, define `$env:SMARTORDER_PORT = "8500"` en PowerShell y ejecuta `.\iniciar_smartorder.cmd`.
+
+También puedes iniciarlo desde PowerShell, dentro del proyecto:
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+py -3 -m venv .venv-web
+.\.venv-web\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv-web\Scripts\python.exe manage.py migrate
+.\.venv-web\Scripts\python.exe manage.py import_legacy_local
+.\.venv-web\Scripts\python.exe manage.py runserver 127.0.0.1:8000 --noreload
 ```
 
-Después haga doble clic en [`iniciar_smartorder.cmd`](iniciar_smartorder.cmd), o inicie la aplicación desde PowerShell:
+Si no hay base antigua, `import_legacy_local` informa que no hay cuentas y continúa. Para una base nueva independiente, omite ese paso.
+
+## Ejecutar la versión Streamlit
+
+Haz doble clic en [`iniciar_streamlit.cmd`](iniciar_streamlit.cmd) y abre **http://127.0.0.1:8501/**. El iniciador instala las dependencias, prepara la misma base local y permite crear el administrador inicial cuando aún no existen cuentas. Usa las mismas credenciales que en Django.
+
+**El servidor no se instala como servicio ni se inicia con Windows.** Solo permanece activo mientras esa ventana esté ejecutándose. Pulsa `Ctrl+C` para detenerlo; para volver a entrar, ejecuta el iniciador otra vez. Puedes cambiar el puerto con `$env:SMARTORDER_STREAMLIT_PORT = "8502"`.
+
+Inicio manual desde PowerShell:
 
 ```powershell
-$env:SMARTORDER_LOCAL_MODE = '1'
-.\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1 --server.port 8501
+.\.venv-web\Scripts\python.exe -m pip install -r requirements-streamlit.txt
+$env:SMARTORDER_ALLOW_LOCAL_SETUP = "1"
+.\.venv-web\Scripts\python.exe -m streamlit run streamlit_app.py --server.address 127.0.0.1 --server.port 8501 --server.headless true
 ```
 
-Abra [http://127.0.0.1:8501/](http://127.0.0.1:8501/) **en el mismo equipo**. Mantenga abierta la ventana que ejecuta la aplicación; `Ctrl+C` la detiene. Esta forma de uso no requiere Streamlit Cloud, pero sí instala la biblioteca Streamlit localmente.
+Después de editar el código, detén y vuelve a iniciar Streamlit para cargar los cambios; la recarga automática está desactivada para mantener consistente el registro de modelos de Django.
 
-### Demo académica de un clic
+Streamlit y Django incluyen productos, venta, autorización por producto, correcciones, importaciones, gestión de cuentas, XLSX, conexión Odoo, seguimiento e informes. Los históricos, gráficos, configuración y finanzas son administrativos. Streamlit usa controles nativos y Django conserva Bootstrap; ambos comparten permisos y reglas. Las métricas técnicas del modelo no se presentan como resultados económicos reales.
 
-Después de instalar las dependencias, ejecute [`iniciar_demo.cmd`](iniciar_demo.cmd). Se crea una instalación aislada con 15 meses de datos sintéticos, un perfil de administración y otro de vendedor. En la pantalla de acceso aparecen dos botones para cambiar de rol. Los datos reales y las cuentas normales no se modifican.
+## Probar en Streamlit Community Cloud
 
-La demo incluye tendencias, promociones simuladas y variación estacional para que el entrenamiento, el rango orientativo, el Centro IA y el flujo de aprobación puedan presentarse sin preparar un Excel previamente.
+La app pública [smartorder-vitali-ai.streamlit.app](https://smartorder-vitali-ai.streamlit.app/) reemplaza la demo anterior al desplegar la rama `main`. La configuración actual de Streamlit Cloud conserva `app.py` como entrada; este importa la interfaz mantenida en `streamlit_app.py`. Streamlit está incluido en `requirements.txt`; `requirements-streamlit.txt` es el acceso equivalente para el iniciador local.
 
-### Demo pública en Streamlit Cloud
-
-La demo oficial del prototipo está publicada en [smartorder-vitali-ai.streamlit.app](https://smartorder-vitali-ai.streamlit.app/). Abre directamente en modo de presentación, crea un almacenamiento separado y habilita los botones para entrar como administración o vendedor. Solo utiliza datos sintéticos y no modifica las cuentas o cargas de una instalación normal.
-
-En cualquier otro despliegue, la pantalla de configuración o acceso incluye **Probar demo pública**. Al pulsarlo, la aplicación abre `?demo=1` y prepara el mismo entorno aislado.
-
-Para que un despliegue abra siempre en modo demostración, agregue en **App settings → Secrets**:
+En **App settings → Secrets**, configura una clave Django y un código de instalación distintos. Genera cada valor en PowerShell con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y pega la salida solo en Secrets:
 
 ```toml
-SMARTORDER_PUBLIC_DEMO = "1"
+SMARTORDER_SECRET_KEY = "<clave-aleatoria-generada>"
+SMARTORDER_SETUP_CODE = "<codigo-aleatorio-de-32-caracteres-o-mas>"
 ```
 
-Las cuentas de demostración son `admin.demo` y `vendedor.demo`; ambas usan `VitaliDemo2026!`. La inicialización está protegida contra accesos simultáneos durante el primer arranque. En Streamlit Community Cloud el almacenamiento sigue siendo temporal y puede reiniciarse cuando la aplicación se suspende o vuelve a desplegarse.
+Al abrir la app, crea el primer administrador con ese código y una contraseña de al menos 12 caracteres. El código solo autoriza la creación de la primera cuenta; cuando ya existe un usuario, el inicio cambia al formulario de acceso. No lo escribas en Git, capturas públicas ni mensajes.
 
-En una instalación normal, fuera del modo de demostración, el primer inicio requiere crear una cuenta administradora; no hay usuarios ni contraseñas predeterminadas. Las contraseñas deben tener al menos 12 caracteres. Si el Excel de demostración está en la carpeta principal, la aplicación lo lee automáticamente. Como el Excel original no se incluye en el repositorio público, en otra copia administración deberá subirlo desde **Datos y modelo**.
+Esta publicación sirve para probar la interfaz con información sintética. El almacenamiento de archivos de Streamlit Community Cloud no es persistente; no cargues ventas, inventario, cuentas ni credenciales reales. El laboratorio Odoo sigue ejecutándose localmente y Cloud no tiene una conexión pública configurada hacia él. Para uso real hacen falta base y archivos persistentes, copias de seguridad, acceso restringido y un servicio Odoo deliberadamente publicado.
 
-### Primer recorrido recomendado
+Para avisos desde esta interfaz, `SMARTORDER_STREAMLIT_URL` determina el enlace de Telegram; el iniciador lo ajusta al puerto elegido. Los avisos siguen ligados a acciones concretas, sin proceso permanente.
 
-1. Entre como administrador y active el Excel en **Datos y modelo**.
-2. En **Usuarios**, cree una cuenta de vendedor y asígnele al menos un cliente que figure en el archivo activo.
-3. Entre como vendedor; revise **Mi cartera** y **Recomendaciones**. Guarde unidad e inventario, seleccione fecha requerida y envíe un pedido a revisión.
-4. Vuelva como administrador; en **Producción**, apruebe o rechace el pedido. Para entregarlo, prepare el lote, descargue el XLSX y confirme que lo compartió.
-5. Compruebe el resultado en **Historial** desde ambos roles.
+## Avisos internos por Telegram
 
-**Si el vendedor no ve productos:** compruebe que hay un Excel activo y que sus clientes asignados coinciden exactamente con los nombres de ese archivo. Una carga nueva puede requerir actualizar las asignaciones en **Usuarios**.
+Es opcional. Define `SMARTORDER_TELEGRAM_BOT_TOKEN` y `SMARTORDER_TELEGRAM_CHAT_ID` como variables de entorno **antes de iniciar**. Al enviar un pedido, revisar un producto o solicitar una corrección, la aplicación intenta mandar un resumen y un enlace. No adjunta datos comerciales ni ejecuta tareas mientras la PC está apagada. El enlace `127.0.0.1` se abre en la misma PC donde corre el servidor. Un fallo de Telegram no cancela el pedido y queda registrado.
 
-## Despliegue en Streamlit Community Cloud
+WhatsApp y envíos automáticos externos no forman parte de esta versión local; requieren cuentas, consentimiento y diseño de entrega adicionales.
 
-El despliegue público actual usa `app.py` desde la rama `main` de [`IsaacRenderos2109/ProyectoSistemaVitali`](https://github.com/IsaacRenderos2109/ProyectoSistemaVitali), con Python 3.12. Para publicar una demo equivalente, configure en **Secrets**:
+## Verificación
 
-```toml
-SMARTORDER_PUBLIC_DEMO = "1"
+Desde la carpeta del proyecto:
+
+```powershell
+.\.venv-web\Scripts\python.exe manage.py check
+.\.venv-web\Scripts\python.exe manage.py makemigrations --check --dry-run
+.\.venv-web\Scripts\python.exe manage.py test operations tests
+.\.venv-web\Scripts\python.exe -m pip check
 ```
 
-Para una instalación privada o de uso real, no active el modo de demo. Antes del primer acceso en red, configure en **Secrets** un valor privado de al menos 20 caracteres:
+La batería ejecutada el 4 de octubre con `manage.py test operations tests --noinput` pasó **83 pruebas en 61.545 segundos**, incluidas las dos comprobaciones nuevas del alta inicial remota con código privado. Cubre ETL, recomendaciones, permisos, ventas, edición/cancelación, autorización, exportación, contextos Odoo, comparación de producción, correcciones encadenadas, fecha inicial compartida y cantidad manual explícita en ambas interfaces. Las pruebas de interfaz usan bases temporales; las solicitudes del conector se aíslan en las pruebas. También pasó `scripts/comprobar_conector_odoo.py` contra el addon de `vitali_lab`; sus documentos sintéticos se revierten al terminar. En esa comprobación no se inició el servidor HTTP de Odoo, por lo que no acredita una transferencia HTTP en vivo. Los límites de simulación y las fechas de verificación indicados en este README forman parte del historial del prototipo.
 
-```toml
-SMARTORDER_SETUP_CODE = "reemplace-por-un-codigo-privado-largo"
-```
+## Estructura y límites de uso
 
-Quien cree el primer administrador deberá introducir ese código. No lo incluya en Git. `SMARTORDER_LOCAL_MODE=1` se utiliza solo con el servidor vinculado a `127.0.0.1` o `::1` para uso en el mismo equipo; no lo configure en Cloud. Consulte la [guía oficial de despliegue](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) y la [gestión de secretos](https://docs.streamlit.io/develop/concepts/connections/secrets-management).
-
-### Si aparece «Falta el código de instalación»
-
-1. Entre en [Streamlit Community Cloud](https://share.streamlit.io/) con la cuenta que desplegó la aplicación.
-2. Abra la aplicación en su espacio de trabajo y vaya a **App settings → Secrets** (también puede aparecer como **Edit Secrets**).
-3. Genere un código privado en PowerShell con `([guid]::NewGuid()).ToString('N')`. Copie el resultado en Secrets como valor de `SMARTORDER_SETUP_CODE`, en el nivel raíz del archivo TOML, y guarde el cambio. No publique ni envíe ese valor por chat.
-4. Recargue la aplicación. Introduzca el mismo valor en **Código de instalación** y cree el primer administrador.
-
-Si ya existe una cuenta administradora, acceda con ella; el código solo se solicita al crear la primera cuenta de una instalación nueva. La [documentación de Streamlit](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/app-settings#view-or-update-your-secrets) explica dónde actualizar los secretos de una aplicación ya desplegada.
-
-Las cuentas, cargas y solicitudes se guardan actualmente en SQLite y archivos bajo `.local/`. [Streamlit Community Cloud no garantiza conservar archivos locales](https://docs.streamlit.io/develop/concepts/connections/connecting-to-data). Antes de usar el despliegue con datos comerciales y varios usuarios, se necesita almacenamiento externo persistente, copias de seguridad y control de acceso al despliegue. El código de instalación protege la creación de la primera cuenta, pero no resuelve la persistencia.
-
-## Organización del código y verificación
-
-| Archivo | Responsabilidad |
+| Ruta | Responsabilidad |
 | --- | --- |
-| `app.py` | Interfaz Streamlit y navegación según el rol. |
-| `smartorder/data.py` | `SalesData`: lectura, validación y preparación del Excel. |
-| `smartorder/demo.py` | Dataset sintético, cuentas aisladas e inicialización concurrente segura para la demo. |
-| `smartorder/forecast.py` | `DemandForecaster`: entrenamiento, evaluación y pronóstico. |
-| `smartorder/orders.py` | `OperationalInput`, cálculo del pedido y exportación XLSX. |
-| `smartorder/storage.py` | `Store`: cuentas, clientes asignados, solicitudes y revisiones en SQLite. |
-| `tests/test_app.py` | Pruebas de los accesos de demostración y navegación de ambos perfiles. |
-| `tests/test_system.py` | Comprobaciones de datos, pronóstico, permisos, pedidos, concurrencia y flujo a producción. |
+| `operations/` | Roles, modelos, pantallas Bootstrap, ETL persistido y flujo de pedidos. |
+| `operations/odoo.py` | Conector local, referencias/revisiones, snapshot e informes compartidos. |
+| `odoo_addons/vitali_lab/` | Personalización Odoo y API restringida, sin modificar su núcleo. |
+| `scripts/` | Preparación, escenarios, resiliencia, PDF y recuperación del laboratorio. |
+| `smartorder/data.py` | Lectura y validación del Excel de ventas. |
+| `smartorder/inventory.py` | Lectura y plantilla de inventario. |
+| `smartorder/recommendations.py` | Comparación de métodos, backtest y referencias. |
+| `smartorder/orders.py` | XLSX seguro para producción. |
+| `smartorder/notifications.py` | Avisos opcionales al personal interno. |
+| `vitali_web/` | Configuración del servidor local. |
 
-Para ejecutar las pruebas:
+La prueba pública de Streamlit no convierte la app en una instalación de uso compartido: usa SQLite y archivos locales temporales. El servidor Django de desarrollo no debe exponerse a Internet.
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
+### Verificación de Streamlit
 
-Los PDF y el Excel originales permanecen locales y están excluidos de Git. Para conocer los hallazgos, decisiones de alcance y datos que faltan, consulte la [auditoría del sistema](docs/AUDITORIA_SISTEMA.md).
+Con las dependencias instaladas, `python manage.py test operations tests` también ejecuta las comprobaciones de la interfaz nativa: acceso, navegación por rol, filtros sin ventas y pantallas administrativas. La prueba del puente comprueba permisos, pedido, revisión y exportación con sesión persistida, y la invalidación de sesión al cambiar la contraseña.

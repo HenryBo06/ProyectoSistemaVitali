@@ -1,0 +1,54 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="{% static 'operations/favicon.svg' %}" type="image/svg+xml">
+  <title>{% block title %}SmartOrder AI{% endblock %} · Vitali Alimentos</title>
+  <link rel="stylesheet" href="{% static 'operations/vendor/bootstrap.min.css' %}">
+  <link rel="stylesheet" href="{% static 'operations/css/app.css' %}?v=vitali-20261002b">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+  {% if request.user.is_authenticated %}
+  <header class="app-header">
+    <div class="container-fluid app-header-inner">
+      <a class="brand" href="{% url 'dashboard' %}" aria-label="SmartOrder AI, ir al inicio">
+        <span class="brand-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span>
+        <span class="brand-product">SmartOrder AI</span>
+      </a>
+      <div class="header-actions">
+        <span class="user-name d-none d-sm-inline">{{ request.user.username }}</span>
+        <span class="role-tag">{% if role == 'admin' or request.user.is_staff %}Administración{% else %}Vendedor{% endif %}</span>
+        <button class="btn btn-sm btn-outline-light d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNavigation" aria-controls="mobileNavigation" aria-label="Abrir menú">Menú</button>
+      </div>
+    </div>
+  </header>
+  <div class="app-shell">
+    <aside class="app-sidebar d-none d-lg-flex" aria-label="Navegación principal">
+      {% include 'operations/navigation.html' %}
+    </aside>
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileNavigation" aria-labelledby="mobileNavigationTitle">
+      <div class="offcanvas-header">
+        <h2 class="offcanvas-title h5 mb-0" id="mobileNavigationTitle">SmartOrder AI</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar menú"></button>
+      </div>
+      <div class="offcanvas-body p-0">{% include 'operations/navigation.html' %}</div>
+    </div>
+    <main class="app-main" id="main-content">
+      <div class="content-wrap">
+        {% include 'operations/messages.html' %}
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+  {% else %}
+  <main id="main-content">{% include 'operations/messages.html' %}{% block anonymous_content %}{% endblock %}</main>
+  {% endif %}
+  <script src="{% static 'operations/vendor/bootstrap.bundle.min.js' %}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

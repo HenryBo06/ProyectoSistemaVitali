@@ -1,0 +1,26 @@
+<nav class="side-nav" aria-label="Secciones">
+  <p class="nav-caption">Trabajo diario</p>
+  <a class="side-link {% if nav == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}" {% if nav == 'dashboard' %}aria-current="page"{% endif %}>{% if request.user.is_staff %}Resumen de ventas{% else %}Mi trabajo{% endif %}</a>
+  {% if role == 'admin' or request.user.is_staff %}
+    <a class="side-link {% if nav == 'recommendations' %}active{% endif %}" href="{% url 'recommendations' %}" {% if nav == 'recommendations' %}aria-current="page"{% endif %}>Productos y sugerencias</a>
+    <a class="side-link {% if nav == 'orders' %}active{% endif %}" href="{% url 'orders' %}" {% if nav == 'orders' %}aria-current="page"{% endif %}>Pedidos para producción</a>
+    <a class="side-link {% if nav == 'corrections' %}active{% endif %}" href="{% url 'correction_requests' %}" {% if nav == 'corrections' %}aria-current="page"{% endif %}>Correcciones de inventario</a>
+    <p class="nav-caption mt-4">Datos y acceso</p>
+    <a class="side-link {% if nav == 'sales_upload' %}active{% endif %}" href="{% url 'sales_upload' %}" {% if nav == 'sales_upload' %}aria-current="page"{% endif %}>Ventas en Excel</a>
+    <a class="side-link {% if nav == 'inventory_upload' %}active{% endif %}" href="{% url 'inventory_upload' %}" {% if nav == 'inventory_upload' %}aria-current="page"{% endif %}>Inventario en Excel</a>
+    <a class="side-link {% if nav == 'users' %}active{% endif %}" href="{% url 'users' %}" {% if nav == 'users' %}aria-current="page"{% endif %}>Usuarios y clientes</a>
+    {% url 'odoo_settings' as odoo_settings_url %}{% if odoo_settings_url %}<a class="side-link {% if nav == 'odoo_settings' %}active{% endif %}" href="{{ odoo_settings_url }}" {% if nav == 'odoo_settings' %}aria-current="page"{% endif %}>Conexión y catálogos de Odoo</a>{% endif %}
+    {% url 'operational_reports' as operational_reports_url %}{% if operational_reports_url %}<a class="side-link {% if nav == 'operational_reports' %}active{% endif %}" href="{{ operational_reports_url }}" {% if nav == 'operational_reports' %}aria-current="page"{% endif %}>Resultados operativos</a>{% endif %}
+  {% else %}
+    <a class="side-link {% if nav == 'recommendations' %}active{% endif %}" href="{% url 'recommendations' %}" {% if nav == 'recommendations' %}aria-current="page"{% endif %}>Productos y sugerencias</a>
+    <a class="side-link {% if nav == 'order_create' %}active{% endif %}" href="{% url 'order_create' %}" {% if nav == 'order_create' %}aria-current="page"{% endif %}>Confirmar venta</a>
+    <a class="side-link {% if nav == 'orders' %}active{% endif %}" href="{% url 'orders' %}" {% if nav == 'orders' %}aria-current="page"{% endif %}>Mis pedidos</a>
+    <a class="side-link {% if nav == 'corrections' %}active{% endif %}" href="{% url 'correction_requests' %}" {% if nav == 'corrections' %}aria-current="page"{% endif %}>Informar inventario</a>
+  {% endif %}
+  <div class="side-nav-footer">
+    <form action="{% url 'logout' %}" method="post">
+      {% csrf_token %}
+      <button class="side-link side-logout" type="submit">Cerrar sesión</button>
+    </form>
+  </div>
+</nav>

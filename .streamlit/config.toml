@@ -1,11 +1,15 @@
 [theme]
 base = "light"
-primaryColor = "#397657"
-backgroundColor = "#F5F8F5"
-secondaryBackgroundColor = "#EAF1EB"
-textColor = "#173247"
+primaryColor = "#12688b"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f7fa"
+textColor = "#20364a"
+font = "sans serif"
 
-[theme.sidebar]
-backgroundColor = "#EAF1EB"
-secondaryBackgroundColor = "#F5F8F5"
-textColor = "#173247"
+[server]
+maxUploadSize = 20
+# Django registers models once; restart after editing backend files.
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false

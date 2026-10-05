@@ -1,0 +1,32 @@
+{% extends 'operations/base.html' %}
+{% block title %}Acceder{% endblock %}
+{% block anonymous_content %}
+<div class="login-shell">
+  <section class="login-story" aria-label="Acerca de SmartOrder AI">
+    <div class="brand"><span class="brand-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span><span class="brand-product">SmartOrder AI</span></div>
+    <div>
+      <p class="page-eyebrow text-light">Pedidos internos</p>
+      <h1>De la venta a la entrega.</h1>
+      <p>Consulta productos, confirma ventas y sigue su avance a producción en un solo lugar.</p>
+    </div>
+    <small class="text-white-50">Uso interno · Datos cargados por administración</small>
+  </section>
+  <section class="login-form-wrap" aria-labelledby="login-title">
+    <div class="login-card">
+      <p class="page-eyebrow">Tu espacio de trabajo</p>
+      <h2 id="login-title">Iniciar sesión</h2>
+      <p class="muted mb-4">Entra con la cuenta que te asignó administración.</p>
+      {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+      <form method="post" action="{% url 'login' %}">
+        {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <div class="mb-3"><label class="form-label" for="id_username">Usuario</label><input class="form-control form-control-lg" type="text" id="id_username" name="username" autocomplete="username" value="{{ form.username.value|default_if_none:'' }}" required autofocus></div>
+        <div class="mb-4"><label class="form-label" for="id_password">Contraseña</label><input class="form-control form-control-lg" type="password" id="id_password" name="password" autocomplete="current-password" required></div>
+        <button class="btn btn-primary btn-lg w-100" type="submit">Entrar</button>
+      </form>
+      <p class="form-text mt-3">Si no puedes acceder, solicita a administración que revise tu cuenta.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}
