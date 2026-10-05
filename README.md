@@ -153,9 +153,9 @@ Streamlit y Django incluyen productos, venta, autorización por producto, correc
 
 ## Probar en Streamlit Community Cloud
 
-La app pública [smartorder-vitali-ai.streamlit.app](https://smartorder-vitali-ai.streamlit.app/) reemplaza la demo anterior al desplegar la rama `main`. La configuración actual de Streamlit Cloud conserva `app.py` como entrada; este importa la interfaz mantenida en `streamlit_app.py`. Streamlit está incluido en `requirements.txt`; `requirements-streamlit.txt` es el acceso equivalente para el iniciador local.
+El código actualizado está en [`HenryBo06/ProyectoSistemaVitali`](https://github.com/HenryBo06/ProyectoSistemaVitali), rama `main`. El registro previo de despliegue identifica como origen de [smartorder-vitali-ai.streamlit.app](https://smartorder-vitali-ai.streamlit.app/) a [`IsaacRenderos2109/ProyectoSistemaVitali`](https://github.com/IsaacRenderos2109/ProyectoSistemaVitali), también desde `main`, con `app.py` como entrada. Después de publicar este cambio en HenryBo06, la URL pública todavía mostró la demo sintética anterior; cambiar este repositorio no actualiza el otro. Para activar esta versión, Streamlit Cloud debe apuntar a HenryBo06 o el mismo código debe publicarse en el repositorio que ya usa Cloud. La nueva entrada `app.py` inicia `streamlit_app.py`. Streamlit está incluido en `requirements.txt`; `requirements-streamlit.txt` es el acceso equivalente para el iniciador local.
 
-En **App settings → Secrets**, configura una clave Django y un código de instalación distintos. Genera cada valor en PowerShell con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y pega la salida solo en Secrets:
+Cuando Cloud apunte a este repositorio, configura en **App settings → Secrets** una clave Django y un código de instalación distintos. Genera cada valor en PowerShell con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y pega la salida solo en Secrets:
 
 ```toml
 SMARTORDER_SECRET_KEY = "<clave-aleatoria-generada>"
