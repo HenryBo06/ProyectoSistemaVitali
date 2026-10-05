@@ -153,9 +153,9 @@ Streamlit y Django incluyen productos, venta, autorización por producto, correc
 
 ## Probar en Streamlit Community Cloud
 
-El código actualizado está en [`HenryBo06/ProyectoSistemaVitali`](https://github.com/HenryBo06/ProyectoSistemaVitali), rama `main`, y quedó publicado en la [app Cloud conectada a ese repo](https://proyectosistemavitali-gicrwmgoqcvkcsu37aticy.streamlit.app/), con `app.py` como entrada. La página inicia y presenta el alta del primer administrador. El registro previo identifica la URL histórica [smartorder-vitali-ai.streamlit.app](https://smartorder-vitali-ai.streamlit.app/) como perteneciente a [`IsaacRenderos2109/ProyectoSistemaVitali`](https://github.com/IsaacRenderos2109/ProyectoSistemaVitali); esa URL todavía muestra la demo sintética anterior. El push a ese repositorio fue rechazado por falta de permisos, así que no se actualizó ni se reemplazó su app. La versión vigente que se puede probar desde HenryBo es la primera URL. Streamlit está incluido en `requirements.txt`; `requirements-streamlit.txt` es el acceso equivalente para el iniciador local.
+La [demo de Streamlit Cloud](https://proyectosistemavitali-gicrwmgoqcvkcsu37aticy.streamlit.app/) inicia con `app.py`, que carga `streamlit_app.py` y comparte la lógica de negocio y los permisos de Django. El vendedor consulta su cartera, productos, disponibilidad y sugerencias para confirmar pedidos; administración gestiona datos y cuentas, revisa ventas y autoriza producción por separado.
 
-Cuando Cloud apunte a este repositorio, configura en **App settings → Secrets** una clave Django y un código de instalación distintos. Genera cada valor en PowerShell con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y pega la salida solo en Secrets:
+Para crear la primera cuenta, agrega en **App settings → Secrets** una clave Django y un código de instalación distintos. Genera cada valor por separado en PowerShell con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y guárdalos solo en Secrets:
 
 ```toml
 SMARTORDER_SECRET_KEY = "<clave-aleatoria-generada>"
@@ -164,7 +164,7 @@ SMARTORDER_SETUP_CODE = "<codigo-aleatorio-de-32-caracteres-o-mas>"
 
 Al abrir la app, crea el primer administrador con ese código y una contraseña de al menos 12 caracteres. El código solo autoriza la creación de la primera cuenta; cuando ya existe un usuario, el inicio cambia al formulario de acceso. No lo escribas en Git, capturas públicas ni mensajes.
 
-Esta publicación sirve para probar la interfaz con información sintética. El almacenamiento de archivos de Streamlit Community Cloud no es persistente; no cargues ventas, inventario, cuentas ni credenciales reales. El laboratorio Odoo sigue ejecutándose localmente y Cloud no tiene una conexión pública configurada hacia él. Para uso real hacen falta base y archivos persistentes, copias de seguridad, acceso restringido y un servicio Odoo deliberadamente publicado.
+Esta demo usa datos sintéticos y el almacenamiento de archivos de Streamlit Community Cloud no es persistente; no cargues ventas, inventario, cuentas ni credenciales reales. El laboratorio Odoo se ejecuta localmente y no tiene una conexión pública configurada desde Cloud. Streamlit está incluido en `requirements.txt`; `requirements-streamlit.txt` es el acceso equivalente para el iniciador local.
 
 Para avisos desde esta interfaz, `SMARTORDER_STREAMLIT_URL` determina el enlace de Telegram; el iniciador lo ajusta al puerto elegido. Los avisos siguen ligados a acciones concretas, sin proceso permanente.
 
