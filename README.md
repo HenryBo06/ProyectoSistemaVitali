@@ -153,7 +153,7 @@ Streamlit y Django incluyen productos, venta, autorización por producto, correc
 
 ## Probar en Streamlit Community Cloud
 
-La [demo de Streamlit Cloud](https://proyectosistemavitali-gicrwmgoqcvkcsu37aticy.streamlit.app/) inicia con `app.py`, que carga `streamlit_app.py` y comparte la lógica de negocio y los permisos de Django. El vendedor consulta su cartera, productos, disponibilidad y sugerencias para confirmar pedidos; administración gestiona datos y cuentas, revisa ventas y autoriza producción por separado.
+La [demo de Streamlit Cloud](https://smartorder-vitali-prueba.streamlit.app/) carga `streamlit_app.py` y comparte la lógica de negocio y los permisos de Django. El vendedor consulta su cartera, productos, disponibilidad y sugerencias para confirmar pedidos; administración gestiona datos y cuentas, revisa ventas y autoriza producción por separado.
 
 Para crear la primera cuenta, agrega en **App settings → Secrets** una clave Django y un código de instalación distintos. Genera cada valor por separado en PowerShell con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y guárdalos solo en Secrets:
 
