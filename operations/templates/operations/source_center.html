@@ -1,0 +1,106 @@
+{% extends 'operations/base.html' %}
+{% block title %}Fuentes de datos{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <p class="page-eyebrow">Administración</p>
+    <h1>Fuentes de datos</h1>
+    <p>Inventario y ejecución desde Odoo. El histórico recibido se conserva independiente.</p>
+  </div>
+</div>
+<div class="source-strip mb-4">
+  <span><strong>Histórico:</strong> {{ dataset.filename|default:"Sin fuente" }}</span>
+  <span><strong>Procedencia:</strong> {% if dataset %}{{ dataset.get_provenance_display }}{% else %}Sin fuente{% endif %}</span>
+  <span><strong>Fecha:</strong> {% if dataset %}{{ dataset.get_date_semantics_display }}{% else %}Sin fuente{% endif %}</span>
+  <span><strong>Estado:</strong> {% if dataset.verified %}Origen verificado{% else %}Referencia por revisar{% endif %}</span>
+  {% if dataset %}<span><a href="{% url 'sales_source_download' dataset.pk %}">Descargar archivo original</a></span>{% endif %}
+</div>
+{% if dataset %}
+<section class="panel panel-body mb-4">
+  <h2>Revisar cobertura histórica</h2>
+  <p class="muted">Solo una cobertura completa significa que una fecha ausente equivale a cero ventas. La unidad se confirma por serie y no se convierte desde la tarifa vigente.</p>
+  {% if overlap_pending %}
+  <div class="alert alert-warning">Hay {{ overlap_rows|length }} línea(s) operativa(s) dentro del intervalo del archivo. Resuelve cada una antes de habilitar cantidades.</div>
+  <div class="table-responsive mb-4"><table class="table align-middle"><thead><tr><th>Pedido y línea</th><th>Coincidencia en el archivo</th><th>Decisión administrativa</th></tr></thead><tbody>
+  {% for row in overlap_rows %}<tr>
+    <td>{{ row.order.client }} · {{ row.line.product }}<br><small>{{ row.order.sale_confirmed_at|date:'d/m/Y' }} · {{ row.line.requested_qty }} {{ row.line.unit|default:'unidad pendiente' }} · pedido {{ row.order.pk }}</small></td>
+    <td>{% for candidate in row.candidates %}{{ candidate.quantity }} {{ candidate.unit }} · línea #{{ candidate.pk }}{% empty %}<span class="muted">No hay una línea compatible por cliente, producto, fecha, cantidad y unidad.</span>{% endfor %}</td>
+    <td><form method="post" class="sale-fields">{% csrf_token %}<input type="hidden" name="action" value="review_operational_sale"><input type="hidden" name="dataset_id" value="{{ dataset.pk }}"><input type="hidden" name="order_line_id" value="{{ row.line.pk }}">
+      {% if row.candidates %}<div><label class="form-label small" for="overlap-decision-{{ row.line.pk }}">Decisión</label><select class="form-select form-select-sm" id="overlap-decision-{{ row.line.pk }}" name="decision"><option value="duplicate">Representado en el archivo</option><option value="independent">Venta operativa independiente</option></select></div><div><label class="form-label small" for="overlap-line-{{ row.line.pk }}">Línea importada</label><select class="form-select form-select-sm" id="overlap-line-{{ row.line.pk }}" name="imported_line_id">{% for candidate in row.candidates %}<option value="{{ candidate.pk }}">#{{ candidate.pk }} · {{ candidate.quantity }} {{ candidate.unit }}</option>{% endfor %}</select></div>
+      {% else %}<input type="hidden" name="decision" value="independent"><p class="small muted mb-0">Solo puede registrarse como venta independiente hasta corregir la conciliación.</p>{% endif %}
+      <div class="align-self-end"><button class="btn btn-sm btn-outline-primary">Guardar decisión</button></div></form></td>
+  </tr>{% endfor %}
+  </tbody></table></div>
+  {% endif %}
+  <details class="mb-3"><summary class="fw-semibold">Registrar cobertura para un intervalo</summary><form method="post" class="sale-fields mt-3">{% csrf_token %}<input type="hidden" name="action" value="create_coverage"><input type="hidden" name="dataset_id" value="{{ dataset.pk }}">
+    <div><label class="form-label" for="coverage-client">Cliente</label><select class="form-select" id="coverage-client" name="client" required>{% for client in coverage_clients %}<option>{{ client }}</option>{% endfor %}</select></div><div><label class="form-label" for="coverage-product">Producto</label><select class="form-select" id="coverage-product" name="product" required>{% for product in coverage_products %}<option>{{ product }}</option>{% endfor %}</select></div>
+    <div><label class="form-label" for="coverage-unit">Unidad histórica confirmada</label><input class="form-control" id="coverage-unit" name="unit" maxlength="50"></div><div><label class="form-label" for="coverage-status">Estado</label><select class="form-select" id="coverage-status" name="status"><option value="unknown">Desconocida</option><option value="complete">Completa</option><option value="no_series">Serie todavía inexistente</option></select></div>
+    <div><label class="form-label" for="coverage-start">Desde</label><input class="form-control" id="coverage-start" name="start_date" type="date" min="{{ dataset.first_date|date:'Y-m-d' }}" max="{{ coverage_end_limit|date:'Y-m-d' }}" value="{{ dataset.first_date|date:'Y-m-d' }}" required></div><div><label class="form-label" for="coverage-end">Hasta</label><input class="form-control" id="coverage-end" name="end_date" type="date" min="{{ dataset.first_date|date:'Y-m-d' }}" max="{{ coverage_end_limit|date:'Y-m-d' }}" value="{{ dataset.last_date|date:'Y-m-d' }}" required></div><div class="align-self-end"><button class="btn btn-primary">Guardar intervalo</button></div>
+  </form></details>
+  <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Cliente y producto</th><th>Intervalo original</th><th>Estado y unidad</th><th>Revisión</th></tr></thead><tbody>
+{% for item in coverage_rows %}<tr><td>{{ item.client }}<br>{{ item.product }}</td><td>{{ item.start_date|date:'d/m/Y' }}–{{ item.end_date|date:'d/m/Y' }}</td><td>{{ item.get_status_display }}{% if item.unit %} · {{ item.unit }}{% endif %}</td><td><form method="post" class="sale-fields">{% csrf_token %}<input type="hidden" name="action" value="review_coverage"><input type="hidden" name="dataset_id" value="{{ dataset.pk }}"><input type="hidden" name="coverage_id" value="{{ item.pk }}"><input type="hidden" name="client" value="{{ item.client }}"><input type="hidden" name="product" value="{{ item.product }}"><div><label class="form-label small" for="coverage-unit-{{ item.pk }}">Unidad</label><input class="form-control form-control-sm" id="coverage-unit-{{ item.pk }}" name="unit" maxlength="50" value="{{ item.unit }}"></div><div><label class="form-label small" for="coverage-status-{{ item.pk }}">Cobertura</label><select class="form-select form-select-sm" id="coverage-status-{{ item.pk }}" name="status"><option value="unknown" {% if item.status == 'unknown' %}selected{% endif %}>Desconocida</option><option value="complete" {% if item.status == 'complete' %}selected{% endif %}>Completa</option><option value="no_series" {% if item.status == 'no_series' %}selected{% endif %}>Sin serie</option></select></div><div><label class="form-label small" for="coverage-start-{{ item.pk }}">Desde</label><input class="form-control form-control-sm" id="coverage-start-{{ item.pk }}" name="start_date" type="date" min="{{ dataset.first_date|date:'Y-m-d' }}" max="{{ coverage_end_limit|date:'Y-m-d' }}" value="{{ item.start_date|date:'Y-m-d' }}" required></div><div><label class="form-label small" for="coverage-end-{{ item.pk }}">Hasta</label><input class="form-control form-control-sm" id="coverage-end-{{ item.pk }}" name="end_date" type="date" min="{{ dataset.first_date|date:'Y-m-d' }}" max="{{ coverage_end_limit|date:'Y-m-d' }}" value="{{ item.end_date|date:'Y-m-d' }}" required></div><div class="align-self-end"><button class="btn btn-sm btn-outline-primary">Guardar</button></div></form>{% if item.reviewed_at %}<small class="muted">Revisado {{ item.reviewed_at|date:'d/m/Y H:i' }} por {{ item.reviewed_by }}</small>{% endif %}</td></tr>{% empty %}<tr><td colspan="4">No hay intervalos de cobertura para revisar.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endif %}
+<section class="panel panel-body mb-4">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h2 class="h4 mb-0">Estado de actualización</h2>
+    {% if health.stale %}
+    <span class="badge-status status-rejected">Desactualizado o sin lectura automática</span>
+    {% else %}
+    <span class="badge-status status-approved">Lectura reciente</span>
+    {% endif %}
+  </div>
+  <p class="mb-1"><strong>Última sincronización correcta:</strong> {{ health.last_success|date:'d/m/Y H:i:s'|default:'Sin datos' }}</p>
+  <p class="mb-2"><strong>Corte:</strong> {{ health.observed_at|date:'d/m/Y H:i:s'|default:'Sin datos' }} · {% if health.stale %}Desactualizado o sin lectura automática{% else %}Lectura reciente{% endif %}</p>
+  {% if health.error %}<div class="alert alert-danger mb-3" role="alert">{{ health.error }}</div>{% endif %}
+  <form method="post" class="mb-3">
+    {% csrf_token %}
+    <button class="btn btn-primary" type="submit">Sincronizar ahora</button>
+  </form>
+  <p class="form-text mb-0">Frecuencia: cada 5 minutos cuando el programador esté en ejecución. Lecturas de más de 15 minutos se consideran desactualizadas.</p>
+</section>
+<div class="alert alert-info mb-4" role="status">
+  <p class="mb-1">Las ubicaciones compartidas se reparten en cuotas iguales de planificación. No equivalen a reservas.</p>
+  <a class="fw-semibold text-decoration-underline" href="{% url 'odoo_settings' %}">Revisar conexión, equivalencias y ubicaciones</a>
+</div>
+<section class="panel mb-4">
+  <div class="panel-header">
+    <h2 class="panel-title">Historial</h2>
+  </div>
+  <div class="panel-body p-0">
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Inicio</th>
+            <th>Estado</th>
+            <th class="text-end">Filas activadas</th>
+            <th class="text-end">Rechazadas</th>
+            <th>Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for run in runs %}
+          <tr>
+            <td class="text-nowrap">{{ run.started_at|date:'d/m/Y H:i:s' }}</td>
+            <td><span class="badge-status {% if run.status == 'success' %}status-approved{% elif run.status == 'error' %}status-rejected{% else %}status-pending{% endif %}">{{ run.status }}</span></td>
+            <td class="num text-end">{{ run.rows }}</td>
+            <td class="num text-end">{{ run.rejected }}</td>
+            <td>{{ run.error }}{% if run.details.pending_orders %} Pedidos por reintentar: {{ run.details.pending_orders }}{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-center p-3 muted">Todavía no hay lecturas automáticas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+<details class="source-details">
+  <summary>Histórico y contingencias mediante Excel</summary>
+  <div class="source-details-body">
+    <p class="mb-0"><a href="{% url 'sales_upload' %}">Incorporación histórica de ventas</a> · <a href="{% url 'inventory_upload' %}">Contingencia de inventario</a></p>
+  </div>
+</details>
+{% endblock %}

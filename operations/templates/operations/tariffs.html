@@ -1,0 +1,78 @@
+{% extends 'operations/base.html' %}
+{% block title %}Clientes y tarifas{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <p class="page-eyebrow">Precios</p>
+    <h1>Clientes y tarifas</h1>
+    <p>Los pedidos existentes conservan su precio.</p>
+  </div>
+</div>
+<section class="panel panel-body tariff-panel mb-4">
+  <form method="post">
+    {% csrf_token %}
+    <div class="tariff-fields">
+      <div>
+        <label class="form-label" for="rate-client">Cliente</label>
+        <select class="form-select" id="rate-client" name="client">{% for item in clients %}<option>{{ item }}</option>{% endfor %}</select>
+      </div>
+      <div>
+        <label class="form-label" for="rate-product">Producto</label>
+        <select class="form-select" id="rate-product" name="product">{% for item in products %}<option>{{ item }}</option>{% endfor %}</select>
+      </div>
+      <div>
+        <label class="form-label" for="rate-unit">Unidad</label>
+        <select class="form-select" id="rate-unit" name="unit"><option>kg</option><option>unid</option></select>
+      </div>
+      <div>
+        <label class="form-label" for="rate-price">Precio USD</label>
+        <input id="rate-price" class="form-control" type="number" step="0.0001" min="0.0001" name="unit_price" required>
+      </div>
+      <div>
+        <label class="form-label" for="rate-discount">Descuento %</label>
+        <input id="rate-discount" class="form-control" type="number" step="0.01" min="0" max="99.99" name="discount_percent" value="0" required>
+      </div>
+      <div class="tariff-submit">
+        <button class="btn btn-primary">Guardar tarifa</button>
+      </div>
+    </div>
+  </form>
+</section>
+<section class="panel panel-body mb-4">
+  <h2 class="section-title mt-0">Excepciones pendientes</h2>
+  {% for order in exceptions %}
+  <div class="p-2 mb-2 bg-light rounded border d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div><a class="fw-bold" href="{% url 'order_detail' order.pk %}">Pedido {{ order.pk }} · {{ order.client }}</a> · {{ order.exception_reason }}</div>
+    <a class="btn btn-sm btn-outline-primary" href="{% url 'order_detail' order.pk %}">Revisar</a>
+  </div>
+  {% empty %}
+  <p class="muted mb-0">Sin excepciones pendientes.</p>
+  {% endfor %}
+</section>
+<div class="panel table-responsive mt-3">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Cliente</th>
+        <th>Producto</th>
+        <th>Unidad</th>
+        <th>Precio USD</th>
+        <th>Descuento %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rate in tariffs %}
+      <tr>
+        <td>{{ rate.client }}</td>
+        <td>{{ rate.product }}</td>
+        <td>{{ rate.unit }}</td>
+        <td>{{ rate.unit_price }}</td>
+        <td>{{ rate.discount_percent }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">Define las tarifas antes de confirmar ventas.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

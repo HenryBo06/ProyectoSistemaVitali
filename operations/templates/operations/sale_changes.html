@@ -1,6 +1,66 @@
 {% load l10n %}
 {% if can_edit_sale or can_cancel_sale %}
-<section class="panel panel-body mt-3"><h2>Editar antes de iniciar ejecución</h2>
-{% if can_edit_sale %}{% for line in lines %}<form method="post" action="{% url 'sale_change' order.id %}" class="mb-3">{% csrf_token %}<input type="hidden" name="action" value="edit"><input type="hidden" name="line_id" value="{{ line.id }}"><h3>{{ line.product }}</h3><label for="qty-{{ line.id }}">Cantidad</label><input class="form-control" id="qty-{{ line.id }}" type="number" step="0.001" min="0.001" name="quantity" value="{{ line.requested_qty|unlocalize }}" required><label for="price-{{ line.id }}">Precio USD</label><input class="form-control" id="price-{{ line.id }}" type="number" step="0.001" min="0" name="unit_price" value="{{ line.unit_price|unlocalize }}" required><label for="discount-{{ line.id }}">Descuento %</label><input class="form-control" id="discount-{{ line.id }}" type="number" step="0.01" min="0" max="100" name="discount_percent" value="{{ line.discount_percent|unlocalize }}" required><label for="change-{{ line.id }}">Motivo</label><input class="form-control" id="change-{{ line.id }}" name="change_reason" maxlength="2000" required><button class="btn btn-outline-primary mt-2">Guardar cambio</button></form>{% endfor %}{% endif %}
-{% if can_cancel_sale %}<form method="post" action="{% url 'sale_change' order.id %}">{% csrf_token %}<input type="hidden" name="action" value="cancel"><label for="cancel-reason">Motivo de cancelación</label><input class="form-control" id="cancel-reason" name="change_reason" maxlength="2000" required><button class="btn btn-outline-danger mt-2">Cancelar venta</button></form>{% endif %}</section>
+<section class="panel panel-body mt-3" aria-label="Editar o cancelar venta">
+  <h2 class="h4 mb-1">Editar antes de iniciar ejecución</h2>
+  <p class="form-text mb-4">Los cambios quedan registrados con su motivo y son revisados por administración.</p>
+
+  {% if can_edit_sale %}
+    {% for line in lines %}
+    <form method="post" action="{% url 'sale_change' order.id %}" class="mb-4 pb-4 border-bottom">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="line_id" value="{{ line.id }}">
+      <h3 class="h5 mb-3">{{ line.product }}</h3>
+      <div class="sale-fields">
+        <div>
+          <label class="form-label" for="qty-{{ line.id }}">Cantidad</label>
+          <input class="form-control" id="qty-{{ line.id }}" type="number"
+                 step="0.001" min="0.001" name="quantity"
+                 value="{{ line.requested_qty|unlocalize }}" required>
+        </div>
+        <div>
+          <label class="form-label" for="price-{{ line.id }}">Precio USD</label>
+          <input class="form-control" id="price-{{ line.id }}" type="number"
+                 step="0.0001" min="0" name="unit_price"
+                 {% if not request.user.is_staff %}readonly{% endif %}
+                 value="{{ line.unit_price|unlocalize }}" required>
+        </div>
+        <div>
+          <label class="form-label" for="discount-{{ line.id }}">Descuento %</label>
+          <input class="form-control" id="discount-{{ line.id }}" type="number"
+                 step="0.01" min="0" max="100" name="discount_percent"
+                 {% if not request.user.is_staff %}readonly{% endif %}
+                 value="{{ line.discount_percent|unlocalize }}" required>
+        </div>
+        <div class="full">
+          <label class="form-label" for="change-{{ line.id }}">Motivo del cambio</label>
+          <input class="form-control" id="change-{{ line.id }}"
+                 name="change_reason" maxlength="2000"
+                 placeholder="Describe brevemente el motivo del cambio" required>
+        </div>
+      </div>
+      <button class="btn btn-outline-primary mt-3" type="submit">Guardar cambio</button>
+    </form>
+    {% endfor %}
+  {% endif %}
+
+  {% if can_cancel_sale %}
+  <div class="review-action-box mt-3" role="region" aria-label="Cancelar esta venta">
+    <p class="form-text mb-3" style="color: var(--v-red);">
+      <strong>⚠ Esta acción cancela toda la venta.</strong> Describe el motivo para continuar.
+    </p>
+    <form method="post" action="{% url 'sale_change' order.id %}">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="cancel">
+      <div class="mb-3">
+        <label class="form-label" for="cancel-reason">Motivo de cancelación</label>
+        <input class="form-control" id="cancel-reason" name="change_reason"
+               maxlength="2000" placeholder="Motivo obligatorio" required>
+      </div>
+      <button class="btn btn-outline-danger" type="submit">Cancelar venta</button>
+    </form>
+  </div>
+  {% endif %}
+
+</section>
 {% endif %}

@@ -17,10 +17,10 @@ from openpyxl import Workbook, load_workbook
 
 from .models import (
     Assignment, DatedFlow, InventoryAdjustment, InventoryBatch, InventoryItem,
-    OrderCoverage, OrderLine, OrderRequest, SalesDataset, SalesLine,
+    OrderCoverage, OrderLine, OrderRequest, SalesCoverage, SalesDataset, SalesLine,
     StockCorrectionRequest,
 )
-from .services import import_inventory, import_sales
+from .services import import_inventory, import_sales, save_sales_coverage
 
 
 def sales_book(first: date, days: int, *, multiplier: int = 1,
@@ -58,6 +58,14 @@ def inventory_book(cutoff: date, *, available: int = 2) -> bytes:
 
 
 class LocalCase:
+    def post_sale(self, payload):
+        payload = dict(payload)
+        if "submission_token" not in payload:
+            page = self.client.get(reverse("order_create"), {"client": payload.get("client", "Cliente A")})
+            if page.status_code == 200:
+                payload["submission_token"] = page.context["submission_token"]
+        return self.client.post(reverse("order_create"), payload)
+
     def setUp(self):
         self.tmp = TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -71,6 +79,10 @@ class LocalCase:
         self.seller = User.objects.create_user(
             "vendedor_vitali", password="ClaveDelVendedor123"
         )
+        from .models import PriceTariff
+        PriceTariff.objects.create(client="Cliente A", product="Alitas", unit="kg", unit_price="12.5", discount_percent=10, updated_by=self.admin)
+        PriceTariff.objects.create(client="Cliente A", product="Chorizo", unit="kg", unit_price=10, updated_by=self.admin)
+
 
 
 class DataAndSchemaTests(LocalCase, TestCase):
@@ -159,13 +171,16 @@ class DataAndSchemaTests(LocalCase, TestCase):
 
 class LocalWorkflowTests(LocalCase, TestCase):
     def _upload_sales(self, raw: bytes, *, verified: bool = False,
-                      full_snapshot: bool = False) -> SalesDataset:
+                      full_snapshot: bool = False,
+                      date_semantics: str = SalesDataset.DateSemantics.SALE_ORDER) -> SalesDataset:
         self.client.force_login(self.admin)
         fields = {
             "sales_file": SimpleUploadedFile(
                 "ventas.xlsx", raw,
                 content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ),
+            "provenance": SalesDataset.Provenance.SIMULATED,
+            "date_semantics": date_semantics,
         }
         if verified:
             fields.update(verified="on", confirmed_origin="on")
@@ -189,6 +204,19 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(response.status_code, 302)
         return InventoryBatch.objects.get(active=True)
 
+    def _confirm_sales_units(self, dataset: SalesDataset, unit: str = "kg"):
+        end = min(dataset.last_date, timezone.localdate() - timedelta(days=1))
+        for client, product in dataset.lines.values_list("client", "product").distinct():
+            coverage_id = dataset.coverage.filter(
+                client=client, product=product,
+            ).values_list("pk", flat=True).first()
+            save_sales_coverage(
+                dataset, self.admin, client=client, product=product, unit=unit,
+                start_date=dataset.first_date.isoformat(), end_date=end.isoformat(),
+                status=SalesCoverage.Status.COMPLETE, coverage_id=coverage_id,
+            )
+            self.assertEqual(dataset.coverage.filter(client=client, product=product).count(), 1)
+
     def _assign_seller(self):
         self.client.force_login(self.admin)
         response = self.client.post(reverse("users"), {
@@ -199,6 +227,8 @@ class LocalWorkflowTests(LocalCase, TestCase):
 
     @override_settings(DEBUG=True)
     def test_setup_is_local_and_single_use(self):
+        from .models import PriceTariff
+        PriceTariff.objects.all().delete()
         get_user_model().objects.all().delete()
         denied = self.client.get(reverse("setup"), REMOTE_ADDR="192.0.2.10", HTTP_HOST="localhost")
         self.assertEqual(denied.status_code, 403)
@@ -216,6 +246,8 @@ class LocalWorkflowTests(LocalCase, TestCase):
 
     @override_settings(SMARTORDER_SETUP_CODE="setup-code-for-tests-only-32-characters")
     def test_remote_setup_requires_the_configured_code(self):
+        from .models import PriceTariff
+        PriceTariff.objects.all().delete()
         get_user_model().objects.all().delete()
         remote = {"REMOTE_ADDR": "192.0.2.10", "HTTP_HOST": "localhost"}
         self.assertEqual(self.client.get(reverse("setup"), **remote).status_code, 200)
@@ -252,7 +284,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_2025_reference_yields_manual_multi_product_review_and_export(self):
-        today = date.today()
+        today = timezone.localdate()
         year = today.year - 1
         first = date(year, 1, 1)
         days = (date(year + 1, 1, 1) - first).days
@@ -266,7 +298,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(recommendation.status_code, 200)
         self.assertTrue(all(card["suggested"] is None
                             for card in recommendation.context["recommendations"]))
-        response = self.client.post(reverse("order_create"), {
+        response = self.post_sale({
             "client": "Cliente A", "required_date": today.isoformat(),
             "note": "Revisar para producción",
             "product": ["Alitas", "Chorizo"], "quantity": ["5", "3"],
@@ -314,12 +346,18 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(order.status, OrderRequest.Status.EXPORTED)
 
     def test_recent_verified_source_and_stock_can_offer_explained_quantity(self):
-        today = date.today()
-        dataset = self._upload_sales(sales_book(today - timedelta(days=365), 365),
-                                     verified=True, full_snapshot=True)
+        today = timezone.localdate()
+        dataset = self._upload_sales(
+            sales_book(today - timedelta(days=365), 365), verified=True, full_snapshot=True,
+            date_semantics=SalesDataset.DateSemantics.DELIVERY,
+        )
+        self._confirm_sales_units(dataset)
         self.assertTrue(dataset.verified)
         stock = self._upload_inventory(inventory_book(today), units_confirmed=True)
         self.assertTrue(stock.active)
+        DatedFlow.objects.filter(batch=stock).update(
+            confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
+        )
         self._assign_seller()
         self.client.force_login(self.seller)
         response = self.client.get(reverse("recommendations"), {
@@ -328,7 +366,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(response.status_code, 200)
         cards = {card["product"]: card for card in response.context["recommendations"]}
         self.assertContains(response, "decision-suggested")
-        self.assertContains(response, "Corte de inventario:")
+        self.assertNotContains(response, "Corte de inventario:")
         self.assertNotContains(response, "Decisión manual")
         self.assertEqual(cards["Alitas"]["state"], "suggested")
         self.assertIsNotNone(cards["Alitas"]["suggested"])
@@ -336,11 +374,11 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertNotIn("commitments_before", cards["Alitas"])
         self.assertNotIn("sales_usd_display", cards["Alitas"])
         from .services import recommendation_cards
-        internal = next(card for card in recommendation_cards(dataset, today + timedelta(days=3), "Cliente A") if card["product"] == "Alitas")
+        internal = next(card for card in recommendation_cards(dataset, today + timedelta(days=3), "Cliente A", mode="vitali") if card["product"] == "Alitas")
         self.assertEqual(internal["incoming"], Decimal("1"))
         self.assertEqual(internal["commitments_before"], Decimal("3"))
         self.assertEqual(internal["commitments"], Decimal("0"))
-        response = self.client.post(reverse("order_create"), {
+        response = self.post_sale({
             "client": "Cliente A",
             "required_date": (today + timedelta(days=3)).isoformat(),
             "product": ["Alitas", "Chorizo"],
@@ -353,12 +391,15 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(order.lines.count(), 2)
         self.assertTrue(all(line.suggested_qty is not None for line in order.lines.all()))
 
-    def test_unconfirmed_inventory_units_block_automatic_order_quantity(self):
-        today = date.today()
-        self._upload_sales(sales_book(today - timedelta(days=365), 365,
-                                      products=("Alitas",)),
-                           verified=True, full_snapshot=True)
-        batch = self._upload_inventory(inventory_book(today), units_confirmed=False)
+    def test_unconfirmed_inventory_units_do_not_change_customer_sale_quantity(self):
+        today = timezone.localdate()
+        dataset = self._upload_sales(
+            sales_book(today - timedelta(days=365), 365, products=("Alitas",)),
+            verified=True, full_snapshot=True,
+            date_semantics=SalesDataset.DateSemantics.DELIVERY,
+        )
+        self._confirm_sales_units(dataset)
+        batch = self._upload_inventory(inventory_book(today, available=0), units_confirmed=False)
         self.assertFalse(batch.unit_match_confirmed)
         self._assign_seller()
         self.client.force_login(self.seller)
@@ -367,8 +408,8 @@ class LocalWorkflowTests(LocalCase, TestCase):
         })
         self.assertEqual(response.status_code, 200)
         card = response.context["recommendations"][0]
-        self.assertIsNone(card["suggested"])
-        self.assertIn("unidad", card["inventory_warning"])
+        self.assertIsNotNone(card["suggested"])
+        self.assertEqual(card["available"], Decimal("0.000"))
 
     def test_empty_sales_filter_keeps_active_source_and_reset_action(self):
         dataset = self._upload_sales(sales_book(date(2025, 1, 1), 40))
@@ -411,9 +452,12 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertNotContains(products, "WAPE")
 
     def test_confirmed_unit_cannot_be_changed_in_post(self):
-        today = date.today()
-        self._upload_sales(sales_book(today - timedelta(days=365), 365),
-                           verified=True, full_snapshot=True)
+        today = timezone.localdate()
+        dataset = self._upload_sales(
+            sales_book(today - timedelta(days=365), 365), verified=True, full_snapshot=True,
+            date_semantics=SalesDataset.DateSemantics.DELIVERY,
+        )
+        self._confirm_sales_units(dataset)
         self._upload_inventory(inventory_book(today), units_confirmed=True)
         self._assign_seller()
         self.client.force_login(self.seller)
@@ -422,7 +466,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         })
         card = {row["product"]: row for row in response.context["recommendations"]}["Alitas"]
         self.assertIsNotNone(card["suggested"])
-        created = self.client.post(reverse("order_create"), {
+        created = self.post_sale({
             "client": "Cliente A", "required_date": (today + timedelta(days=3)).isoformat(),
             "product": ["Alitas"], "quantity": [str(card["suggested"])],
             "unit": ["docenas"], "reason": ["manipulado"],
@@ -453,7 +497,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         ).available, Decimal("2"))
         self.assertEqual(InventoryAdjustment.objects.get(correction=correction).available, Decimal("9"))
         from .services import recommendation_cards
-        cards = recommendation_cards(SalesDataset.objects.get(active=True), today, "Cliente A")
+        cards = recommendation_cards(SalesDataset.objects.get(active=True), today, "Cliente A", mode="vitali")
         self.assertEqual(next(card for card in cards if card["product"] == "Alitas")["available"],
                          Decimal("9"))
 
@@ -462,7 +506,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self._upload_sales(sales_book(first, 40))
         self._assign_seller()
         self.client.force_login(self.seller)
-        created = self.client.post(reverse("order_create"), {
+        created = self.post_sale({
             "client": "Cliente A", "required_date": date.today().isoformat(),
             "product": ["Alitas"], "quantity": ["5"], "unit": ["kg"],
             "reason": ["Pedido manual por rotación"],
@@ -519,7 +563,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self._upload_sales(sales_book(date(2025, 1, 1), 10))
         self._assign_seller()
         self.client.force_login(self.seller)
-        response = self.client.post(reverse("order_create"), {
+        response = self.post_sale({
             "client": "Cliente A", "required_date": date.today().isoformat(),
             "product": ["Alitas", "Chorizo", ""],
             "quantity": ["4", "", ""],
@@ -539,7 +583,7 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self._upload_sales(sales_book(date(2025, 1, 1), 10))
         self._assign_seller()
         self.client.force_login(self.seller)
-        response = self.client.post(reverse("order_create"), {
+        response = self.post_sale({
             "client": "Cliente A", "required_date": date.today().isoformat(),
             "product": ["Alitas", ""], "quantity": ["4", "2"],
             "unit": ["kg", "kg"], "reason": ["Conteo manual", ""],

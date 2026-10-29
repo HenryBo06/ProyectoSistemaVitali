@@ -8,7 +8,7 @@
   <link rel="icon" href="{% static 'operations/favicon.svg' %}" type="image/svg+xml">
   <title>{% block title %}SmartOrder AI{% endblock %} · Vitali Alimentos</title>
   <link rel="stylesheet" href="{% static 'operations/vendor/bootstrap.min.css' %}">
-  <link rel="stylesheet" href="{% static 'operations/css/app.css' %}?v=vitali-20261002b">
+  <link rel="stylesheet" href="{% static 'operations/css/app.css' %}?v=vitali-20261017a">
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -16,14 +16,17 @@
   {% if request.user.is_authenticated %}
   <header class="app-header">
     <div class="container-fluid app-header-inner">
-      <a class="brand" href="{% url 'dashboard' %}" aria-label="SmartOrder AI, ir al inicio">
+      <a class="brand" href="{% if request.user.is_staff %}{% url 'pilot_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" aria-label="SmartOrder AI, ir al inicio">
         <span class="brand-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span>
         <span class="brand-product">SmartOrder AI</span>
       </a>
       <div class="header-actions">
         <span class="user-name d-none d-sm-inline">{{ request.user.username }}</span>
         <span class="role-tag">{% if role == 'admin' or request.user.is_staff %}Administración{% else %}Vendedor{% endif %}</span>
-        <button class="btn btn-sm btn-outline-light d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNavigation" aria-controls="mobileNavigation" aria-label="Abrir menú">Menú</button>
+        <button class="btn btn-sm btn-outline-light d-lg-none d-inline-flex align-items-center gap-1" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileNavigation" aria-controls="mobileNavigation" aria-label="Abrir menú">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          <span>Menú</span>
+        </button>
       </div>
     </div>
   </header>

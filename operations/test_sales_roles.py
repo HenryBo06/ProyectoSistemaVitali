@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import AccessEvent, Assignment, OrderLine, OrderRequest
 from .services import import_inventory, import_sales
@@ -16,19 +17,19 @@ from .tests import LocalCase, inventory_book, sales_book
 class SalesRoleTests(LocalCase, TestCase):
     def setUp(self):
         super().setUp()
-        self.dataset = import_sales(sales_book(date.today() - timedelta(days=30), 30),
+        self.dataset = import_sales(sales_book(timezone.localdate() - timedelta(days=30), 30),
                                     "privado.xlsx", self.admin, False, True)
-        import_inventory(inventory_book(date.today()), "stock.xlsx", self.admin, True)
+        import_inventory(inventory_book(timezone.localdate()), "stock.xlsx", self.admin, True)
         Assignment.objects.create(user=self.seller, client="Cliente A")
         self.client.force_login(self.seller)
 
     def create_sale(self, **extra):
-        payload = {"client": "Cliente A", "required_date": (date.today() + timedelta(days=30)).isoformat(),
+        payload = {"client": "Cliente A", "required_date": (timezone.localdate() + timedelta(days=30)).isoformat(),
                    "product": ["Alitas"], "quantity": ["5"], "unit": ["kg"],
                    "reason": ["Cliente confirmó"], "unit_price": ["12.5"],
                    "discount_percent": ["10"], "payment_terms": "30 días"}
         payload.update(extra)
-        return self.client.post(reverse("order_create"), payload)
+        return self.post_sale(payload)
 
     def test_linked_production_cannot_exceed_confirmed_sale(self):
         from .models import OdooOrderLink
@@ -55,17 +56,29 @@ class SalesRoleTests(LocalCase, TestCase):
             self.assertNotIn("chart_monthly", context)
             self.assertIsNone(context.get("dataset"))
             for card in context.get("recommendations", []):
-                for field in ("reference_qty", "sales_usd_display", "incoming", "method", "forecast"):
+                for field in ("sales_usd_display", "incoming", "method", "forecast"):
                     self.assertNotIn(field, card)
+            if page == "recommendations":
+                self.assertIn("reference_date", context["recommendations"][0])
+                self.assertIn("reference_qty", context["recommendations"][0])
         self.create_sale()
         detail = screen_context("order_detail", key, order_id=OrderRequest.objects.get().pk)
         self.assertFalse(hasattr(detail["order"], "dataset"))
         self.assertNotIn("reference_qty", detail["lines"][0])
         self.client.force_login(self.admin)
-        self.assertContains(self.client.get(reverse("dashboard")), "privado.xlsx")
+        self.assertNotContains(self.client.get(reverse("dashboard")), "privado.xlsx")
+
+    def test_missing_historical_unit_is_not_filled_from_current_tariff(self):
+        page = self.client.get(reverse("order_create"), {"client": "Cliente A"})
+        self.assertEqual(page.status_code, 200)
+        card = page.context[0]["recommendations"][0]
+        self.assertEqual(card["unit"], "")
+        self.assertFalse(card["unit_confirmed"])
+        self.assertFalse(card["tariff_available"])
 
     def test_sale_is_confirmed_without_production_approval_and_can_repeat_week(self):
-        self.assertEqual(self.create_sale().status_code, 302)
+        response = self.create_sale()
+        self.assertEqual(response.status_code, 302, response.content.decode())
         order = OrderRequest.objects.get()
         self.assertTrue(order.sale_confirmed)
         self.assertEqual(order.payment_terms, "30 días")
@@ -109,7 +122,7 @@ class SalesRoleTests(LocalCase, TestCase):
         line = order.lines.get()
         url = reverse("sale_change", args=[order.pk])
         edit = {"action": "edit", "line_id": str(line.pk), "quantity": "6",
-                "unit_price": "15", "discount_percent": "20", "change_reason": "Cliente ajustó"}
+                "unit_price": "12.5", "discount_percent": "10", "change_reason": "Cliente ajustó"}
         self.client.post(url, edit)
         line.refresh_from_db()
         self.assertEqual(line.requested_qty, Decimal("6"))

@@ -7,9 +7,26 @@ import uuid
 
 
 class SalesDataset(models.Model):
+    class Provenance(models.TextChoices):
+        UNKNOWN = "unknown", "Por confirmar"
+        REAL = "real", "Real"
+        SIMULATED = "simulated", "Simulada"
+
+    class DateSemantics(models.TextChoices):
+        SALE_ORDER = "sale_order", "Fecha de venta o pedido"
+        DELIVERY = "delivery", "Fecha de entrega realizada"
+
     digest = models.CharField(max_length=64, unique=True)
     filename = models.CharField(max_length=255)
     file = models.FileField(upload_to="sales/")
+    provenance = models.CharField(max_length=16, choices=Provenance.choices, default=Provenance.UNKNOWN)
+    date_semantics = models.CharField(max_length=16, choices=DateSemantics.choices, default=DateSemantics.SALE_ORDER)
+    operational_overlap_reviewed = models.BooleanField(default=False)
+    operational_overlap_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="reviewed_sales_overlaps",
+    )
+    operational_overlap_reviewed_at = models.DateTimeField(null=True, blank=True)
     first_date = models.DateField()
     last_date = models.DateField()
     row_count = models.PositiveIntegerField()
@@ -38,8 +55,20 @@ class SalesDataset(models.Model):
 
 
 class SalesLine(models.Model):
+    class Provenance(models.TextChoices):
+        UNKNOWN = "unknown", "Por confirmar"
+        REAL = "real", "Real"
+        SIMULATED = "simulated", "Simulada"
+        OPERATIONAL = "operational", "Operativa"
+
     dataset = models.ForeignKey(SalesDataset, on_delete=models.CASCADE, related_name="lines")
     date = models.DateField()
+    requested_delivery_date = models.DateField(null=True, blank=True)
+    committed_delivery_date = models.DateField(null=True, blank=True)
+    provenance = models.CharField(max_length=16, choices=Provenance.choices, default=Provenance.UNKNOWN)
+    unit = models.CharField(max_length=50, blank=True)
+    source_order_ref = models.CharField(max_length=160, blank=True)
+    source_line_ref = models.CharField(max_length=160, blank=True)
     client = models.CharField(max_length=255)
     product = models.CharField(max_length=255)
     category = models.CharField(max_length=255, blank=True)
@@ -74,6 +103,8 @@ class Assignment(models.Model):
 
 
 class InventoryBatch(models.Model):
+    source = models.CharField(max_length=16, default="excel")
+    observed_at = models.DateTimeField(null=True, blank=True)
     digest = models.CharField(max_length=64, unique=True)
     filename = models.CharField(max_length=255)
     file = models.FileField(upload_to="inventory/")
@@ -117,16 +148,40 @@ class DatedFlow(models.Model):
         INCOMING = "incoming", "Entrada prevista"
         CUSTOMER_COMMITMENT = "customer_commitment", "Compromiso con cliente"
 
+    class DateSemantics(models.TextChoices):
+        REQUESTED = "requested", "Entrega solicitada"
+        COMMITTED = "committed", "Entrega comprometida"
+        EXPECTED_INCOMING = "expected_incoming", "Recepción prevista"
+
+    class Reconciliation(models.TextChoices):
+        PENDING = "pending", "Pendiente de conciliar"
+        UNIQUE = "unique", "Compromiso independiente"
+        DUPLICATE = "duplicate", "Representa un compromiso existente"
+        AMBIGUOUS = "ambiguous", "Coincidencia ambigua"
+
     # Null batch permits an administrative entry between complete inventory uploads.
     batch = models.ForeignKey(
         InventoryBatch, on_delete=models.PROTECT, null=True, blank=True, related_name="dated_flows"
     )
     kind = models.CharField(max_length=32, choices=Kind.choices)
+    date_semantics = models.CharField(max_length=24, choices=DateSemantics.choices, default=DateSemantics.REQUESTED)
+    source_reference = models.CharField(max_length=160, blank=True)
+    reconciliation = models.CharField(max_length=16, choices=Reconciliation.choices, default=Reconciliation.PENDING)
+    related_order_line = models.ForeignKey(
+        "OrderLine", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="representing_flows",
+    )
     client = models.CharField(max_length=255)
     product = models.CharField(max_length=255)
     unit = models.CharField(max_length=50, blank=True)
     quantity = models.DecimalField(max_digits=18, decimal_places=3)
     due_date = models.DateField()
+    confirmed = models.BooleanField(default=False)
+    confirmed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="confirmed_dated_flows",
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="dated_flows"
     )
@@ -140,6 +195,13 @@ class DatedFlow(models.Model):
 
 
 class OrderRequest(models.Model):
+    submission_id = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    submission_hash = models.CharField(max_length=64, blank=True)
+    exception_reason = models.TextField(blank=True)
+    commercial_review_note = models.TextField(blank=True)
+    commercial_reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        null=True, blank=True, related_name="commercial_reviews")
+    commercial_reviewed_at = models.DateTimeField(null=True, blank=True)
     class Status(models.TextChoices):
         PENDING = "pending", "Pendiente de producción"
         REVIEWED = "reviewed", "Producción revisada"
@@ -170,6 +232,8 @@ class OrderRequest(models.Model):
         related_name="revalidated_orders",
     )
     required_date = models.DateField()
+    committed_date = models.DateField(null=True, blank=True)
+    sale_confirmed_at = models.DateTimeField(null=True, blank=True)
     note = models.TextField(blank=True)
     sale_confirmed = models.BooleanField(default=False)
     payment_terms = models.CharField(max_length=255, blank=True)
@@ -197,6 +261,10 @@ class OrderLine(models.Model):
     reference_qty = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
     method = models.CharField(max_length=100, blank=True)
     suggested_qty = models.DecimalField(max_digits=18, decimal_places=3, null=True, blank=True)
+    suggestion_mode = models.CharField(max_length=24, default="sale")
+    suggestion_reason = models.TextField(blank=True)
+    suggestion_event = models.CharField(max_length=255, blank=True)
+    suggestion_as_of = models.DateField(null=True, blank=True)
     requested_qty = models.DecimalField(max_digits=18, decimal_places=3)
     reason = models.TextField(blank=True)
     unit_price = models.DecimalField(max_digits=18, decimal_places=4, default=0)
@@ -322,6 +390,242 @@ class NotificationLog(models.Model):
     sent_at = models.DateTimeField(null=True, blank=True)
 
 
+class UserNotification(models.Model):
+    class Kind(models.TextChoices):
+        OPERATIONAL = "operational", "Novedad operativa"
+        EVENT = "event", "Oportunidad de temporada"
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="smartorder_notifications"
+    )
+    event_key = models.CharField(max_length=64, unique=True)
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.OPERATIONAL)
+    title = models.CharField(max_length=160)
+    body = models.TextField()
+    target_url = models.CharField(max_length=500, blank=True)
+    client = models.CharField(max_length=255, blank=True)
+    order = models.ForeignKey(
+        OrderRequest, on_delete=models.PROTECT, null=True, blank=True, related_name="inbox_notifications"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        indexes = [models.Index(fields=["recipient", "read_at", "-created_at"])]
+
+
+class CommercialEvent(models.Model):
+    class Kind(models.TextChoices):
+        HOLIDAY = "holiday", "Asueto"
+        COMMERCIAL = "commercial", "Temporada comercial"
+        LOCAL = "local", "Celebración local"
+
+    key = models.SlugField(max_length=100)
+    title = models.CharField(max_length=160)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    territory = models.CharField(max_length=160, blank=True, default="Nacional")
+    source = models.URLField(max_length=500, blank=True)
+    active = models.BooleanField(default=False)
+    reviewed = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="commercial_events_created"
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="commercial_events_reviewed",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["start_date", "title"]
+        constraints = [
+            models.CheckConstraint(condition=Q(end_date__gte=F("start_date")), name="commercial_event_dates_in_order"),
+            models.UniqueConstraint(fields=["key", "start_date", "territory"], name="commercial_event_once_per_territory"),
+        ]
+
+
+class ClientStockCount(models.Model):
+    client = models.CharField(max_length=255)
+    product = models.CharField(max_length=255)
+    location = models.CharField(max_length=160)
+    unit = models.CharField(max_length=50)
+    available = models.DecimalField(max_digits=18, decimal_places=3)
+    observed_on = models.DateField()
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="client_stock_counts"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-observed_on", "-created_at"]
+        indexes = [models.Index(fields=["client", "product", "-observed_on"])]
+        constraints = [models.CheckConstraint(condition=Q(available__gte=0), name="client_stock_nonnegative")]
+
+
+class ClientStockMovement(models.Model):
+    class Kind(models.TextChoices):
+        INCOMING = "incoming", "Entrada al cliente"
+        OUTGOING = "outgoing", "Salida del cliente"
+
+    client = models.CharField(max_length=255)
+    product = models.CharField(max_length=255)
+    location = models.CharField(max_length=160)
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    unit = models.CharField(max_length=50)
+    quantity = models.DecimalField(max_digits=18, decimal_places=3)
+    effective_date = models.DateField()
+    reference = models.CharField(max_length=200, blank=True)
+    confirmed = models.BooleanField(default=False)
+    reconciliation = models.CharField(
+        max_length=16, choices=DatedFlow.Reconciliation.choices,
+        default=DatedFlow.Reconciliation.PENDING,
+    )
+    related_order_line = models.ForeignKey(
+        OrderLine, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="representing_stock_movements",
+    )
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="client_stock_movements"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["effective_date", "client", "product", "location"]
+        indexes = [models.Index(fields=["client", "product", "effective_date", "confirmed"])]
+        constraints = [models.CheckConstraint(condition=Q(quantity__gt=0), name="client_stock_movement_positive")]
+
+
+class RestockTarget(models.Model):
+    class Scope(models.TextChoices):
+        CLIENT = "client", "Cliente"
+        LOCATION = "location", "Ubicación de Vitali"
+
+    scope = models.CharField(max_length=16, choices=Scope.choices)
+    # Store `client:<name>` or `location:<id>` so both scopes have a non-null unique key.
+    owner_key = models.CharField(max_length=255)
+    product = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50)
+    target_quantity = models.DecimalField(max_digits=18, decimal_places=3)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="restock_targets"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["scope", "owner_key", "product"]
+        constraints = [
+            models.UniqueConstraint(fields=["scope", "owner_key", "product"], name="restock_target_once"),
+            models.CheckConstraint(condition=Q(target_quantity__gte=0), name="restock_target_nonnegative"),
+        ]
+
+
+class SalesCoverage(models.Model):
+    class Status(models.TextChoices):
+        UNKNOWN = "unknown", "Cobertura desconocida"
+        COMPLETE = "complete", "Cobertura completa"
+        NO_SERIES = "no_series", "Serie todavía inexistente"
+
+    dataset = models.ForeignKey(SalesDataset, on_delete=models.CASCADE, related_name="coverage")
+    client = models.CharField(max_length=255)
+    product = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50, blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.UNKNOWN)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="sales_coverage_reviews",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["client", "product", "unit", "start_date"]
+        constraints = [
+            models.CheckConstraint(condition=Q(end_date__gte=F("start_date")), name="sales_coverage_dates_in_order"),
+            models.UniqueConstraint(
+                fields=["dataset", "client", "product", "unit", "start_date", "end_date"],
+                name="sales_coverage_interval_once",
+            ),
+        ]
+
+
+class SalesOperationalReconciliation(models.Model):
+    class Decision(models.TextChoices):
+        DUPLICATE = "duplicate", "Representado en el archivo"
+        INDEPENDENT = "independent", "Venta operativa independiente"
+
+    dataset = models.ForeignKey(
+        SalesDataset, on_delete=models.CASCADE, related_name="operational_reconciliations",
+    )
+    order_line = models.ForeignKey(
+        "OrderLine", on_delete=models.PROTECT, related_name="sales_reconciliations",
+    )
+    imported_line = models.ForeignKey(
+        SalesLine, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="operational_reconciliations",
+    )
+    decision = models.CharField(max_length=16, choices=Decision.choices)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="sales_operational_reconciliations",
+    )
+    reviewed_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["dataset", "order_line"], name="sales_reconciliation_once_per_order_line"),
+            models.UniqueConstraint(fields=["dataset", "imported_line"], condition=Q(imported_line__isnull=False),
+                                    name="sales_reconciliation_imported_line_once"),
+        ]
+
+
+class LocationStockSnapshot(models.Model):
+    """Administrative physical count, separate from customer allocations."""
+
+    location_id = models.PositiveIntegerField()
+    location_name = models.CharField(max_length=160)
+    product = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50)
+    available = models.DecimalField(max_digits=18, decimal_places=3)
+    observed_on = models.DateField()
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="location_stock_counts"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["location_id", "product", "-observed_on", "-created_at"]
+        indexes = [models.Index(fields=["location_id", "product", "-observed_on"])]
+        constraints = [models.CheckConstraint(condition=Q(available__gte=0), name="location_stock_nonnegative")]
+
+
+class LocationIncoming(models.Model):
+    """Confirmed expected receipts for planning; recording one does not authorize production."""
+
+    location_id = models.PositiveIntegerField()
+    location_name = models.CharField(max_length=160)
+    product = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50)
+    quantity = models.DecimalField(max_digits=18, decimal_places=3)
+    due_date = models.DateField()
+    reference = models.CharField(max_length=160, blank=True)
+    confirmed = models.BooleanField(default=False)
+    recorded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="location_incoming"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["due_date", "location_id", "product"]
+        indexes = [models.Index(fields=["location_id", "product", "due_date", "confirmed"])]
+        constraints = [models.CheckConstraint(condition=Q(quantity__gte=0), name="location_incoming_nonnegative")]
+
+
 class AccessEvent(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="access_events")
     action = models.CharField(max_length=64)
@@ -338,6 +642,7 @@ class OdooProductMapping(models.Model):
 
 
 class OdooCustomerMapping(models.Model):
+    location_id = models.PositiveIntegerField(null=True, blank=True)
     client = models.CharField(max_length=255, unique=True)
     code = models.CharField(max_length=128, unique=True)
 
@@ -351,3 +656,34 @@ class OdooOrderLink(models.Model):
     last_error = models.CharField(max_length=500, blank=True)
     last_synced = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class PriceTariff(models.Model):
+    client = models.CharField(max_length=255)
+    product = models.CharField(max_length=255)
+    unit = models.CharField(max_length=50)
+    unit_price = models.DecimalField(max_digits=18, decimal_places=4)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["client", "product"], name="one_client_product_tariff"),
+            models.CheckConstraint(condition=Q(unit_price__gt=0), name="tariff_price_positive"),
+            models.CheckConstraint(condition=Q(discount_percent__gte=0) & Q(discount_percent__lt=100), name="tariff_discount_range"),
+        ]
+
+
+class SourceSync(models.Model):
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(max_length=16, default="running")
+    fingerprint = models.CharField(max_length=64, blank=True)
+    rows = models.PositiveIntegerField(default=0)
+    rejected = models.PositiveIntegerField(default=0)
+    details = models.JSONField(default=dict)
+    error = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["status"], condition=Q(status="running"), name="one_running_source_sync")]

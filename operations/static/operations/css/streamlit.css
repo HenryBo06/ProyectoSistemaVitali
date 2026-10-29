@@ -1,0 +1,628 @@
+:root {
+  --v-ink: #16323c;
+  --v-bottle: #0c6f7c;
+  --v-bottle-dark: #085863;
+  --v-mango: #e07c2a;
+  --v-floor: #e7eef1;
+  --v-crate: #ffffff;
+  --v-line: #c5d5db;
+  --v-muted: #4a6470;
+  --v-green: #5ba744;
+  --v-yellow: #f6cd28;
+  --v-orange: #ee9233;
+  --v-red: #dd3a42;
+  --v-cyan: #42b7d3;
+  --v-blue: #1479a5;
+  --v-flight: linear-gradient(180deg, var(--v-green) 0% 16.66%, var(--v-yellow) 16.66% 33.33%, var(--v-orange) 33.33% 50%, var(--v-red) 50% 66.66%, var(--v-cyan) 66.66% 83.33%, var(--v-blue) 83.33% 100%);
+  --v-display: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --v-body: "Segoe UI", "Calibri", system-ui, sans-serif;
+
+  /* Google Material Design 3 Spacing Grid (8pt / 4pt) */
+  --v-space-1: 4px;
+  --v-space-2: 8px;
+  --v-space-3: 12px;
+  --v-space-4: 16px;
+  --v-space-6: 24px;
+  --v-space-8: 32px;
+  --v-radius-sm: 6px;
+  --v-radius-md: 8px;
+  --v-radius-lg: 12px;
+  --v-radius-xl: 16px;
+  --v-control-height: 44px;
+}
+
+/* Global App Shell */
+.stApp, [data-testid="stAppViewContainer"] {
+  background: var(--v-floor) !important;
+  color: var(--v-ink);
+  font-family: var(--v-body);
+}
+.stApp::before {
+  content: "";
+  position: fixed;
+  z-index: 999999;
+  inset: 0 auto 0 0;
+  width: 12px;
+  background: var(--v-flight);
+  pointer-events: none;
+}
+
+/* Streamlit Header Fix: Eliminate header overlay that chops off the top text */
+[data-testid="stHeader"] {
+  background-color: transparent !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+}
+[data-testid="stToolbar"] {
+  pointer-events: auto !important;
+  right: 1rem !important;
+  top: 0.5rem !important;
+}
+.stAppDeployButton, [data-testid="stDecoration"] { display: none !important; }
+
+/* Eliminate ugly anchor link icons (🔗) next to headings */
+[data-testid="stHeaderActionElements"],
+.stHeadingWithActionElements button,
+a.anchorjs-link,
+[data-testid="stHeaderAnchor"] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Main Container: Generous top breathing room so no header text is ever cut */
+[data-testid="stMainBlockContainer"] {
+  max-width: 1240px;
+  padding-top: 3.5rem !important;
+  padding-bottom: 4rem !important;
+  padding-left: clamp(1rem, 3.5vw, 2.5rem) !important;
+  padding-right: clamp(1rem, 3.5vw, 2.5rem) !important;
+}
+
+/* Headings Typography */
+h1, h2, h3 {
+  font-family: var(--v-display);
+  letter-spacing: -.02em;
+  line-height: 1.25 !important;
+  color: var(--v-ink);
+}
+h1 {
+  font-weight: 750 !important;
+  font-size: clamp(1.8rem, 2.5vw, 2.3rem) !important;
+}
+h2 {
+  font-weight: 700 !important;
+  font-size: clamp(1.35rem, 1.8vw, 1.65rem) !important;
+}
+h3 {
+  font-weight: 650 !important;
+  font-size: 1.15rem !important;
+}
+
+/* ==========================================================================
+   CENTERED ENTERPRISE LOGIN VIEW (Google Sign-In Style)
+   ========================================================================== */
+[data-testid="stAppViewContainer"]:has(input[aria-label="Usuario"]) [data-testid="stMainBlockContainer"] {
+  max-width: 480px !important;
+  margin-inline: auto !important;
+  padding-top: clamp(2.5rem, 8vh, 5rem) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+}
+[data-testid="stAppViewContainer"]:has(input[aria-label="Usuario"]) .vitali-identity {
+  text-align: center;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0.25rem;
+}
+[data-testid="stAppViewContainer"]:has(input[aria-label="Usuario"]) h1 {
+  text-align: center !important;
+  font-size: 2.2rem !important;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.25rem !important;
+  letter-spacing: -0.03em !important;
+}
+[data-testid="stAppViewContainer"]:has(input[aria-label="Usuario"]) [data-testid="stCaptionContainer"] {
+  text-align: center !important;
+  font-size: 0.95rem !important;
+  color: var(--v-muted) !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Centered Login Card */
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) {
+  background: var(--v-crate) !important;
+  border: 1px solid var(--v-line) !important;
+  border-radius: var(--v-radius-xl) !important;
+  padding: 2.25rem 2rem !important;
+  box-shadow: 0 10px 30px rgba(22, 50, 60, 0.08), 0 2px 6px rgba(22, 50, 60, 0.04) !important;
+  margin-top: 1.25rem !important;
+  max-width: 100% !important;
+}
+
+/* Card Header inside Login */
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) h3,
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) [data-testid="stHeading"] {
+  font-size: 1.45rem !important;
+  font-weight: 750 !important;
+  color: var(--v-ink) !important;
+  margin-bottom: 1.25rem !important;
+  border-bottom: 1px solid var(--v-line) !important;
+  padding-bottom: 0.75rem !important;
+}
+
+/* Full-width Prominent Submit Button for Login */
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) .stButton,
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) .stFormSubmitButton {
+  width: 100% !important;
+  margin-top: 1.25rem !important;
+}
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) .stButton > button,
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) .stFormSubmitButton > button {
+  width: 100% !important;
+  min-height: 48px !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  border-radius: var(--v-radius-md) !important;
+  background: var(--v-bottle) !important;
+  border-color: var(--v-bottle) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(12, 111, 124, 0.25) !important;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.15s ease !important;
+}
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) .stButton > button:hover,
+[data-testid="stForm"]:has(input[aria-label="Usuario"]) .stFormSubmitButton > button:hover {
+  background: var(--v-bottle-dark) !important;
+  border-color: var(--v-bottle-dark) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 14px rgba(12, 111, 124, 0.35) !important;
+}
+
+/* ==========================================================================
+   INPUTS & CONTROLS (Fix BaseWeb Grey Hollow Slabs)
+   ========================================================================== */
+/* The outer BaseWeb input box: make it crisp white with a real border */
+div[data-baseweb="input"],
+div[data-baseweb="base-input"],
+div[data-baseweb="textarea"] {
+  background-color: #ffffff !important;
+  border: 1.5px solid var(--v-line) !important;
+  border-radius: var(--v-radius-md) !important;
+  min-height: var(--v-control-height) !important;
+  box-shadow: 0 1px 2px rgba(22, 50, 60, 0.04) !important;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+div[data-baseweb="input"]:hover,
+div[data-baseweb="base-input"]:hover,
+div[data-baseweb="textarea"]:hover {
+  border-color: #9cb4bd !important;
+}
+div[data-baseweb="input"]:focus-within,
+div[data-baseweb="base-input"]:focus-within,
+div[data-baseweb="textarea"]:focus-within {
+  border-color: var(--v-bottle) !important;
+  box-shadow: 0 0 0 3px rgba(12, 111, 124, 0.18) !important;
+}
+
+/* Disabled input state */
+div[data-baseweb="input"]:has(input:disabled),
+div[data-baseweb="base-input"]:has(input:disabled) {
+  background-color: var(--v-floor) !important;
+  border-color: #d1dde2 !important;
+  cursor: not-allowed !important;
+}
+div[data-baseweb="input"] input:disabled {
+  color: var(--v-muted) !important;
+  cursor: not-allowed !important;
+}
+
+/* The actual HTML input tag */
+div[data-baseweb="input"] input,
+div[data-baseweb="base-input"] input,
+div[data-baseweb="textarea"] textarea {
+  background-color: transparent !important;
+  color: var(--v-ink) !important;
+  font-size: 0.95rem !important;
+  font-family: var(--v-body) !important;
+  padding: 0.6rem 0.85rem !important;
+}
+
+/* Selectbox BaseWeb wrapper */
+div[data-baseweb="select"] > div {
+  background-color: #ffffff !important;
+  border: 1.5px solid var(--v-line) !important;
+  border-radius: var(--v-radius-md) !important;
+  min-height: var(--v-control-height) !important;
+  box-shadow: 0 1px 2px rgba(22, 50, 60, 0.04) !important;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out !important;
+}
+div[data-baseweb="select"] > div:hover {
+  border-color: #9cb4bd !important;
+}
+div[data-baseweb="select"] > div:focus-within {
+  border-color: var(--v-bottle) !important;
+  box-shadow: 0 0 0 3px rgba(12, 111, 124, 0.18) !important;
+}
+
+/* Multiselect Tags (Google Material 3 Pill Chips) */
+div[data-baseweb="tag"] {
+  background-color: rgba(12, 111, 124, 0.08) !important;
+  border: 1px solid rgba(12, 111, 124, 0.25) !important;
+  border-radius: 16px !important;
+  padding: 3px 10px !important;
+  font-weight: 600 !important;
+  font-size: 0.85rem !important;
+  color: var(--v-bottle-dark) !important;
+  box-shadow: 0 1px 2px rgba(22, 50, 60, 0.03) !important;
+}
+div[data-baseweb="tag"] span {
+  color: var(--v-bottle-dark) !important;
+}
+div[data-baseweb="tag"] [role="presentation"] svg {
+  fill: var(--v-muted) !important;
+}
+div[data-baseweb="tag"] [role="presentation"]:hover svg {
+  fill: var(--v-red) !important;
+}
+
+/* BaseWeb Dropdown Popover Menus */
+ul[data-baseweb="menu"] {
+  border-radius: var(--v-radius-md) !important;
+  border: 1px solid var(--v-line) !important;
+  box-shadow: 0 10px 30px rgba(22, 50, 60, 0.12) !important;
+  background-color: #ffffff !important;
+  padding: 6px !important;
+}
+li[data-baseweb="menu-item"] {
+  border-radius: var(--v-radius-sm) !important;
+  padding: 8px 12px !important;
+  font-size: 0.92rem !important;
+  color: var(--v-ink) !important;
+  transition: background-color 0.12s ease !important;
+}
+li[data-baseweb="menu-item"]:hover {
+  background-color: #eef5f7 !important;
+  color: var(--v-bottle-dark) !important;
+}
+li[data-baseweb="menu-item"][aria-selected="true"] {
+  background-color: rgba(12, 111, 124, 0.12) !important;
+  color: var(--v-bottle-dark) !important;
+  font-weight: 700 !important;
+}
+
+/* Form Labels & Help text */
+[data-testid="stTextInput"] label,
+[data-testid="stNumberInput"] label,
+[data-testid="stDateInput"] label,
+[data-testid="stSelectbox"] label,
+[data-testid="stTextArea"] label,
+[data-testid="stMultiselect"] label {
+  font-weight: 650 !important;
+  font-size: 0.875rem !important;
+  color: var(--v-ink) !important;
+  margin-bottom: 6px !important;
+}
+[data-testid="stTooltipIcon"] {
+  color: var(--v-muted) !important;
+}
+
+/* ==========================================================================
+   CARDS, METRICS & SURFACES
+   ========================================================================== */
+/* Metrics */
+[data-testid="stMetric"] {
+  padding: 1.1rem 1.35rem !important;
+  background: var(--v-crate) !important;
+  border: 1px solid var(--v-line) !important;
+  border-radius: var(--v-radius-lg) !important;
+  box-shadow: 0 4px 16px rgba(22, 50, 60, 0.05), 0 1px 2px rgba(22, 50, 60, 0.03) !important;
+}
+[data-testid="stMetricLabel"] {
+  color: var(--v-muted) !important;
+  letter-spacing: .05em !important;
+  text-transform: uppercase !important;
+  font-size: .78rem !important;
+  font-weight: 700 !important;
+}
+[data-testid="stMetricValue"] {
+  font-variant-numeric: tabular-nums !important;
+  color: var(--v-bottle-dark) !important;
+  font-weight: 750 !important;
+  font-size: 1.75rem !important;
+  margin-top: 4px !important;
+}
+
+/* Bordered Containers */
+[data-testid="stVerticalBlockBorderWrapper"] {
+  border-color: var(--v-line) !important;
+  border-radius: var(--v-radius-lg) !important;
+  background: var(--v-crate) !important;
+  box-shadow: 0 4px 16px rgba(22, 50, 60, 0.05), 0 1px 2px rgba(22, 50, 60, 0.03) !important;
+  padding: 1.25rem 1.5rem !important;
+  margin-bottom: 0.75rem !important;
+}
+
+/* Standard Forms */
+[data-testid="stForm"] {
+  border-color: var(--v-line) !important;
+  border-radius: var(--v-radius-lg) !important;
+  padding: 1.25rem 1.5rem !important;
+  background: var(--v-crate) !important;
+  box-shadow: 0 4px 16px rgba(22, 50, 60, 0.05), 0 1px 2px rgba(22, 50, 60, 0.03) !important;
+}
+
+/* DataTables & DataFrames */
+[data-testid="stDataFrame"] {
+  border: 1px solid var(--v-line) !important;
+  border-radius: var(--v-radius-md) !important;
+  background: var(--v-crate) !important;
+  overflow: hidden !important;
+  box-shadow: 0 1px 3px rgba(22, 50, 60, 0.04) !important;
+}
+
+/* Expanders */
+[data-testid="stExpander"] {
+  border: 1px solid var(--v-line) !important;
+  border-radius: var(--v-radius-md) !important;
+  background: var(--v-crate) !important;
+  box-shadow: 0 1px 3px rgba(22, 50, 60, 0.04) !important;
+  margin-bottom: 0.75rem !important;
+}
+
+/* Tabs (Google Material 3 Tab Bar) */
+div[data-baseweb="tab-list"] {
+  border-bottom: 2px solid var(--v-line) !important;
+  gap: 8px !important;
+  margin-bottom: 1.25rem !important;
+}
+button[data-baseweb="tab"] {
+  font-family: var(--v-display) !important;
+  font-size: 0.95rem !important;
+  font-weight: 600 !important;
+  color: var(--v-muted) !important;
+  padding: 10px 16px !important;
+  border-bottom: 2px solid transparent !important;
+  margin-bottom: -2px !important;
+  background: transparent !important;
+  transition: color 0.15s ease, border-color 0.15s ease !important;
+}
+button[data-baseweb="tab"]:hover {
+  color: var(--v-bottle-dark) !important;
+}
+button[data-baseweb="tab"][aria-selected="true"] {
+  color: var(--v-bottle-dark) !important;
+  font-weight: 750 !important;
+  border-bottom-color: var(--v-bottle) !important;
+}
+div[data-baseweb="tab-highlight"] {
+  background-color: var(--v-bottle) !important;
+}
+
+/* Material Design 3 Alerts */
+[data-testid="stAlert"] {
+  border-radius: var(--v-radius-md) !important;
+  border: 1px solid var(--v-line) !important;
+  border-left-width: 4px !important;
+  box-shadow: 0 1px 3px rgba(22, 50, 60, 0.04) !important;
+  padding: 0.85rem 1.15rem !important;
+  font-size: 0.92rem !important;
+  margin-bottom: 1rem !important;
+}
+[data-testid="stAlert"]:has([data-testid="stNotificationContentInfo"]) {
+  border-left-color: var(--v-bottle) !important;
+  background-color: #f1f7f9 !important;
+}
+[data-testid="stAlert"]:has([data-testid="stNotificationContentWarning"]) {
+  border-left-color: var(--v-orange) !important;
+  background-color: #fff9f0 !important;
+}
+[data-testid="stAlert"]:has([data-testid="stNotificationContentError"]) {
+  border-left-color: var(--v-red) !important;
+  background-color: #fdf2f2 !important;
+}
+[data-testid="stAlert"]:has([data-testid="stNotificationContentSuccess"]) {
+  border-left-color: var(--v-green) !important;
+  background-color: #f2f9ee !important;
+}
+
+/* Dividers */
+[data-testid="stDivider"], hr {
+  margin-top: 1.25rem !important;
+  margin-bottom: 1.25rem !important;
+  border-color: var(--v-line) !important;
+  opacity: 0.6 !important;
+}
+
+/* Buttons */
+button[kind="primary"] {
+  background: var(--v-bottle) !important;
+  border-color: var(--v-bottle) !important;
+  color: #ffffff !important;
+}
+.stButton > button {
+  min-height: var(--v-control-height);
+  border-radius: var(--v-radius-md);
+  font-weight: 650;
+  box-shadow: 0 1px 2px rgba(22, 50, 60, .08);
+  transition: transform .12s ease, box-shadow .12s ease, background-color .15s ease;
+}
+.stButton > button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(22, 50, 60, .12);
+}
+
+/* ==========================================================================
+   SIDEBAR & NAVIGATION
+   ========================================================================== */
+[data-testid="stSidebar"] {
+  background: #dce8ec !important;
+  border-right: 1px solid var(--v-line) !important;
+}
+[data-testid="stSidebar"] > div:first-child {
+  padding-left: 1.1rem;
+}
+[data-testid="stSidebar"] h1 {
+  font-family: var(--v-display) !important;
+  font-size: 1.35rem !important;
+  letter-spacing: -.03em;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label {
+  padding: 10px 14px !important;
+  border-radius: var(--v-radius-sm) !important;
+  width: 100% !important;
+  margin: 3px 0 !important;
+  min-height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  font-weight: 550 !important;
+  font-size: 0.92rem !important;
+  color: var(--v-muted) !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover {
+  background-color: rgba(255, 255, 255, 0.65) !important;
+  color: var(--v-bottle-dark) !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
+  background: var(--v-crate) !important;
+  box-shadow: inset 3px 0 var(--v-bottle) !important;
+  color: var(--v-bottle-dark) !important;
+  font-weight: 700 !important;
+}
+
+/* Focus Visible */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--v-mango) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px rgba(224, 124, 42, 0.25) !important;
+}
+
+/* Identity & Brand Elements */
+.vitali-identity {
+  margin: 0 0 1rem;
+  border-bottom: 1px solid var(--v-line);
+  padding: .25rem 0 1rem;
+}
+.vitali-identity strong {
+  display: block;
+  font-family: var(--v-display);
+  font-size: 1.15rem;
+  letter-spacing: .32em;
+  color: var(--v-bottle);
+  font-weight: 750;
+}
+.vitali-identity span {
+  display: block;
+  font-size: .65rem;
+  letter-spacing: .24em;
+  color: var(--v-muted);
+  margin-top: 3px;
+  font-weight: 600;
+}
+.vitali-ticket {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 1.4rem;
+  padding-bottom: .9rem;
+  border-bottom: 1px solid var(--v-line);
+}
+.vitali-ticket span {
+  font-family: var(--v-display);
+  letter-spacing: .18em;
+  font-weight: 750;
+  color: var(--v-bottle);
+}
+.vitali-ticket em {
+  font-style: normal;
+  font-size: .72rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--v-muted);
+}
+
+/* File Uploaders (MD3 dropzone) */
+[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"] {
+  border: 1.5px dashed var(--v-line) !important;
+  background-color: #ffffff !important;
+  border-radius: var(--v-radius-md) !important;
+  padding: 1.25rem !important;
+  transition: border-color 0.2s ease, background-color 0.2s ease !important;
+}
+[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"]:hover {
+  border-color: var(--v-bottle) !important;
+  background-color: rgba(91, 167, 68, 0.02) !important;
+}
+[data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"] button {
+  border-radius: var(--v-radius-sm) !important;
+  font-weight: 600 !important;
+}
+
+/* Checkboxes (Material 3) */
+[data-testid="stCheckbox"] {
+  margin-bottom: 0.4rem !important;
+}
+[data-testid="stCheckbox"] label {
+  font-size: 0.9rem !important;
+  color: var(--v-ink) !important;
+  cursor: pointer !important;
+}
+[data-testid="stCheckbox"] input[type="checkbox"] {
+  accent-color: var(--v-bottle) !important;
+  width: 1.15rem !important;
+  height: 1.15rem !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+}
+
+/* Tabular numbers for Metrics & Tables */
+[data-testid="stMetricValue"], [data-testid="stDataFrame"] {
+  font-variant-numeric: tabular-nums !important;
+}
+
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding: 3rem 1rem 2rem 1.4rem !important; }
+  .vitali-ticket { flex-direction: column; gap: .25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* ── Round 5: Sidebar Navigation Polish ─────────────────────────── */
+
+/* Sidebar nav links — hover and active state */
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"] {
+  border-radius: 6px !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"]:hover {
+  background-color: rgba(12, 111, 124, 0.08) !important;
+}
+[data-testid="stSidebar"] [data-testid="stSidebarNavLink"][aria-selected="true"] {
+  background-color: rgba(12, 111, 124, 0.14) !important;
+  color: var(--v-bottle-dark) !important;
+  font-weight: 600 !important;
+}
+
+/* Sidebar page title / section dividers */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+  font-size: 0.72rem !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  color: var(--v-muted) !important;
+  margin-bottom: 0.4rem !important;
+}
+
+/* Sidebar horizontal rule used as divider */
+[data-testid="stSidebar"] hr {
+  border-color: var(--v-line) !important;
+  margin: 0.6rem 0 !important;
+}

@@ -3,6 +3,8 @@
 from pathlib import Path
 import os
 import secrets
+from urllib.parse import urlsplit, unquote, parse_qs
+from django.core.exceptions import ImproperlyConfigured
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -79,6 +81,20 @@ DATABASES = {
         "OPTIONS": {"timeout": 15},
     }
 }
+database_url = os.environ.get("SMARTORDER_DATABASE_URL", "")
+if database_url:
+    parsed = urlsplit(database_url)
+    if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname or not parsed.path.strip("/"):
+        raise ImproperlyConfigured("SMARTORDER_DATABASE_URL debe identificar una base PostgreSQL.")
+    options = parse_qs(parsed.query, strict_parsing=True)
+    if set(options) - {"sslmode"}:
+        raise ImproperlyConfigured("La URL admite únicamente la opción sslmode.")
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.postgresql", "NAME": unquote(parsed.path[1:]),
+        "USER": unquote(parsed.username or ""), "PASSWORD": unquote(parsed.password or ""),
+        "HOST": parsed.hostname, "PORT": parsed.port or 5432,
+        "CONN_MAX_AGE": 0, "OPTIONS": {"connect_timeout": 10, **({"sslmode": options["sslmode"][0]} if options else {})},
+    }
 
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
@@ -99,7 +115,7 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 MEDIA_URL = "media/"
-MEDIA_ROOT = WEB_HOME / "uploads"
+MEDIA_ROOT = Path(os.environ.get("SMARTORDER_MEDIA_ROOT", WEB_HOME / "uploads")).resolve()
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"
@@ -108,4 +124,5 @@ LOGIN_REDIRECT_URL = "dashboard"
 SMARTORDER_DELIVERY_DAYS = int(os.environ.get("SMARTORDER_DELIVERY_DAYS", "365"))
 SMARTORDER_SELLER_EDIT = os.environ.get("SMARTORDER_SELLER_EDIT", "1") == "1"
 SMARTORDER_SELLER_CANCEL = os.environ.get("SMARTORDER_SELLER_CANCEL", "1") == "1"
+SMARTORDER_MAINTENANCE_UI = os.environ.get("SMARTORDER_MAINTENANCE_UI", "0") == "1"
 SMARTORDER_ODOO_CONFIG = os.environ.get("SMARTORDER_ODOO_CONFIG", BASE_DIR / '.local-odoo' / 'smartorder.json')

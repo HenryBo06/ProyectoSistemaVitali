@@ -1,0 +1,96 @@
+{% extends 'operations/base.html' %}
+{% block title %}Control administrativo{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div>
+    <p class="page-eyebrow">Administración</p>
+    <h1>Control administrativo</h1>
+    <p>Pedidos, producción y entregas del período solicitado.</p>
+  </div>
+</div>
+<form class="filter-bar mb-4">
+  <div class="filter-title">
+    <strong>Rango de fechas</strong>
+    <span>Filtrar control del período</span>
+  </div>
+  <div>
+    <label class="form-label" for="from">Desde</label>
+    <input class="form-control" type="date" id="from" name="from_date" value="{{ from_date|date:'Y-m-d' }}">
+  </div>
+  <div>
+    <label class="form-label" for="to">Hasta</label>
+    <input class="form-control" type="date" id="to" name="to_date" value="{{ to_date|date:'Y-m-d' }}">
+  </div>
+  <div></div>
+  <button class="btn btn-outline-primary" type="submit">Aplicar período</button>
+</form>
+<div class="row g-3 mb-4" aria-label="Indicadores ejecutivos">
+  <div class="col-sm-6">
+    <div class="stat stat-featured">
+      <span class="stat-label">Venta confirmada</span>
+      <strong class="stat-value">USD {{ confirmed_revenue|floatformat:2 }}</strong>
+      <span class="stat-note">Después de descuentos; excluye cancelaciones y excepciones pendientes. No representa facturación ni cobros.</span>
+    </div>
+  </div>
+  <div class="col-sm-6">
+    <div class="stat">
+      <span class="stat-label">Puntualidad</span>
+      <strong class="stat-value">{% if punctuality != None %}{{ punctuality|floatformat:1 }} %{% else %}Sin datos suficientes{% endif %}</strong>
+      <span class="stat-note">{{ on_time_orders }}/{{ due_orders }} pedidos vencidos con compromiso · {{ unknown_punctuality }} sin seguimiento suficiente.</span>
+    </div>
+  </div>
+</div>
+{% if health.stale %}<div role="status" class="alert alert-warning mb-4">Disponibilidad pendiente de validar. Los pedidos pueden registrarse bajo pedido.</div>{% endif %}
+<div class="section-label">
+  <h2>Acciones pendientes</h2>
+</div>
+{% regroup actions by order_id as queue %}
+<div class="product-grid mb-4">
+  {% for entry in queue %}
+  <section class="panel panel-body">
+    <h3 class="panel-title"><a href="{% url 'order_detail' entry.grouper %}">Pedido {{ entry.grouper }}</a></h3>
+    <p class="muted">{{ entry.list.0.client }}</p>
+    <ul class="mb-0">{% for action in entry.list %}<li>{{ action.reason }}</li>{% endfor %}</ul>
+  </section>
+  {% empty %}
+  <p class="muted">Sin acciones pendientes en este período.</p>
+  {% endfor %}
+</div>
+<div class="section-label">
+  <h2>Cantidades por unidad</h2>
+</div>
+<div class="panel table-responsive mb-3">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Unidad</th>
+        <th>Vendido</th>
+        <th>Entrega neta</th>
+        <th>Pendiente</th>
+        <th>Cumplimiento</th>
+        <th>Por revisar producción</th>
+        <th>Autorizado</th>
+        <th>Producido</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in unit_totals %}
+      <tr>
+        <td>{{ item.unit }}</td>
+        <td>{{ item.sold }}</td>
+        <td>{{ item.net|default_if_none:'Sin datos' }}</td>
+        <td>{{ item.outstanding|default_if_none:'Sin datos' }}</td>
+        <td>{{ item.fulfillment|floatformat:1|default:'Sin datos' }}{% if item.fulfillment != None %} %{% endif %}</td>
+        <td>{{ item.pending_production }}</td>
+        <td>{{ item.approved }}</td>
+        <td>{{ item.produced|default_if_none:'Sin datos' }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8">Sin ventas confirmadas en este período.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="form-text">Entrega neta = salidas menos devoluciones. Cumplimiento = entrega neta / vendido. Una lectura pendiente impide presentar resultados completos para esa unidad.</p>
+<p><a href="{% url 'operational_reports' %}">Detalle de ejecución</a></p>
+{% endblock %}

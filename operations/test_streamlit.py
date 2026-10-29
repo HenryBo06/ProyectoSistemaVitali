@@ -7,11 +7,13 @@ from importlib.util import find_spec
 
 from django.core.exceptions import PermissionDenied
 from django.test import TransactionTestCase, override_settings
+from django.utils import timezone
 
-from .models import Assignment, InventoryAdjustment, OrderLine, OrderRequest, SalesDataset, StockCorrectionRequest
+from .models import Assignment, ClientStockCount, ClientStockMovement, CommercialEvent, InventoryAdjustment, OrderLine, OrderRequest, PriceTariff, SalesDataset, StockCorrectionRequest
 from .services import import_inventory, import_sales
 from .streamlit_bridge import call_screen, request_for, screen_context, sign_in
 from .tests import LocalCase, inventory_book, sales_book
+from .test_planning_inbox import sales_book_with_units
 
 
 @override_settings(SMARTORDER_ODOO_CONFIG=None)
@@ -28,6 +30,8 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
 
         Assignment.objects.all().delete()
         SalesDataset.objects.all().delete()
+        from .models import PriceTariff
+        PriceTariff.objects.all().delete()
         get_user_model().objects.all().delete()
         with override_settings(SMARTORDER_SETUP_CODE="corto"):
             with self.assertRaises(PermissionDenied):
@@ -55,7 +59,7 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
             screen_context("users", seller_key)
         with self.assertRaises(PermissionDenied):
             screen_context("dashboard", seller_key, {"client": "Otra cartera"})
-        response, notices, seller_key = call_screen("order_create", seller_key, data={
+        response, notices, seller_key = call_screen("order_create", seller_key, data={"submission_token": screen_context("order_create", seller_key)["submission_token"],
             "client": "Cliente A", "required_date": date.today(), "product": ["Alitas"],
             "quantity": ["4"], "unit": ["kg"], "reason": ["Pedido confirmado con el cliente"],
         })
@@ -82,7 +86,7 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
 
         seller_key = sign_in(self.seller.username, "ClaveDelVendedor123")
         admin_key = sign_in(self.admin.username, "ClaveAdministrativa123")
-        call_screen("order_create", seller_key, data={
+        call_screen("order_create", seller_key, data={"submission_token": screen_context("order_create", seller_key)["submission_token"],
             "client": "Cliente A", "required_date": date.today(), "product": ["Alitas"],
             "quantity": ["4"], "unit": ["kg"], "reason": ["Cliente confirmó"],
         })
@@ -126,6 +130,7 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
             call_screen("setup", key, data={"username": "otro", "password": "UnaClaveMuySegura2026"})
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    @override_settings(SMARTORDER_SELLER_EDIT=True, SMARTORDER_SELLER_CANCEL=True)
     def test_native_future_sale_edit_cancel_and_admin_detail_match_local(self):
         from streamlit.testing.v1 import AppTest
         from django.urls import reverse
@@ -137,10 +142,11 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         app.run()
         app.date_input[0].set_value(date.today() + timedelta(days=30)).run()
         app.multiselect[0].select("Alitas").run()
-        for label, value in (("Cantidad solicitada", "5"), ("Precio unitario USD", "12.5"),
-                             ("Descuento %", "10"), ("Motivo de cantidad manual o ajuste", "Entrega futura acordada"),
+        next(field for field in app.text_input if field.label == "Unidad").set_value("kg")
+        for label, value in (("Cantidad solicitada", "5"), ("Motivo de cantidad manual o ajuste", "Entrega futura acordada"),
                              ("Condiciones comerciales", "30 días")):
             next(field for field in app.text_input if field.label == label).set_value(value)
+        next(button for button in app.button if button.label == "Continuar").click().run()
         next(button for button in app.button if button.label == "Confirmar venta").click().run()
         self.assertFalse(app.exception)
         self.assertFalse(app.error)
@@ -151,7 +157,9 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         local = self.client.get(reverse("order_detail", args=[order.pk]))
         self.assertContains(local, "30 días")
         self.assertContains(local, "Compromiso futuro")
-        app.radio[0].set_value("Pedidos y producción").run()
+        self.assertTrue(local.context[0]["can_edit_sale"])
+        workspace = next(widget for widget in app.radio if "Pedidos y producción" in widget.options)
+        workspace.set_value("Pedidos y producción").run()
         next(field for field in app.text_input if field.label == "Cantidad").set_value("6")
         next(field for field in app.text_input if field.label == "Motivo del cambio").set_value("Cliente ajustó cantidad")
         next(button for button in app.button if button.label == "Guardar cambio").click().run()
@@ -165,7 +173,10 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         app.session_state["session_key"] = sign_in(self.admin.username, "ClaveAdministrativa123")
         app.run()
         self.assertFalse(app.exception)
-        self.assertTrue(any("Ventas usadas: ventas.xlsx" in item.value for item in app.caption))
+        self.assertFalse(any("Ventas usadas:" in item.value for item in app.caption))
+        for technical_page in ("Fuentes de datos", "Histórico y contingencias", "Conexión y catálogos de Odoo"):
+            self.assertNotIn(technical_page, app.radio[0].options)
+        self.assertFalse(any("Sincronizar" in button.label or "XLSX" in button.label for button in app.button))
         self.assertTrue(any("Precio unitario: USD 12.5000" in item.value for item in app.markdown))
         self.assertTrue(any("Condiciones comerciales: 30 días" in item.value for item in app.markdown))
         app.session_state["session_key"] = sign_in(self.seller.username, "ClaveDelVendedor123")
@@ -177,6 +188,7 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         self.assertEqual(order.status, OrderRequest.Status.CANCELLED)
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    @override_settings(SMARTORDER_MAINTENANCE_UI=True)
     def test_native_inventory_correction_and_import_details(self):
         from streamlit.testing.v1 import AppTest
         from django.urls import reverse
@@ -196,7 +208,7 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         next(button for button in app.button if button.label == "Aprobar corrección").click().run()
         self.assertFalse(app.exception)
         self.assertEqual(str(InventoryAdjustment.objects.get(correction=correction).available), "8.000")
-        app.radio[0].set_value("Datos en Excel").run()
+        app.radio[0].set_value("Histórico y contingencias").run()
         self.assertFalse(app.exception)
         self.assertTrue(any("inventario_paridad.xlsx" in item.value for item in app.info))
         self.assertTrue(any("2 existencias" in item.value for item in app.info))
@@ -206,6 +218,7 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         self.assertContains(self.client.get(reverse("sales_upload")), f"{self.dataset.row_count} filas")
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    @override_settings(SMARTORDER_MAINTENANCE_UI=True)
     def test_native_login_role_navigation_products_and_empty_filters(self):
         from streamlit.testing.v1 import AppTest
 
@@ -220,23 +233,46 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         app.button[0].click().run()
         self.assertFalse(app.exception)
         self.assertTrue(any(title.value == "Mi trabajo" for title in app.title))
-        self.assertNotIn("Datos en Excel", app.radio[0].options)
+        self.assertNotIn("Histórico y contingencias", app.radio[0].options)
         self.assertFalse(app.date_input)
         self.assertFalse(any("Ventas del período" in metric.label for metric in app.metric))
         app.radio[0].set_value("Productos y pedidos").run()
         self.assertFalse(app.exception)
-        self.assertTrue(any(metric.value == "Decisión manual" for metric in app.metric))
-        self.assertTrue(any(button.label == "Confirmar venta" for button in app.button))
+        self.assertTrue(any("Decisión manual" in str(frame.value.values) for frame in app.dataframe))
+        self.assertTrue(any(button.label == "Continuar" for button in app.button))
         app.multiselect[0].select("Alitas").run()
         next(field for field in app.text_input if field.label == "Cantidad solicitada").set_value("4")
-        next(field for field in app.text_input if field.label == "Unidad").set_value("kg")
-        next(button for button in app.button if button.label == "Confirmar venta").click().run()
-        self.assertTrue(app.error)  # a manual amount needs an explanation
+        unit = next(field for field in app.text_input if field.label == "Unidad")
+        self.assertEqual(unit.value, "")
+        self.assertFalse(unit.disabled)
+        unit.set_value("kg")
+        next(field for field in app.text_area if field.label == "Observaciones del pedido").set_value("Nota conservada")
+        next(widget for widget in app.radio if widget.label == "Al continuar").set_value("Guardar borrador")
+        next(button for button in app.button if button.label == "Continuar").click().run()
+        self.assertTrue(any("Borrador guardado" in item.value for item in app.success))
+        changed_delivery = app.date_input[0].value + timedelta(days=2)
+        app.date_input[0].set_value(changed_delivery).run()
         self.assertEqual(next(field for field in app.text_input if field.label == "Cantidad solicitada").value, "4")
+        self.assertEqual(next(field for field in app.text_area if field.label == "Observaciones del pedido").value, "Nota conservada")
+        unit = next(field for field in app.text_input if field.label == "Unidad")
+        self.assertEqual(unit.value, "kg")
+        next(button for button in app.button if button.label == "Continuar").click().run()
+        self.assertTrue(app.error)  # the invalid review must stay editable
+        self.assertEqual(next(field for field in app.text_input if field.label == "Cantidad solicitada").value, "4")
+        self.assertFalse(next(field for field in app.text_input if field.label == "Cantidad solicitada").disabled)
         next(field for field in app.text_input if field.label == "Motivo de cantidad manual o ajuste").set_value("Cliente confirmó el pedido")
+        next(button for button in app.button if button.label == "Continuar").click().run()
+        self.assertFalse(app.exception)
         next(button for button in app.button if button.label == "Confirmar venta").click().run()
         self.assertFalse(app.exception)
         self.assertEqual(OrderRequest.objects.count(), 1)
+        workspace = next(widget for widget in app.radio if "Mi trabajo" in widget.options)
+        workspace.set_value("Mi trabajo").run()
+        self.assertFalse(app.exception)
+        dashboard_text = " ".join(
+            str(item.value) for item in [*app.caption, *app.markdown, *app.info, *app.success]
+        )
+        self.assertIn("Pendiente de producción", dashboard_text)
         app.radio[0].set_value("Pedidos y producción").run()
         self.assertFalse(app.exception)
         app.radio[0].set_value("Correcciones de inventario").run()
@@ -247,7 +283,7 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         app.text_input[0].set_value(self.admin.username)
         app.text_input[1].set_value("ClaveAdministrativa123")
         app.button[0].click().run()
-        self.assertIn("Datos en Excel", app.radio[0].options)
+        self.assertIn("Histórico y contingencias", app.radio[0].options)
         app.radio[0].set_value("Pedidos y producción").run()
         next(button for button in app.button if button.label == "Autorizar producción").click().run()
         self.assertFalse(app.exception)
@@ -256,9 +292,161 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         next(button for button in app.button if button.label == "Preparar XLSX").click().run()
         self.assertFalse(app.exception)
         self.assertTrue(app.session_state["export_file"][1].startswith(b"PK"))
-        for page in ("Datos en Excel", "Usuarios y cartera", "Productos y pedidos", "Correcciones de inventario"):
+        for page in ("Histórico y contingencias", "Usuarios y cartera", "Productos y pedidos", "Correcciones de inventario"):
             app.radio[0].set_value(page).run()
             self.assertFalse(app.exception, page)
+        app.radio[0].set_value("Productos y pedidos").run()
+        self.assertTrue(any(item.label == "Evaluación de sugerencia comercial" for item in app.expander))
+
+    @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    def test_native_client_stock_inbox_and_admin_planning_screens(self):
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "streamlit_app.py"), default_timeout=30)
+        app.session_state["session_key"] = sign_in(self.seller.username, "ClaveDelVendedor123")
+        app.session_state["workspace"] = "Conteo del cliente"
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any(title.value == "Conteo de existencias del cliente" for title in app.title))
+        next(field for field in app.text_input if field.label == "Existencia contada").set_value("18")
+        next(field for field in app.text_input if field.label == "Unidad").set_value("kg")
+        next(field for field in app.text_input if field.label == "Ubicación del cliente").set_value("Bodega A")
+        next(button for button in app.button if button.label == "Guardar conteo").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(ClientStockCount.objects.count(), 1)
+
+        next(field for field in app.text_input if field.label == "Cantidad del movimiento").set_value("2")
+        next(field for field in app.text_input if field.label == "Unidad del movimiento").set_value("kg")
+        next(field for field in app.text_input if field.label == "Ubicación del movimiento").set_value("Bodega A")
+        next(field for field in app.text_input if field.label == "Referencia del movimiento").set_value("Venta externa confirmada")
+        next(field for field in app.checkbox if field.label == "Confirmo que el cliente reportó este movimiento").set_value(True)
+        next(button for button in app.button if button.label == "Guardar movimiento").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(ClientStockMovement.objects.count(), 1)
+
+        app.session_state["workspace"] = "Notificaciones"
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any(title.value == "Notificaciones" for title in app.title))
+        admin_app = AppTest.from_file(str(Path(__file__).resolve().parents[1] / "streamlit_app.py"), default_timeout=30)
+        admin_app.session_state["session_key"] = sign_in(self.admin.username, "ClaveAdministrativa123")
+        admin_app.session_state["workspace"] = "Calendario y reposición"
+        admin_app.run()
+        self.assertFalse(admin_app.exception)
+        self.assertTrue(any(title.value == "Calendario y reposición" for title in admin_app.title))
+        self.assertTrue(any("Necesidad para los próximos siete días" in item.value for item in admin_app.subheader))
+
+    @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    @override_settings(SMARTORDER_MAINTENANCE_UI=True)
+    def test_native_client_switch_clears_unsaved_incompatible_quantity_and_regenerates_terms(self):
+        today = timezone.localdate()
+        self.dataset = import_sales(
+            sales_book_with_units(today - timedelta(days=35), 30), "unidades-streamlit.xlsx",
+            self.admin, False, True, provenance=SalesDataset.Provenance.REAL,
+        )
+        Assignment.objects.create(user=self.seller, client="Cliente B")
+        PriceTariff.objects.create(
+            client="Cliente B", product="Alitas", unit="lb", unit_price="7.25",
+            discount_percent=5, updated_by=self.admin,
+        )
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file(
+            str(Path(__file__).resolve().parents[1] / "streamlit_app.py"), default_timeout=30,
+        )
+        app.session_state["session_key"] = sign_in(self.seller.username, "ClaveDelVendedor123")
+        app.session_state["workspace"] = "Productos y pedidos"
+        app.run()
+        self.assertFalse(app.exception)
+        next(widget for widget in app.selectbox if widget.label == "Cliente").set_value("Cliente A").run()
+        app.multiselect[0].select("Alitas").run()
+        next(field for field in app.text_input if field.label == "Cantidad solicitada").set_value("4").run()
+        next(field for field in app.text_input if field.label == "Motivo de cantidad manual o ajuste").set_value(
+            "Cliente confirmó cuatro kg"
+        ).run()
+        next(field for field in app.text_area if field.label == "Observaciones del pedido").set_value(
+            "Conservar la nota"
+        ).run()
+        next(field for field in app.text_input if field.label == "Condiciones comerciales").set_value(
+            "30 días"
+        ).run()
+
+        next(widget for widget in app.selectbox if widget.label == "Cliente").set_value("Cliente B").run()
+        self.assertFalse(app.exception)
+        self.assertEqual(next(field for field in app.text_input if field.label == "Cantidad solicitada").value, "")
+        self.assertEqual(next(field for field in app.text_input if field.label == "Unidad").value, "lb")
+        self.assertEqual(next(field for field in app.text_input if field.label == "Motivo de cantidad manual o ajuste").value, "")
+        self.assertEqual(next(field for field in app.text_input if field.label == "Precio unitario USD").value, "7.2500")
+        self.assertEqual(next(field for field in app.text_input if field.label == "Descuento %").value, "5.00")
+        self.assertEqual(next(field for field in app.text_area if field.label == "Observaciones del pedido").value, "Conservar la nota")
+        self.assertEqual(next(field for field in app.text_input if field.label == "Condiciones comerciales").value, "30 días")
+        self.assertTrue(any("Alitas" in warning.value for warning in app.warning))
+
+    @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    @override_settings(SMARTORDER_MAINTENANCE_UI=True)
+    def test_native_dashboard_opportunities_with_same_date_keep_distinct_event_identity(self):
+        today = timezone.localdate()
+        self.dataset = import_sales(
+            sales_book_with_units(today - timedelta(days=35), 30),
+            "event-switch-streamlit.xlsx", self.admin, False, True,
+            provenance=SalesDataset.Provenance.REAL,
+        )
+        PriceTariff.objects.update_or_create(
+            client="Cliente A", product="Alitas",
+            defaults={"unit": "kg", "unit_price": "12.50", "discount_percent": 0,
+                      "updated_by": self.admin},
+        )
+        events = [
+            CommercialEvent.objects.create(
+                key=f"same-day-{suffix}", title=title, kind=CommercialEvent.Kind.COMMERCIAL,
+                start_date=today, end_date=today, territory="Nacional", active=True,
+                reviewed=True, created_by=self.admin,
+            )
+            for suffix, title in (("a", "Evento A"), ("b", "Evento B"))
+        ]
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file(
+            str(Path(__file__).resolve().parents[1] / "streamlit_app.py"), default_timeout=30,
+        )
+        app.session_state["session_key"] = sign_in(self.seller.username, "ClaveDelVendedor123")
+        app.session_state["workspace"] = "Mi trabajo"
+        app.run()
+        self.assertFalse(app.exception)
+        opportunities = [button for button in app.button if button.label == "Preparar esta venta"]
+        self.assertEqual(len(opportunities), 2)
+        opportunities[0].click().run()
+        self.assertFalse(app.exception)
+        first_event_id = app.session_state["product_event_id"]
+        self.assertIn(first_event_id, {event.pk for event in events})
+        second_event_id = next(event.pk for event in events if event.pk != first_event_id)
+        quantity = next(field for field in app.text_input if field.label == "Cantidad solicitada")
+        quantity.set_value("4").run()
+        next(field for field in app.text_input if field.label == "Motivo de cantidad manual o ajuste").set_value(
+            "Venta del primer evento"
+        ).run()
+        next(button for button in app.button if button.label == "Continuar").click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["sale_review"]["event_id"], first_event_id)
+        previous_token = app.session_state["sale_token"]
+
+        app.session_state["pending_sale_context"] = {
+            "client": "Cliente A", "product": "Alitas", "required_date": today,
+            "mode": "sale", "event_id": second_event_id,
+        }
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(app.session_state["product_event_id"], second_event_id)
+        self.assertNotIn("sale_review", app.session_state)
+        self.assertNotEqual(app.session_state["sale_token"], previous_token)
+        self.assertFalse(any(button.label == "Confirmar venta" for button in app.button))
+        quantity = next(field for field in app.text_input if field.label == "Cantidad solicitada")
+        self.assertEqual(quantity.value, "4")
+        self.assertFalse(quantity.disabled)
+        self.assertEqual(
+            next(field for field in app.text_input if field.label == "Motivo de cantidad manual o ajuste").value,
+            "Venta del primer evento",
+        )
 
 
 class StreamlitSetupTests(TransactionTestCase):

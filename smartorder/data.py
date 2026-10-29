@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from hashlib import sha256
 from io import BytesIO
@@ -19,7 +19,8 @@ from openpyxl.utils.exceptions import InvalidFileException
 HEADERS = (
     "Fecha", "Cliente", "Zona_Geografica", "Canal_Distribucion", "Canal_Venta",
     "Producto", "Categoria", "Cantidad_kg_unid", "Precio_Unitario_USD",
-    "Monto_Venta_USD",
+    "Monto_Venta_USD", "Unidad", "Fecha_entrega_solicitada",
+    "Fecha_entrega_comprometida", "Referencia_pedido", "Referencia_linea",
 )
 CORE_HEADERS = (
     "Fecha", "Cliente", "Producto", "Cantidad_kg_unid", "Precio_Unitario_USD",
@@ -29,9 +30,14 @@ OPTIONAL_TEXT_DEFAULTS = {
     "Canal_Distribucion": "No especificado",
     "Canal_Venta": "No especificado",
     "Categoria": "Sin categoría",
+    "Unidad": "",
+    "Referencia_pedido": "",
+    "Referencia_linea": "",
 }
 COLUMN_ALIASES = {
     "Fecha": ("fecha", "fecha_venta", "fecha_pedido", "date", "dia"),
+    "Fecha_entrega_solicitada": ("fecha_entrega_solicitada", "entrega_solicitada", "requested_delivery_date"),
+    "Fecha_entrega_comprometida": ("fecha_entrega_comprometida", "entrega_comprometida", "committed_delivery_date"),
     "Cliente": ("cliente", "nombre_cliente", "customer", "customer_name"),
     "Zona_Geografica": ("zona_geografica", "zona", "region", "territorio"),
     "Canal_Distribucion": (
@@ -42,6 +48,9 @@ COLUMN_ALIASES = {
         "producto", "nombre_producto", "descripcion_producto", "product", "sku",
     ),
     "Categoria": ("categoria", "categoria_producto", "familia", "category"),
+    "Unidad": ("unidad", "unidad_medida", "uom", "unit"),
+    "Referencia_pedido": ("referencia_pedido", "pedido_id", "order_id", "order_reference"),
+    "Referencia_linea": ("referencia_linea", "linea_id", "line_id", "line_reference"),
     "Cantidad_kg_unid": (
         "cantidad_kg_unid", "cantidad", "unidades", "cantidad_pedida", "quantity", "qty",
     ),
@@ -64,30 +73,39 @@ class SalesData:
     sheets: tuple[str, ...]
     recalculated_amounts: int
     normalization_notes: tuple[str, ...] = ()
+    date_semantics: str = "sale_order"
+    provenance: str = "unknown"
+    coverage: dict[tuple[str, str, str], tuple[tuple[date, date], ...]] = field(default_factory=dict)
 
     @property
     def first_date(self) -> date:
-        return self.rows["Fecha"].min().date()
+        starts = [start for intervals in self.coverage.values() for start, _ in intervals]
+        return min([self.rows["Fecha"].min().date(), *starts])
 
     @property
     def last_date(self) -> date:
-        return self.rows["Fecha"].max().date()
+        ends = [end for intervals in self.coverage.values() for _, end in intervals]
+        return max([self.rows["Fecha"].max().date(), *ends])
 
     @property
     def clients(self) -> list[str]:
         return sorted(self.rows["Cliente"].unique().tolist())
 
     def daily(self) -> pd.DataFrame:
-        """Una fila por día, cliente y producto; ausencia significa cero ventas."""
-        pairs = self.rows[["Cliente", "Producto"]].drop_duplicates()
+        """Completa una serie por fecha y unidad; la ausencia se valida aparte por cobertura."""
+        rows = self.rows.copy()
+        if "Unidad" not in rows:
+            rows["Unidad"] = ""
+        rows["Unidad"] = rows["Unidad"].fillna("").astype(str).str.strip().str.casefold()
+        pairs = rows[["Cliente", "Producto", "Unidad"]].drop_duplicates()
         days = pd.DataFrame({"Fecha": pd.date_range(self.first_date, self.last_date)})
         grid = pairs.merge(days, how="cross")
-        totals = self.rows.groupby(["Fecha", "Cliente", "Producto"], as_index=False)[
+        totals = rows.groupby(["Fecha", "Cliente", "Producto", "Unidad"], as_index=False)[
             "Cantidad_kg_unid"
         ].sum()
-        return grid.merge(totals, on=["Fecha", "Cliente", "Producto"], how="left").fillna(
+        return grid.merge(totals, on=["Fecha", "Cliente", "Producto", "Unidad"], how="left").fillna(
             {"Cantidad_kg_unid": 0.0}
-        ).sort_values(["Cliente", "Producto", "Fecha"]).reset_index(drop=True)
+        ).sort_values(["Cliente", "Producto", "Unidad", "Fecha"]).reset_index(drop=True)
 
     @property
     def quality_score(self) -> int:
@@ -127,6 +145,15 @@ def _as_date(value: object, row: int) -> date:
     raise ValueError(f"Fila {row}: Fecha inválida.")
 
 
+def _optional_date(value: object, row: int, name: str) -> date | None:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    try:
+        return _as_date(value, row)
+    except ValueError as exc:
+        raise ValueError(f"Fila {row}: {name} debe ser una fecha válida.") from exc
+
+
 def _number(value: object, name: str, row: int) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"Fila {row}: {name} debe ser numérico.")
@@ -136,7 +163,8 @@ def _number(value: object, name: str, row: int) -> float:
     return result
 
 
-def load_sales(source: bytes | str | Path) -> SalesData:
+def load_sales(source: bytes | str | Path, *, date_semantics: str = "sale_order",
+               provenance: str = "unknown") -> SalesData:
     raw = source if isinstance(source, bytes) else Path(source).read_bytes()
     if len(raw) > MAX_BYTES or not raw.startswith(b"PK"):
         raise ValueError("El archivo debe ser un XLSX válido de 20 MB o menos.")
@@ -195,6 +223,14 @@ def load_sales(source: bytes | str | Path) -> SalesData:
                         raise ValueError(f"Hoja {sheet.title}, fila {excel_row}: falta {name}.")
                     item[name] = text.strip()
                 item["Fecha"] = _as_date(item["Fecha"], excel_row)
+                item["Fecha_entrega_solicitada"] = _optional_date(
+                    item.get("Fecha_entrega_solicitada"), excel_row, "Fecha_entrega_solicitada"
+                )
+                item["Fecha_entrega_comprometida"] = _optional_date(
+                    item.get("Fecha_entrega_comprometida"), excel_row, "Fecha_entrega_comprometida"
+                )
+                for name in ("Unidad", "Referencia_pedido", "Referencia_linea"):
+                    item[name] = str(item.get(name) or "").strip()[:160 if name.startswith("Referencia") else 50]
                 quantity = _number(item["Cantidad_kg_unid"], "Cantidad_kg_unid", excel_row)
                 price = _number(item["Precio_Unitario_USD"], "Precio_Unitario_USD", excel_row)
                 item["Cantidad_kg_unid"] = quantity
@@ -234,5 +270,5 @@ def load_sales(source: bytes | str | Path) -> SalesData:
         )
     return SalesData(
         frame, sha256(raw).hexdigest(), tuple(used_sheets), recalculated,
-        tuple(dict.fromkeys(notes)),
+        tuple(dict.fromkeys(notes)), date_semantics=date_semantics, provenance=provenance,
     )

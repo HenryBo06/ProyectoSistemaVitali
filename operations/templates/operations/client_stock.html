@@ -1,0 +1,35 @@
+{% extends 'operations/base.html' %}
+{% load l10n %}
+{% block title %}Conteo del cliente{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="page-eyebrow">Vendedor</p><h1>Existencias del cliente</h1><p>Registra el conteo que reporta el cliente. Este dato se mantiene separado del inventario de Vitali.</p></div></div>
+<form method="get" class="filter-bar mb-4">
+  <div><label class="form-label" for="client">Cliente</label><select class="form-select" id="client" name="client">{% for client in clients %}<option value="{{ client }}" {% if client == selected_client %}selected{% endif %}>{{ client }}</option>{% endfor %}</select></div>
+  <button class="btn btn-outline-primary">Consultar</button>
+</form>
+{% if selected_client %}
+<section class="panel panel-body mb-4">
+  <h2>Registrar conteo de hoy</h2><p class="muted">El objetivo de existencias lo define administración. Para calcular reposición se necesita un conteo fechado hoy y unidades compatibles.</p>
+  <form method="post" class="sale-fields">{% csrf_token %}<input type="hidden" name="action" value="count"><input type="hidden" name="client" value="{{ selected_client }}">
+    <div><label class="form-label" for="product">Producto</label><select class="form-select" id="product" name="product" required>{% for product in products %}<option>{{ product }}</option>{% endfor %}</select></div>
+    <div><label class="form-label" for="available">Existencia contada</label><input class="form-control" id="available" name="available" type="number" min="0" step="0.001" required></div>
+    <div><label class="form-label" for="unit">Unidad</label><input class="form-control" id="unit" name="unit" maxlength="50" required></div>
+    <div><label class="form-label" for="location">Ubicación del cliente</label><input class="form-control" id="location" name="location" maxlength="160" required></div>
+    <div><label class="form-label" for="observed_on">Fecha del conteo</label><input class="form-control" id="observed_on" name="observed_on" type="date" value="{{ today|date:'Y-m-d' }}" required></div>
+    <div class="align-self-end"><button class="btn btn-primary" type="submit">Guardar conteo</button></div>
+  </form>
+</section>
+<section class="panel panel-body mb-4">
+  <details class="mt-4"><summary class="fw-semibold">Registrar entrada o salida confirmada</summary><form method="post" class="sale-fields mt-3">{% csrf_token %}<input type="hidden" name="action" value="movement"><input type="hidden" name="client" value="{{ selected_client }}">
+    <div><label class="form-label" for="movement-product">Producto</label><select class="form-select" id="movement-product" name="product" required>{% for product in products %}<option>{{ product }}</option>{% endfor %}</select></div><div><label class="form-label" for="movement-kind">Movimiento</label><select class="form-select" id="movement-kind" name="kind"><option value="incoming">Entrada al cliente</option><option value="outgoing">Salida del cliente</option></select></div>
+    <div><label class="form-label" for="movement-quantity">Cantidad</label><input class="form-control" id="movement-quantity" name="quantity" type="number" min="0.001" step="0.001" required></div><div><label class="form-label" for="movement-unit">Unidad</label><input class="form-control" id="movement-unit" name="unit" maxlength="50" required></div>
+    <div><label class="form-label" for="movement-location">Ubicación del cliente</label><input class="form-control" id="movement-location" name="location" maxlength="160" required></div><div><label class="form-label" for="movement-date">Fecha efectiva</label><input class="form-control" id="movement-date" name="effective_date" type="date" min="{{ min_movement_date|date:'Y-m-d' }}" max="{{ max_movement_date|date:'Y-m-d' }}" required></div>
+    <div class="full"><label class="form-label" for="movement-reference">Referencia</label><input class="form-control" id="movement-reference" name="reference" maxlength="200"></div><div class="form-check full"><input class="form-check-input" id="movement-confirmed" name="confirmed" type="checkbox" value="1" required><label class="form-check-label" for="movement-confirmed">Confirmo que el cliente reportó este movimiento</label></div><div class="full"><button class="btn btn-outline-primary">Guardar movimiento</button></div>
+  </form></details>
+</section>
+<section class="panel panel-body mb-4"><h2>Estado por producto</h2><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Producto</th><th>Conteo por ubicaciones</th><th>Objetivo</th><th>Acción</th></tr></thead><tbody>
+{% for row in product_rows %}<tr><td>{{ row.product }}</td><td>{{ row.count_status }}</td><td>{% if row.target %}{{ row.target.target_quantity }} {{ row.target.unit }}{% else %}Por definir{% endif %}</td><td><a class="btn btn-sm btn-outline-primary" href="{% url 'order_create' %}?mode=client_restock&amp;client={{ selected_client|urlencode }}&amp;product={{ row.product|urlencode }}&amp;required_date={{ today|date:'Y-m-d' }}">Revisar reposición</a></td></tr>{% empty %}<tr><td colspan="4">No hay productos en este cliente.</td></tr>{% endfor %}
+</tbody></table></div></section>
+<section class="panel panel-body"><h2>Movimientos confirmados</h2><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Fecha</th><th>Producto</th><th>Movimiento</th><th>Ubicación</th><th>Cantidad</th></tr></thead><tbody>{% for row in movements %}<tr><td>{{ row.effective_date|date:'d/m/Y' }}</td><td>{{ row.product }}</td><td>{{ row.get_kind_display }}</td><td>{{ row.location }}</td><td>{{ row.quantity }} {{ row.unit }}</td></tr>{% empty %}<tr><td colspan="5">No hay movimientos futuros confirmados para este cliente.</td></tr>{% endfor %}</tbody></table></div><p class="muted mb-0">Las compras a Vitali no se tratan como consumo del cliente. Solo se usan las entradas y salidas que el vendedor confirmó junto con el cliente.</p></section>
+{% else %}<div class="empty-state"><h2>Sin clientes asignados</h2><p>Administración debe asignarte una cartera para registrar conteos.</p></div>{% endif %}
+{% endblock %}

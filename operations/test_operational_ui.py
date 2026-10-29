@@ -14,13 +14,14 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (Assignment, InventoryAdjustment, InventoryBatch, InventoryItem, OdooCustomerMapping,
-                     OdooOrderLink, OdooProductMapping, OrderLine, OrderRequest, StockCorrectionRequest)
-from .services import import_sales
+                     OdooOrderLink, OdooProductMapping, OrderLine, OrderRequest, SalesCoverage,
+                     SalesDataset, StockCorrectionRequest)
+from .services import import_sales, save_sales_coverage
 from .streamlit_bridge import screen_context, sign_in
 from .tests import LocalCase, sales_book
 
 
-@override_settings(SMARTORDER_ODOO_CONFIG=None)
+@override_settings(SMARTORDER_ODOO_CONFIG=None, SMARTORDER_MAINTENANCE_UI=True)
 class OperationalUITests(LocalCase, TransactionTestCase):
     def setUp(self):
         super().setUp()
@@ -56,14 +57,14 @@ class OperationalUITests(LocalCase, TransactionTestCase):
         self.assertIn("Pendiente 4 kg", seller)
         self.assertIn("03/10/2026 06:30", seller)
         for forbidden in ("FACTURA_PRIVADA_001", "ERROR_PRIVADO_CONEXION", "Facturación y saldo",
-                          "Sincronizar venta con Odoo", "Cancelar operación en Odoo"):
+                          "Sincronizar venta con Odoo", "Cancelar operación"):
             self.assertNotIn(forbidden, seller)
         request.user = self.admin
         admin = render_to_string("operations/odoo_order_panel.html", {
-            "request": request, "role": "admin", "order": self.order, "odoo": self.operation})
+            "request": request, "role": "admin", "order": self.order, "odoo": self.operation, "maintenance_ui": True})
         for expected in ("FACTURA_PRIVADA_001", "ERROR_PRIVADO_CONEXION", "confirm_action", "Pago parcial",
                          "Sincronizar venta con Odoo", "Actualizar avance de Odoo",
-                         "Enviar cantidades autorizadas a fabricar", "Cancelar operación en Odoo"):
+                         "Enviar cantidades autorizadas a fabricar", "Cancelar operación"):
             self.assertIn(expected, admin)
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
@@ -74,16 +75,31 @@ class OperationalUITests(LocalCase, TransactionTestCase):
         today = date(2026, 10, 3)
         tomorrow = today + timedelta(days=1)
         products = tuple(f"Producto LAB-{index:03d}" for index in range(1, 9))
+        from .models import PriceTariff
+        PriceTariff.objects.bulk_create([PriceTariff(client="Cliente A", product=product, unit="kg", unit_price=4, updated_by=self.admin) for product in products])
         first = date(2025, 5, 1)
-        dataset = import_sales(sales_book(first, (today - first).days + 1, products=products),
-            "fuente_privada_fecha.xlsx", self.admin, verified=True, full_snapshot_confirmed=True)
+        dataset = import_sales(
+            sales_book(first, (today - first).days + 1, products=products),
+            "fuente_privada_fecha.xlsx", self.admin, verified=True, full_snapshot_confirmed=True,
+            provenance=SalesDataset.Provenance.SIMULATED,
+            date_semantics=SalesDataset.DateSemantics.DELIVERY,
+        )
+        for product in products:
+            coverage_id = dataset.coverage.filter(
+                client="Cliente A", product=product,
+            ).values_list("pk", flat=True).first()
+            save_sales_coverage(
+                dataset, self.admin, client="Cliente A", product=product, unit="kg",
+                start_date=dataset.first_date.isoformat(), end_date=(today - timedelta(days=1)).isoformat(),
+                status=SalesCoverage.Status.COMPLETE, coverage_id=coverage_id,
+            )
         batch = InventoryBatch.objects.create(filename="stock_privado.xlsx", digest="fecha-stock",
             uploaded_by=self.admin, active=True, unit_match_confirmed=True)
         InventoryItem.objects.bulk_create([InventoryItem(batch=batch, client="Cliente A", product=product,
             available=0, observed_on=today, unit="kg") for product in products])
         self.client.force_login(self.seller)
         key = sign_in(self.seller.username, "ClaveDelVendedor123")
-        reason = "La fecha de entrega está fuera del rango de sugerencias"
+        reason = "Sugerimos revisar"
         with patch("django.utils.timezone.localdate", return_value=today):
             self.assertEqual(default_delivery_date(None), today)
             with patch.object(dataset, "last_date", today + timedelta(days=500)):
@@ -96,18 +112,22 @@ class OperationalUITests(LocalCase, TransactionTestCase):
                 self.assertEqual(shared["required_date"], tomorrow)
                 self.assertEqual(shared["min_date"], today)
                 self.assertEqual(shared["max_date"], today + timedelta(days=365))
-                self.assertEqual(len(shared["recommendations"]), 8)
+                self.assertEqual(len(shared["recommendations"]), 8,
+                                 {"cards": [(card["product"], card.get("unit")) for card in shared["recommendations"]],
+                                  "coverage": list(dataset.coverage.values_list("product", "unit", "status"))})
                 self.assertTrue(all(card["suggested"] is not None for card in shared["recommendations"]))
                 for card in shared["recommendations"]:
                     self.assertNotIn("forecast", card)
-                    self.assertNotIn("reference_qty", card)
+                    self.assertIn("reference_date", card)
+                    self.assertIn("reference_qty", card)
+                    self.assertNotIn("audit_windows", card)
                     self.assertNotIn("sales_usd_display", card)
                 explicit = {"required_date": today.isoformat()}
                 response = self.client.get(reverse(name), explicit)
                 shared = screen_context(name, key, explicit)
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(shared["required_date"], today)
-                self.assertTrue(all(card["suggested"] is None and reason in card["explanation"]
+                self.assertTrue(all(card["suggested"] is not None and reason in card["explanation"]
                                     for card in shared["recommendations"]))
                 self.assertContains(response, reason)
                 for forbidden in (dataset.filename, "Ventas conocidas", "año anterior", "Fuente y cobertura"):
@@ -118,11 +138,15 @@ class OperationalUITests(LocalCase, TransactionTestCase):
             app.run()
             self.assertFalse(app.exception)
             self.assertEqual(app.date_input[0].value, tomorrow)
-            self.assertEqual(sum(metric.label == "Cantidad sugerida" for metric in app.metric), 8)
+            summary = next(frame.value for frame in app.dataframe if "Cantidad sugerida" in frame.value.columns)
+            self.assertEqual(len(summary), 8)
+            self.assertTrue(all(value != "Decisión manual" for value in summary["Cantidad sugerida"]))
             app.date_input[0].set_value(today).run()
             self.assertFalse(app.exception)
             self.assertEqual(app.date_input[0].value, today)
-            self.assertEqual(sum(metric.label == "Cantidad para solicitar" for metric in app.metric), 8)
+            summary = next(frame.value for frame in app.dataframe if "Cantidad sugerida" in frame.value.columns)
+            self.assertEqual(len(summary), 8)
+            self.assertTrue((summary["Cantidad sugerida"] != "Decisión manual").all())
             visible = " ".join(item.value for item in [*app.caption, *app.markdown, *app.warning])
             self.assertIn(reason, visible)
             for forbidden in (dataset.filename, "Ventas conocidas", "año anterior", "Fuente y cobertura"):
@@ -130,6 +154,7 @@ class OperationalUITests(LocalCase, TransactionTestCase):
             app.multiselect[0].set_value([products[0]]).run()
             next(field for field in app.text_input if field.label == "Cantidad solicitada").set_value("2")
             next(field for field in app.text_input if field.label == "Motivo de cantidad manual o ajuste").set_value("Entrega acordada para hoy")
+            next(button for button in app.button if button.label == "Continuar").click().run()
             next(button for button in app.button if button.label == "Confirmar venta").click().run()
             self.assertFalse(app.exception)
             saved = OrderRequest.objects.latest("pk")
@@ -205,7 +230,7 @@ class OperationalUITests(LocalCase, TransactionTestCase):
         request = RequestFactory().get("/")
         request.user = self.admin
         for template, data in (("odoo_settings", config), ("operational_reports", report)):
-            html = render_to_string(f"operations/{template}.html", {"request": request, "role": "admin", **data})
+            html = render_to_string(f"operations/{template}.html", {"request": request, "role": "admin", "maintenance_ui": True, **data})
             self.assertNotIn("NO_MOSTRAR_CREDENCIAL", html)
             self.assertIn("VIT-LAB-001" if template == "odoo_settings" else "Laboratorio con datos simulados", html)
             if template == "operational_reports":
@@ -395,10 +420,10 @@ class OperationalUITests(LocalCase, TransactionTestCase):
             app.session_state["session_key"] = sign_in(self.admin.username, "ClaveAdministrativa123")
             with patch("operations.views.odoo_service.synchronize") as synchronize:
                 app.run()
-                next(button for button in app.button if button.label == "Cancelar operación en Odoo").click().run()
+                next(button for button in app.button if button.label == "Cancelar operación").click().run()
                 synchronize.assert_not_called()
                 next(item for item in app.checkbox if item.label.startswith("Revisé la venta y sus operaciones")).check()
-                next(button for button in app.button if button.label == "Cancelar operación en Odoo").click().run()
+                next(button for button in app.button if button.label == "Cancelar operación").click().run()
                 self.assertFalse(app.exception)
                 self.assertEqual(synchronize.call_args.args[0].pk, self.order.pk)
                 self.assertEqual(synchronize.call_args.args[1], "cancel")

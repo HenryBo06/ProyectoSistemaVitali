@@ -1,22 +1,55 @@
 {% extends 'operations/base.html' %}
 {% block title %}Productos y sugerencias{% endblock %}
 {% block content %}
-<div class="page-heading"><div><h1>Productos y sugerencias</h1><p>Consulta disponibilidad y confirma las cantidades con tu cliente.</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Crear venta</a>{% endif %}</div>
-{% if role == 'admin' and dataset %}
+<div class="page-heading"><div><p class="page-eyebrow">{% if suggestion_mode == 'client_restock' %}Existencias del cliente{% else %}Venta contextual{% endif %}</p><h1>Productos y sugerencias</h1><p>{% if suggestion_mode == 'client_restock' %}Compara el conteo de hoy con el objetivo definido por administración.{% else %}Consulta antecedentes del cliente para la entrega seleccionada.{% endif %}</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Crear venta{% endif %}</a>{% endif %}</div>
+{% if role == 'vendedor' %}<div class="d-flex flex-wrap gap-2 mb-3"><a class="btn {% if suggestion_mode == 'sale' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Sugerencia de venta</a><a class="btn {% if suggestion_mode == 'client_restock' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?mode=client_restock&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Reposición del cliente</a><a class="btn btn-outline-primary" href="{% url 'client_stock' %}?client={{ selected_client|urlencode }}">Registrar conteo</a></div>{% endif %}
+{% if maintenance_ui and role == 'admin' and dataset %}
 {% if source_status == 'reference' %}<div class="alert alert-warning" role="status">Fuente sin verificar: las cifras son referencia y la cantidad se decide manualmente.</div>{% elif source_status == 'stale' %}<div class="alert alert-warning" role="status">El histórico no tiene ventas recientes. Revisa las fechas antes de decidir un pedido.</div>{% endif %}
 <details class="source-details"><summary>Fuente y cobertura</summary><div class="source-details-body"><span>{{ dataset.filename }}</span><span>{{ dataset.first_date|date:'d/m/Y' }}–{{ dataset.last_date|date:'d/m/Y' }}</span><span>Última venta: {{ latest_sale_date|date:'d/m/Y' }}</span></div></details>
 {% endif %}
-<form class="filter-bar" method="get"><div><label for="client">Cliente</label><select class="form-select" id="client" name="client">{% for client in clients %}<option {% if client == selected_client %}selected{% endif %}>{{ client }}</option>{% endfor %}</select></div><div><label for="delivery">Entrega comprometida</label><input class="form-control" type="date" id="delivery" name="required_date" value="{{ required_date|date:'Y-m-d' }}" min="{{ min_date|date:'Y-m-d' }}" max="{{ max_date|date:'Y-m-d' }}"></div><button class="btn btn-outline-primary">Consultar</button></form>
+<form class="filter-bar" method="get">
+  <div class="filter-title">
+    <strong>Filtros de consulta</strong>
+    <span>Cliente y fecha requerida</span>
+  </div>
+  <div>
+    <label class="form-label" for="client">Cliente</label>
+    <select class="form-select" id="client" name="client">{% for client in clients %}<option {% if client == selected_client %}selected{% endif %}>{{ client }}</option>{% endfor %}</select>
+  </div>
+  <div>
+    <label class="form-label" for="delivery">Entrega solicitada</label>
+    <input class="form-control" type="date" id="delivery" name="required_date" value="{{ required_date|date:'Y-m-d' }}" min="{{ min_date|date:'Y-m-d' }}" max="{{ max_date|date:'Y-m-d' }}">
+  </div>
+  {% if role == 'vendedor' %}<input type="hidden" name="mode" value="{{ suggestion_mode }}">{% endif %}
+  <button class="btn btn-outline-primary" type="submit">Consultar</button>
+</form>
 <div class="product-grid">
 {% for item in recommendations %}
 <article class="panel product-summary decision-{{ item.state }}">
   <div class="product-summary-heading"><div><p class="page-eyebrow">{{ item.category|default:'Producto' }}</p><h2>{{ item.product }}</h2></div><span class="badge-status {% if item.suggested == None %}status-manual{% else %}status-approved{% endif %}">{% if item.suggested == None %}Cantidad manual{% else %}Con sugerencia{% endif %}</span></div>
-  <dl class="product-summary-facts"><div><dt>Existencia disponible</dt><dd>{% if item.available != None %}{{ item.available }} <small>{{ item.unit }}</small>{% else %}Por confirmar{% endif %}</dd></div><div><dt>Cantidad sugerida</dt><dd>{% if item.suggested != None %}{{ item.suggested }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div></dl>
-  {% if item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
+  <dl class="product-summary-facts"><div><dt>Existencia disponible</dt><dd>{% if item.available != None %}{{ item.available }} <small>{{ item.stock_unit|default:'unidad por confirmar' }}</small>{% else %}Por confirmar{% endif %}</dd></div><div><dt>Cantidad sugerida</dt><dd>{% if item.suggested != None %}{{ item.suggested }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div></dl>
+  {% if maintenance_ui and item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
   {% if item.inventory_warning %}<div class="alert alert-warning" role="status">{{ item.inventory_warning }}</div>{% endif %}
   <p class="muted">{{ item.explanation }}</p>
-  {% if role == 'admin' %}<details class="product-evidence"><summary>Histórico y datos de cálculo</summary><p>Ventas: {{ item.sales_usd_display }} · Días con venta: {{ item.days_with_sale }}</p><p>Referencia: {{ item.reference_qty|default_if_none:'Sin dato' }} · {{ item.reference_period }}</p><p>Entradas antes de entrega: {{ item.incoming }} · Compromisos previos: {{ item.commitments_before }} · Compromisos de la semana: {{ item.commitments }}</p></details>{% endif %}
+  {% if role == 'vendedor' and item.reference_date and item.reference_qty != None %}<p class="helper-block">Venta registrada el {{ item.reference_date|date:'d/m/Y' }}: {{ item.reference_qty }} {{ item.unit }} para este cliente.</p>{% endif %}
+  {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}<p><strong>Conteo del cliente:</strong> {% if item.client_stock != None %}{{ item.client_stock }} {{ item.unit }} en {{ item.client_stock_location }}{% else %}hoy pendiente o vencido{% endif %} · <strong>Objetivo:</strong> {{ item.client_stock_target|default_if_none:'por definir' }} {% if item.client_stock_target != None %}{{ item.unit }}{% endif %}</p>{% if item.client_stock_projected != None %}<p>Proyección al {{ required_date|date:'d/m/Y' }}: {{ item.client_stock_projected }} {{ item.unit }} · entradas confirmadas {{ item.client_stock_incoming }} · salidas confirmadas {{ item.client_stock_outgoing }}.</p>{% endif %}{% endif %}
+  {% if role == 'admin' %}
+  <details class="product-evidence">
+    <summary>Histórico y datos de cálculo</summary>
+    <p>Ventas: {{ item.sales_usd_display }} · Días con venta: {{ item.days_with_sale }}</p>
+    <p>Referencia: {{ item.reference_qty|default_if_none:'Sin dato' }} · {{ item.reference_period }}</p>
+    <p>Entradas antes de entrega: {{ item.incoming }} · Compromisos previos: {{ item.commitments_before }} · Compromisos de la semana: {{ item.commitments }}</p>
+    {% if item.sale_evaluation %}
+    <hr>
+    <p><strong>Evaluación diaria de venta para este cliente y producto:</strong> ventanas evaluadas {{ item.sale_evaluation.windows }}/{{ item.sale_evaluation.targets }}{% if item.sale_evaluation.coverage != None %}{% widthratio item.sale_evaluation.coverage 1 100 as coverage_percent %} · cobertura {{ coverage_percent }} %{% endif %} · {% if item.sale_evaluation.automatic %}habilitada para sugerencias{% else %}revisión manual{% endif %}.</p>
+    <p>Error absoluto medio: {% if item.sale_evaluation.mae != None %}{{ item.sale_evaluation.mae|floatformat:3 }} {{ item.unit|default:'unidad registrada' }}{% else %}sin datos suficientes{% endif %} · promedio simple de referencia: {% if item.sale_evaluation.baseline_mae != None %}{{ item.sale_evaluation.baseline_mae|floatformat:3 }} {{ item.unit|default:'unidad registrada' }}{% else %}sin datos suficientes{% endif %}.</p>
+    <p>Sobreestimación media por ventana: {% if item.sale_evaluation.overforecast != None %}{{ item.sale_evaluation.overforecast|floatformat:3 }}{% else %}sin datos suficientes{% endif %} · referencia simple: {% if item.sale_evaluation.baseline_overforecast != None %}{{ item.sale_evaluation.baseline_overforecast|floatformat:3 }}{% else %}sin datos suficientes{% endif %}.</p>
+    {% if item.sale_evaluation.event %}<p>Evento evaluado: {{ item.sale_evaluation.event }}.</p>{% endif %}
+    <p class="form-text">Las métricas usan cortes cronológicos por serie. La cobertura corresponde a las ventanas de auditoría; la precisión comercial queda pendiente de validar con ventas reales recientes.</p>
+    {% else %}<p>La evaluación diaria de venta no está disponible para esta fecha de entrega.</p>{% endif %}
+  </details>
+  {% endif %}
 </article>
-{% empty %}<div class="empty-state"><h2>No hay productos para esta cartera</h2><p>Selecciona otro cliente o consulta a administración.</p></div>{% endfor %}
+{% empty %}<div class="empty-state">{% if not catalog_available %}<h2>Catálogo no disponible</h2><p>Administración debe cargar y habilitar ventas para consultar productos.</p>{% elif not client_in_catalog %}<h2>Este cliente no tiene ventas registradas en el catálogo activo</h2><p>Solicita a administración revisar la asignación y la fuente vigente.</p>{% else %}<h2>No hay productos con ventas registradas para esta consulta</h2><p>Revisa el cliente y la fecha de entrega o solicita una revisión administrativa.</p>{% endif %}</div>{% endfor %}
 </div>
 {% endblock %}

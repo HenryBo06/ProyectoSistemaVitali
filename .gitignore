@@ -7,6 +7,7 @@ __pycache__/
 .local-demo/
 .local-web/
 .local-web-lab/
+.local-web-pilot/
 .venv-web/
 .apptest-demo/
 .local-odoo/

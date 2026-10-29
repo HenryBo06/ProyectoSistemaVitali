@@ -1,18 +1,51 @@
 {% extends 'operations/base.html' %}
 {% block title %}Venta {{ order.id }}{% endblock %}
-{% block content %}
-<div class="page-heading"><div><h1>Venta #{{ order.id }}</h1><p>{{ order.client }} · Entrega comprometida: {{ order.required_date|date:'d/m/Y' }}</p></div><a class="btn btn-outline-primary" href="{% url 'orders' %}">Volver</a></div>
-<section class="panel panel-body mb-4"><p>{% if order.sale_confirmed %}<strong>Venta confirmada sin aprobación administrativa.</strong> La producción se autoriza por separado.{% else %}Solicitud anterior al nuevo flujo comercial.{% endif %}</p>
-<p>Autor: {{ order.seller.username }} · {{ order.created_at|date:'d/m/Y H:i' }}</p>
-{% if order.payment_terms %}<p>Condiciones comerciales: {{ order.payment_terms }}</p>{% endif %}
-{% if order.note %}<p>{{ order.note }}</p>{% endif %}</section>
-{% for line in lines %}<section class="product-line panel-body"><h2>{{ line.product }}</h2><dl class="sale-summary"><div><dt>Cantidad vendida</dt><dd>{{ line.requested_qty }} {{ line.unit }}</dd></div><div><dt>Precio unitario</dt><dd>USD {{ line.unit_price }}</dd></div><div><dt>Descuento</dt><dd>{{ line.discount_percent }} %</dd></div></dl>
-<p>Producción: {{ line.get_status_display }}</p>
-{% if line.approved_qty != None %}<p>Cantidad autorizada para producción: {{ line.approved_qty }} {{ line.unit }}</p>{% endif %}
-{% if line.review_note %}<p>Respuesta de administración: {{ line.review_note }}</p>{% endif %}
-{% if line.future_quantity == None %}<p>Disponibilidad por confirmar; entrega futura pendiente de planificación.</p>{% elif line.future_quantity > 0 %}<p>Compromiso futuro: {{ line.future_quantity }} {{ line.unit }} según inventario al confirmar.</p>{% else %}<p>Existencia suficiente según inventario al confirmar.</p>{% endif %}
-<p class="form-text">La existencia observada no constituye una reserva ni confirma entrega.</p>
-{% if line.suggested_qty != None %}<p>Sugerencia: {{ line.suggested_qty }} {{ line.unit }}</p>{% endif %}{% if line.reason %}<p>Motivo: {{ line.reason }}</p>{% endif %}</section>{% endfor %}
+{% block content %}{% include 'operations/commercial_panel.html' %}
+<div class="page-heading"><div><h1>Venta #{{ order.id }}</h1><p>{{ order.client }} · Entrega solicitada: {{ order.required_date|date:'d/m/Y' }}</p></div><a class="btn btn-outline-primary" href="{% url 'orders' %}">Volver</a></div>
+<section class="panel panel-body mb-4">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+    <div class="h5 mb-0">{% if order.sale_confirmed %}<strong>Venta confirmada sin aprobación administrativa.</strong> La producción se autoriza por separado.{% else %}Excepción comercial pendiente; todavía no confirma venta.{% endif %}</div>
+    <span class="badge-status {% if order.sale_confirmed %}status-approved{% else %}status-pending{% endif %}">{% if order.sale_confirmed %}Confirmada{% else %}Pendiente{% endif %}</span>
+  </div>
+  <div class="source-strip mb-2">
+    <span><strong>Autor:</strong> {{ order.seller.username }}</span>
+    <span><strong>Fecha:</strong> {{ order.created_at|date:'d/m/Y H:i' }}</span>
+    {% if order.payment_terms %}<span><strong>Condiciones comerciales:</strong> {{ order.payment_terms }}</span>{% endif %}
+  </div>
+  {% if order.note %}<div class="helper-block"><p class="mb-0"><strong>Observaciones:</strong> {{ order.note }}</p></div>{% endif %}
+</section>
+{% for line in lines %}
+<article class="product-line" aria-labelledby="line-{{ line.id }}">
+  <div class="product-line-head">
+    <div>
+      <h2 class="panel-title mb-1" id="line-{{ line.id }}">{{ line.product }}</h2>
+      <span class="small muted">{{ line.unit }} · venta confirmada</span>
+    </div>
+    <span class="badge-status {% if line.status == 'approved' %}status-approved{% elif line.status == 'rejected' %}status-rejected{% elif line.status == 'exported' %}status-exported{% else %}status-pending{% endif %}">
+      Producción: {{ line.get_status_display }}
+    </span>
+  </div>
+  <div class="product-line-body">
+    <dl class="sale-summary mb-3">
+      <div><dt>Cantidad vendida</dt><dd>{{ line.requested_qty }} {{ line.unit }}</dd></div>
+      <div><dt>Precio unitario</dt><dd>USD {{ line.unit_price }}</dd></div>
+      <div><dt>Descuento</dt><dd>{{ line.discount_percent }} %</dd></div>
+    </dl>
+    {% if line.approved_qty != None %}<p class="mb-2"><strong>Cantidad autorizada para producción:</strong> {{ line.approved_qty }} {{ line.unit }}</p>{% endif %}
+    {% if line.review_note %}<p class="helper-block mb-2"><strong>Respuesta de administración:</strong> {{ line.review_note }}</p>{% endif %}
+    {% if line.future_quantity == None %}
+      <p class="mb-2">Disponibilidad por confirmar; entrega futura pendiente de planificación.</p>
+    {% elif line.future_quantity > 0 %}
+      <p class="mb-2">Compromiso futuro: {{ line.future_quantity }} {{ line.unit }} según inventario al confirmar.</p>
+    {% else %}
+      <p class="mb-2">Existencia suficiente según inventario al confirmar.</p>
+    {% endif %}
+    <p class="form-text mb-2">La existencia observada no constituye una reserva ni confirma entrega.</p>
+    {% if line.suggested_qty != None %}<p class="mb-1 text-muted small">Sugerencia: {{ line.suggested_qty }} {{ line.unit }}</p>{% endif %}
+    {% if line.reason %}<p class="mb-0 text-muted small">Motivo: {{ line.reason }}</p>{% endif %}
+  </div>
+</article>
+{% endfor %}
 {% include 'operations/sale_changes.html' %}
 {% include 'operations/odoo_order_panel.html' %}
 {% endblock %}

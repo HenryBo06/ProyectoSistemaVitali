@@ -55,7 +55,7 @@ def rpc(method, **kwargs):
             raise ValueError
     except ValueError as exc:
         raise OdooError('Este laboratorio admite únicamente la dirección local de Odoo.') from exc
-    if method not in {'ping', 'sync_sale', 'authorize_production', 'snapshot', 'cancel_sale'}:
+    if method not in {'ping', 'sync_sale', 'authorize_production', 'snapshot', 'cancel_sale', 'read_sources'}:
         raise OdooError('Operación de integración inválida.')
     # ponytail: localhost only, no proxies or redirects; external hosting needs its own reviewed connection.
     try:
@@ -287,7 +287,9 @@ def order_context(order, *, admin=False):
             'outstanding': max(Decimal('0'), Decimal(str(row.get('ordered', 0))) - net),
             'last_delivery_at': delivery_moment(row)})
     synced = bool(snapshot.get('sale'))
-    stale = synced and (link.status != 'synced' or snapshot.get('revision') != link.revision)
+    from datetime import timedelta
+    stale = synced and (link.status != 'synced' or snapshot.get('revision') != link.revision or
+                        not link.last_synced or timezone.now() - link.last_synced > timedelta(minutes=15))
     result = {'enabled': enabled, 'synced': synced, 'stale': stale,
               'status': 'Actualizado' if link and link.status == 'synced' and not stale else 'Pendiente de actualizar',
               'last_synced': link.last_synced if link else None, 'sale_name': snapshot.get('sale', {}).get('name', ''),
