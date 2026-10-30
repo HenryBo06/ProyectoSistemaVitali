@@ -179,6 +179,27 @@ Para generar cada secreto por separado, ejecuta localmente `python -c "import se
 
 Para avisos desde esta interfaz, `SMARTORDER_STREAMLIT_URL` determina el enlace de Telegram; el iniciador lo ajusta al puerto elegido. Los avisos siguen ligados a acciones concretas, sin proceso permanente.
 
+
+### Cuentas de prueba en Streamlit Cloud (sin base de datos externa)
+
+Para una **demo sintética y temporal** con el frontend publicado, se pueden inicializar dos cuentas desde **App settings → Secrets** de la **misma aplicación**. Este mecanismo solo funciona con SQLite, requiere autorización explícita y **no cambia cuentas existentes**. No es necesario configurar Neon.
+
+Las contraseñas del laboratorio local **no están en GitHub**: se generaron de forma aleatoria y se guardaron en el archivo ignorado `.local-web-lab/credentials.json`. Si ese archivo todavía existe en el equipo de desarrollo, selecciona una cuenta administrativa y una vendedora y copia sus valores **directamente** a Secrets, sin enviarlos por chat ni subir el archivo. Si se perdió, utiliza contraseñas nuevas y seguras para la demo; las anteriores no pueden deducirse del código.
+
+Añade las siguientes claves a los Secrets **existentes** de Streamlit Cloud, sin borrar `SMARTORDER_SECRET_KEY` ni otros valores:
+
+```toml
+SMARTORDER_DEMO_BOOTSTRAP = true
+SMARTORDER_DEMO_ADMIN_USERNAME = "<usuario-administrador-del-laboratorio>"
+SMARTORDER_DEMO_ADMIN_PASSWORD = "<contrasena-privada-de-ese-usuario>"
+SMARTORDER_DEMO_SELLER_USERNAME = "<usuario-vendedor-del-laboratorio>"
+SMARTORDER_DEMO_SELLER_PASSWORD = "<contrasena-privada-de-ese-usuario>"
+```
+
+Tras incorporar este cambio a `main`, guarda los Secrets y reinicia la app. Cuando la base SQLite está **vacía**, se crean una cuenta administrativa (`is_staff=True`, no superusuario) y una vendedora (`is_staff=False`), y se muestra el inicio de sesión. Si ya hay usuarios, **no se crea, reemplaza ni restablece ninguno**; utiliza la gestión de cuentas existente. El mecanismo se omite por completo si se usa PostgreSQL o si `SMARTORDER_DEMO_BOOTSTRAP` no es `true`.
+
+**Límites:** los usuarios y pedidos de SQLite pueden perderse cuando Streamlit Cloud recrea su contenedor; con los mismos Secrets, las cuentas de prueba se inicializarán otra vez en una base vacía. Las carteras de clientes, las ventas y los archivos del laboratorio local **no se importan** a Cloud; para probar pedidos es necesario cargar datos sintéticos y asignar clientes desde administración. No utilices datos reales ni contraseñas de producción.
+
 ## Avisos internos por Telegram
 
 Es opcional. Define `SMARTORDER_TELEGRAM_BOT_TOKEN` y `SMARTORDER_TELEGRAM_CHAT_ID` como variables de entorno **antes de iniciar**. Al enviar un pedido, revisar un producto o solicitar una corrección, la aplicación intenta mandar un resumen y un enlace. No adjunta datos comerciales ni ejecuta tareas mientras la PC está apagada. El enlace `127.0.0.1` se abre en la misma PC donde corre el servidor. Un fallo de Telegram no cancela el pedido y queda registrado.
