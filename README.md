@@ -159,13 +159,13 @@ La aplicación pública existente es [SmartOrder AI](https://smartorder-vitali-p
 
 1. Crea una base PostgreSQL privada en un proveedor administrado, con copias de seguridad y conexión TLS. Conserva su URL de conexión en un gestor de secretos; no la subas a GitHub.
 2. En [Streamlit Community Cloud](https://share.streamlit.io/), abre la aplicación **existente** y entra en **App settings → Secrets**. Mantén el valor actual de `SMARTORDER_SECRET_KEY` si ya existe (cambiarlo invalida sesiones y puede afectar datos cifrados). Configura:
-   
+
    ```toml
    SMARTORDER_SECRET_KEY = "<clave-privada-estable>"
    SMARTORDER_SETUP_CODE = "<codigo-privado-de-32-caracteres-o-mas>"
    SMARTORDER_DATABASE_URL = "postgresql://<usuario>:<contrasena>@<servidor>/<base>?sslmode=require"
    ```
-   
+
    Si el proveedor suministra `channel_binding=require`, se admite junto con `sslmode=require`. Usa la URL exacta facilitada por el proveedor; codifica los caracteres especiales de la contraseña en la URL. Nunca compartas esos valores en capturas, incidencias o mensajes.
 3. Reinicia la aplicación desde Streamlit Cloud. El paquete `psycopg[binary]` está declarado en `requirements.txt` y la aplicación ejecuta `migrate` sobre PostgreSQL al iniciar.
 4. Si la base está vacía, aparecerá **Crear administrador inicial**. Introduce el código privado de instalación y crea la primera cuenta con una contraseña segura. A continuación crea los vendedores y sus asignaciones desde administración. En los siguientes reinicios aparecerá **Entrar a tu cuenta**.
