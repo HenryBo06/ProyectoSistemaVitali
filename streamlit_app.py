@@ -30,6 +30,7 @@ from django.db import close_old_connections
 from django.http import Http404
 from django.utils import timezone
 
+from operations.demo_bootstrap import provision_demo_accounts
 from operations.models import OrderLine
 from operations.streamlit_bridge import call_screen, request_for, screen_context, sign_in, sign_out
 
@@ -44,6 +45,19 @@ def prepare_database():
     # database once per process, whether it is local SQLite or remote PostgreSQL.
     # For multi-instance hosting, run migrations in a dedicated deployment step.
     call_command("migrate", interactive=False, verbosity=0)
+    # Explicit demo-only opt-in. Passwords remain in Streamlit Cloud Secrets.
+    # Existing users are never changed, and PostgreSQL is never seeded.
+    try:
+        if st.secrets.get("SMARTORDER_DEMO_BOOTSTRAP", False) is True:
+            provision_demo_accounts(
+                enabled=True,
+                admin_username=st.secrets.get("SMARTORDER_DEMO_ADMIN_USERNAME", ""),
+                admin_password=st.secrets.get("SMARTORDER_DEMO_ADMIN_PASSWORD", ""),
+                seller_username=st.secrets.get("SMARTORDER_DEMO_SELLER_USERNAME", ""),
+                seller_password=st.secrets.get("SMARTORDER_DEMO_SELLER_PASSWORD", ""),
+            )
+    except st.errors.StreamlitSecretNotFoundError:
+        pass
 
 
 prepare_database()
