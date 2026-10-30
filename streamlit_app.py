@@ -40,9 +40,10 @@ st.html(f"<style>{(Path(__file__).resolve().parent / 'operations/static/operatio
 
 @st.cache_resource
 def prepare_database():
-    # ponytail: migrate once per process; large deployments use the deployment migration step.
-    if settings.DATABASES["default"]["ENGINE"].endswith("sqlite3"):
-        call_command("migrate", interactive=False, verbosity=0)
+    # Community Cloud has no separate migration phase. Migrate the configured
+    # database once per process, whether it is local SQLite or remote PostgreSQL.
+    # For multi-instance hosting, run migrations in a dedicated deployment step.
+    call_command("migrate", interactive=False, verbosity=0)
 
 
 prepare_database()
@@ -1575,6 +1576,8 @@ if not user.is_authenticated:
     st.caption("Vitali Alimentos · Ventas, pedidos y producción")
     initial = not get_user_model().objects.exists()
     allowed = os.environ.get("SMARTORDER_ALLOW_LOCAL_SETUP") == "1" and st.get_option("server.address") in {"127.0.0.1", "localhost", "::1"}
+    if not allowed and settings.DATABASES["default"]["ENGINE"].endswith("sqlite3"):
+        st.warning("Esta instancia utiliza almacenamiento temporal. Para conservar las cuentas después de reiniciar Streamlit Cloud, configura SMARTORDER_DATABASE_URL con una base PostgreSQL persistente en App settings → Secrets.")
     remote_setup = len(settings.SMARTORDER_SETUP_CODE) >= 32
     if initial and not allowed and not remote_setup:
         st.info("Para crear la cuenta inicial en Streamlit Cloud, configura SMARTORDER_SETUP_CODE (mínimo 32 caracteres) en App settings → Secrets. En el equipo local, ejecuta iniciar_streamlit.cmd.")

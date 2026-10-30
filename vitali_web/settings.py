@@ -87,13 +87,25 @@ if database_url:
     if parsed.scheme not in {"postgres", "postgresql"} or not parsed.hostname or not parsed.path.strip("/"):
         raise ImproperlyConfigured("SMARTORDER_DATABASE_URL debe identificar una base PostgreSQL.")
     options = parse_qs(parsed.query, strict_parsing=True)
-    if set(options) - {"sslmode"}:
-        raise ImproperlyConfigured("La URL admite únicamente la opción sslmode.")
+    if set(options) - {"sslmode", "channel_binding"}:
+        raise ImproperlyConfigured("La URL admite únicamente sslmode y channel_binding.")
+    if any(len(values) != 1 for values in options.values()):
+        raise ImproperlyConfigured("Los parámetros de conexión no deben repetirse.")
+    if "sslmode" in options and options["sslmode"][0] not in {
+        "disable", "allow", "prefer", "require", "verify-ca", "verify-full"
+    }:
+        raise ImproperlyConfigured("Valor sslmode no válido.")
+    if "channel_binding" in options and options["channel_binding"][0] not in {
+        "disable", "prefer", "require"
+    }:
+        raise ImproperlyConfigured("Valor channel_binding no válido.")
+    connection_options = {"connect_timeout": 10}
+    connection_options.update({name: values[0] for name, values in options.items()})
     DATABASES["default"] = {
         "ENGINE": "django.db.backends.postgresql", "NAME": unquote(parsed.path[1:]),
         "USER": unquote(parsed.username or ""), "PASSWORD": unquote(parsed.password or ""),
         "HOST": parsed.hostname, "PORT": parsed.port or 5432,
-        "CONN_MAX_AGE": 0, "OPTIONS": {"connect_timeout": 10, **({"sslmode": options["sslmode"][0]} if options else {})},
+        "CONN_MAX_AGE": 0, "OPTIONS": connection_options,
     }
 
 PASSWORD_HASHERS = [

@@ -1,0 +1,53 @@
+name: SmartOrder CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  django-and-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_DB: smartorder_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d smartorder_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Django system checks and SQLite tests
+        run: |
+          python manage.py check
+          python manage.py test operations tests --noinput
+      - name: Python, JavaScript and whitespace checks
+        run: |
+          python -m compileall -q streamlit_app.py operations vitali_web
+          node --check operations/static/operations/order.js
+          git diff --check HEAD^ HEAD
+      - name: PostgreSQL migration and cross-process persistence
+        env:
+          SMARTORDER_DATABASE_URL: postgresql://ci@127.0.0.1:5432/smartorder_ci?sslmode=disable
+          SMARTORDER_SECRET_KEY: ci-ephemeral-nonproduction-key
+        run: |
+          python manage.py migrate --noinput
+          python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','vitali_web.settings'); import django; django.setup(); from django.contrib.auth import get_user_model; get_user_model().objects.create_user(username='ci_persistent_user')"
+          python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','vitali_web.settings'); import django; django.setup(); from django.contrib.auth import get_user_model; assert get_user_model().objects.filter(username='ci_persistent_user').exists()"
