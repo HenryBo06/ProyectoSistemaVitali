@@ -40,9 +40,10 @@ st.html(f"<style>{(Path(__file__).resolve().parent / 'operations/static/operatio
 
 @st.cache_resource
 def prepare_database():
-    # ponytail: migrate once per process; large deployments use the deployment migration step.
-    if settings.DATABASES["default"]["ENGINE"].endswith("sqlite3"):
-        call_command("migrate", interactive=False, verbosity=0)
+    # Community Cloud has no separate migration phase. Migrate the configured
+    # database once per process, whether it is local SQLite or remote PostgreSQL.
+    # For multi-instance hosting, run migrations in a dedicated deployment step.
+    call_command("migrate", interactive=False, verbosity=0)
 
 
 prepare_database()
