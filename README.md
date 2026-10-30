@@ -151,20 +151,31 @@ Después de editar el código, detén y vuelve a iniciar Streamlit para cargar l
 
 Streamlit y Django incluyen productos, venta, autorización por producto, correcciones, importaciones, gestión de cuentas, XLSX, conexión Odoo, seguimiento e informes. Los históricos, gráficos, configuración y finanzas son administrativos. Streamlit usa controles nativos y Django conserva Bootstrap; ambos comparten permisos y reglas. Las métricas técnicas del modelo no se presentan como resultados económicos reales.
 
-## Probar en Streamlit Community Cloud
+## Desplegar Streamlit Community Cloud con cuentas persistentes
 
-La [demo de Streamlit Cloud](https://smartorder-vitali-prueba.streamlit.app/) carga `streamlit_app.py` y comparte la lógica de negocio y los permisos de Django. El vendedor consulta su cartera, productos, disponibilidad y sugerencias para confirmar pedidos; administración gestiona datos y cuentas, revisa ventas y autoriza producción por separado.
+La aplicación pública existente es [SmartOrder AI](https://smartorder-vitali-prueba.streamlit.app/). Streamlit Community Cloud inicia `app.py`, que carga `streamlit_app.py` y comparte los modelos, las cuentas, los permisos y las reglas de negocio de Django.
 
-Para crear la primera cuenta, agrega en **App settings → Secrets** una clave Django y un código de instalación distintos. Genera cada valor por separado en PowerShell con `python -c "import secrets; print(secrets.token_urlsafe(48))"` y guárdalos solo en Secrets:
+**Persistencia:** el almacenamiento SQLite predeterminado es local al contenedor de Streamlit y puede desaparecer en cada reinicio o redespliegue. Para conservar administradores, vendedores, asignaciones y registros de la base de datos, configura una instancia PostgreSQL externa y persistente **antes** de crear cuentas nuevas. El sistema aplica las migraciones de Django al iniciar Streamlit, tanto para SQLite como para PostgreSQL.
 
-```toml
-SMARTORDER_SECRET_KEY = "<clave-aleatoria-generada>"
-SMARTORDER_SETUP_CODE = "<codigo-aleatorio-de-32-caracteres-o-mas>"
-```
+1. Crea una base PostgreSQL privada en un proveedor administrado, con copias de seguridad y conexión TLS. Conserva su URL de conexión en un gestor de secretos; no la subas a GitHub.
+2. En [Streamlit Community Cloud](https://share.streamlit.io/), abre la aplicación **existente** y entra en **App settings → Secrets**. Mantén el valor actual de `SMARTORDER_SECRET_KEY` si ya existe (cambiarlo invalida sesiones y puede afectar datos cifrados). Configura:
+   
+   ```toml
+   SMARTORDER_SECRET_KEY = "<clave-privada-estable>"
+   SMARTORDER_SETUP_CODE = "<codigo-privado-de-32-caracteres-o-mas>"
+   SMARTORDER_DATABASE_URL = "postgresql://<usuario>:<contrasena>@<servidor>/<base>?sslmode=require"
+   ```
+   
+   Si el proveedor suministra `channel_binding=require`, se admite junto con `sslmode=require`. Usa la URL exacta facilitada por el proveedor; codifica los caracteres especiales de la contraseña en la URL. Nunca compartas esos valores en capturas, incidencias o mensajes.
+3. Reinicia la aplicación desde Streamlit Cloud. El paquete `psycopg[binary]` está declarado en `requirements.txt` y la aplicación ejecuta `migrate` sobre PostgreSQL al iniciar.
+4. Si la base está vacía, aparecerá **Crear administrador inicial**. Introduce el código privado de instalación y crea la primera cuenta con una contraseña segura. A continuación crea los vendedores y sus asignaciones desde administración. En los siguientes reinicios aparecerá **Entrar a tu cuenta**.
+5. Comprueba la persistencia: cierra sesión, reinicia la aplicación desde Cloud y verifica que el administrador y los vendedores siguen existiendo y que pueden iniciar sesión. Revisa los registros de despliegue si falla la conexión.
 
-Al abrir la app, crea el primer administrador con ese código y una contraseña de al menos 8 caracteres. El código solo autoriza la creación de la primera cuenta; cuando ya existe un usuario, el inicio cambia al formulario de acceso. No lo escribas en Git, capturas públicas ni mensajes.
+Para generar cada secreto por separado, ejecuta localmente `python -c "import secrets; print(secrets.token_urlsafe(48))"`. El código de instalación solo autoriza la creación de la primera cuenta; no reemplaza las contraseñas de usuario.
 
-Esta demo usa datos sintéticos y el almacenamiento de archivos de Streamlit Community Cloud no es persistente; no cargues ventas, inventario, cuentas ni credenciales reales. El laboratorio Odoo se ejecuta localmente y no tiene una conexión pública configurada desde Cloud. Streamlit está incluido en `requirements.txt`; `requirements-streamlit.txt` es el acceso equivalente para el iniciador local.
+**Importante:** cambiar de SQLite a PostgreSQL **no migra automáticamente** cuentas ni pedidos anteriores. Si existe una copia de seguridad válida, planifica su restauración; si la base SQLite temporal ya se perdió, hay que recrear las cuentas. No publiques las credenciales sintéticas del laboratorio local (`.local-web-lab/credentials.json`) ni las reutilices en la aplicación pública.
+
+**Límite de persistencia:** PostgreSQL conserva los registros relacionales, pero los archivos cargados mediante `FileField` (Excel de ventas e inventario) continúan en el almacenamiento local temporal del contenedor. Para conservar esos archivos entre despliegues es necesario configurar también almacenamiento de objetos persistente y sus controles de acceso. Hasta entonces, utiliza únicamente datos sintéticos y no dependas de la app Cloud para operaciones comerciales reales. El laboratorio Odoo permanece local, sin conexión pública configurada.
 
 Para avisos desde esta interfaz, `SMARTORDER_STREAMLIT_URL` determina el enlace de Telegram; el iniciador lo ajusta al puerto elegido. Los avisos siguen ligados a acciones concretas, sin proceso permanente.
 
