@@ -1,63 +1,77 @@
 {% extends 'operations/base.html' %}
 {% block title %}Mi trabajo{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="page-eyebrow">Vendedor</p><h1>Mi trabajo</h1><p>Consulta disponibilidad, confirma ventas y sigue tus entregas.</p></div><a class="btn btn-primary" href="{% url 'recommendations' %}">Productos y sugerencias</a></div>
-<div class="row g-3 mb-4"><div class="col-sm-6"><div class="stat"><span class="stat-label">Clientes asignados</span><strong class="stat-value">{{ clients|length }}</strong></div></div><div class="col-sm-6"><div class="stat"><span class="stat-label">Pedidos de mi cartera</span><strong class="stat-value">{{ order_count }}</strong></div></div></div>
-<div class="seller-workspace">
-<section class="panel panel-body next-sale">
-  <p class="page-eyebrow">Tu siguiente venta</p>
-  <h2>De tu cartera a una entrega comprometida.</h2>
-  <p class="muted">Revisa la disponibilidad y acuerda cantidades y condiciones con tu cliente.</p>
-  <div class="d-flex flex-wrap gap-2 mt-3">
-    <a class="btn btn-primary" href="{% url 'order_create' %}">Preparar venta</a>
-    <a class="btn btn-outline-primary" href="{% url 'orders' %}">Seguir mis pedidos</a>
+<div class="page-heading seller-heading">
+  <div>
+    <p class="page-eyebrow">Espacio del vendedor</p>
+    <h1>Mi trabajo</h1>
+    <p>Revisa sugerencias para tu cartera, prepara ventas y da seguimiento a las entregas acordadas.</p>
   </div>
+  <a class="btn btn-primary btn-lg" href="{% url 'order_create' %}">Preparar una venta <span aria-hidden="true">→</span></a>
+</div>
+
+<section class="seller-next-step panel" aria-labelledby="seller-next-title">
+  <div class="seller-next-copy">
+    <p class="page-eyebrow">Siguiente paso</p>
+    <h2 id="seller-next-title">Elige un cliente y revisa los productos</h2>
+    <p>Consulta cantidades sugeridas y disponibilidad. Tú decides qué incluir; cada venta se confirma con tu revisión.</p>
+  </div>
+  <ol class="seller-flow" aria-label="Pasos para preparar una venta">
+    <li><span>1</span> Cliente</li><li><span>2</span> Productos</li><li><span>3</span> Revisar</li><li><span>4</span> Confirmar</li>
+  </ol>
 </section>
-<section class="panel panel-body">
-  <h2>Mi cartera</h2>
-  <p class="panel-subtitle mb-3">Clientes asignados a tu cuenta</p>
-  <ul class="client-list">
+
+<div class="row g-3 my-2" aria-label="Resumen de cartera">
+  <div class="col-sm-6"><div class="stat"><span class="stat-label">Clientes asignados</span><strong class="stat-value">{{ clients|length }}</strong><span class="stat-note">Cartera disponible para consulta</span></div></div>
+  <div class="col-sm-6"><div class="stat"><span class="stat-label">Pedidos de mi cartera</span><strong class="stat-value">{{ order_count }}</strong><span class="stat-note">Solicitudes registradas</span></div></div>
+</div>
+
+<div class="section-label"><h2>Tu cartera</h2><small>Abre un cliente para consultar productos y empezar una venta.</small></div>
+<section class="panel seller-client-panel" aria-label="Clientes asignados">
+  <ul class="client-list seller-client-list">
     {% for client in clients %}
-    <li><a href="{% url 'recommendations' %}?client={{ client|urlencode }}">{{ client }}<span>Consultar productos →</span></a></li>
+    <li>
+      <a href="{% url 'order_create' %}?client={{ client|urlencode }}">
+        <span class="client-initial" aria-hidden="true">{{ client|slice:':1'|upper }}</span>
+        <span class="client-name">{{ client }}<small>Cliente asignado a tu cartera</small></span>
+        <span class="client-action">Consultar y preparar venta <span aria-hidden="true">→</span></span>
+      </a>
+    </li>
     {% empty %}
-    <li class="p-3 muted">Administración debe asignarte clientes para empezar.</li>
+    <li class="seller-empty"><strong>Tu cartera todavía no está configurada.</strong><span>Contacta a administración para asignar clientes a tu cuenta.</span></li>
     {% endfor %}
   </ul>
 </section>
-</div>
-<div class="seller-workspace mt-3">
+
+<div class="seller-workspace seller-followup-grid mt-4">
   <section class="panel panel-body">
-    <h2>Atención pendiente</h2>
-    <p class="panel-subtitle mb-3">Ventas confirmadas que todavía requieren seguimiento</p>
-    <ul class="client-list">
+    <div class="section-heading-inline"><div><h2>Requiere tu atención</h2><p class="panel-subtitle">Solicitudes recientes que necesitan seguimiento</p></div><a href="{% url 'orders' %}">Ver mis pedidos</a></div>
+    <ul class="client-list followup-list">
       {% for order in attention_orders %}
-      <li><a href="{% url 'order_detail' order.pk %}">{{ order.client }}<span>{{ order.get_status_display }} · {{ order.required_date|date:"j M Y" }}</span></a></li>
-      {% empty %}
-      <li class="p-3 muted">No tienes ventas pendientes de seguimiento.</li>
-      {% endfor %}
+      <li><a href="{% url 'order_detail' order.pk %}"><span>{{ order.client }} · pedido #{{ order.pk }}</span><small>{{ order.get_status_display }} · entrega {{ order.required_date|date:"j M Y" }}</small></a></li>
+      {% empty %}<li class="seller-empty"><strong>No tienes novedades operativas pendientes.</strong><span>Las respuestas de administración aparecerán aquí.</span></li>{% endfor %}
     </ul>
   </section>
   <section class="panel panel-body">
-    <h2>Próximas entregas</h2>
-    <p class="panel-subtitle mb-3">Fechas comprometidas en tu cartera</p>
-    <ul class="client-list">
+    <div class="section-heading-inline"><div><h2>Próximas entregas</h2><p class="panel-subtitle">Fechas comprometidas en tu cartera</p></div></div>
+    <ul class="client-list followup-list">
       {% for order in upcoming_orders %}
-      <li><a href="{% url 'order_detail' order.pk %}">{{ order.client }}<span>{{ order.committed_date|date:"D j M Y" }} · {{ order.get_status_display }}</span></a></li>
-      {% empty %}
-      <li class="p-3 muted">No hay entregas comprometidas próximas.</li>
-      {% endfor %}
-    </ul>
-  </section>
-  <section class="panel panel-body">
-    <h2>Oportunidades</h2>
-    <p class="panel-subtitle mb-3">Hasta tres sugerencias vinculadas a eventos revisados</p>
-    <ul class="client-list">
-      {% for item in opportunities %}
-      <li><a href="{{ item.url }}">{{ item.client }} · {{ item.product }}<span>{{ item.event }} · {{ item.date|date:"j M Y" }}</span></a></li>
-      {% empty %}
-      <li class="p-3 muted">No hay oportunidades de evento para mostrar ahora.</li>
-      {% endfor %}
+      <li><a href="{% url 'order_detail' order.pk %}"><span>{{ order.client }}</span><small>{{ order.committed_date|date:"D j M Y" }} · {{ order.get_status_display }}</small></a></li>
+      {% empty %}<li class="seller-empty"><strong>No hay entregas próximas.</strong><span>Las entregas comprometidas se mostrarán aquí.</span></li>{% endfor %}
     </ul>
   </section>
 </div>
+
+{% if opportunities %}
+<div class="section-label"><h2>Oportunidades para revisar</h2><small>Sugerencias vinculadas a eventos comerciales revisados.</small></div>
+<div class="product-grid seller-opportunities">
+  {% for item in opportunities %}
+  <article class="panel panel-body opportunity-card">
+    <p class="page-eyebrow">Evento revisado</p><h3>{{ item.event }}</h3><p>{{ item.client }} · {{ item.product }}</p>
+    <p class="muted">Fecha sugerida para revisar: {{ item.date|date:"j M Y" }}</p>
+    <a class="btn btn-outline-primary" href="{{ item.url }}">Revisar esta oportunidad <span aria-hidden="true">→</span></a>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
 {% endblock %}

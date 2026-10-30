@@ -16,6 +16,28 @@
   });
   const review = document.querySelector('#sale-review');
   const lineFilter = document.querySelector('#product-line-filter');
+  const selectionStatus = document.querySelector('#selection-status');
+  const formatNumber = (value, places = 3) => Number(value).toLocaleString('es-SV', {
+    maximumFractionDigits: places,
+  });
+  const formatMoney = value => Number(value).toLocaleString('es-SV', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+  const formatDate = value => {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Intl.DateTimeFormat('es-SV', {
+      day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC',
+    }).format(new Date(Date.UTC(year, month - 1, day)));
+  };
+  function updateSelectionStatus() {
+    const count = form.querySelectorAll('.product-toggle:checked').length;
+    if (selectionStatus) {
+      selectionStatus.textContent = count === 1
+        ? '1 producto seleccionado. Revisa cada cantidad y su unidad.'
+        : `${count} productos seleccionados. Revisa cada cantidad y su unidad.`;
+      selectionStatus.classList.toggle('selection-status-active', count > 0);
+    }
+  }
   function filterProducts() {
     if (!lineFilter) return;
     form.querySelectorAll('.sale-product').forEach(product => {
@@ -31,19 +53,27 @@
   form.querySelectorAll('.product-toggle').forEach(toggle => {
     const product = toggle.closest('.sale-product');
     product.querySelector('.product-fields').hidden = !toggle.checked;
+    const quantity = product.querySelector('.sale-qty');
+    const unit = product.querySelector('.sale-unit');
+    quantity.required = toggle.checked;
+    unit.required = toggle.checked;
     const syncProduct = () => {
-      const quantity = product.querySelector('.sale-qty');
       product.querySelector('.product-fields').hidden = !toggle.checked;
+      quantity.required = toggle.checked;
+      unit.required = toggle.checked;
       if (!toggle.checked) quantity.value = '';
       review.hidden = true;
+      updateSelectionStatus();
     };
     toggle.addEventListener('change', syncProduct);
   });
+  updateSelectionStatus();
   form.querySelectorAll('.use-suggestion').forEach(button => button.addEventListener('click', () => {
     const product = button.closest('.sale-product'), toggle = product.querySelector('.product-toggle');
     const quantity = document.getElementById(button.dataset.quantity);
     toggle.checked = true; product.querySelector('.product-fields').hidden = false;
     quantity.value = quantity.dataset.suggested; quantity.focus(); review.hidden = true;
+    updateSelectionStatus();
   }));
   document.querySelector('#review-sale').addEventListener('click', () => {
     if (!form.reportValidity()) return;
@@ -52,11 +82,17 @@
     const target = document.querySelector('#review-lines'); target.replaceChildren(); let total = 0, count = 0;
     products.forEach((product, index) => {
       if (!quantities[index].trim()) return; const row = document.createElement('p');
-      row.textContent = `${product}: ${quantities[index]} ${units[index]} · USD ${prices[index] || 'sin tarifa'} · descuento ${discounts[index]} %`;
+      row.textContent = `${product}: ${formatNumber(quantities[index])} ${units[index]} · USD ${formatMoney(prices[index])} · descuento ${formatNumber(discounts[index], 2)} %`;
       target.append(row); count++; total += Math.round(Number(quantities[index]) * Number(prices[index]) * (1 - Number(discounts[index]) / 100) * 100) / 100;
     });
     if (!count) target.textContent = 'Selecciona un producto e indica su cantidad.';
-    document.querySelector('#review-total').textContent = `Total propuesto: USD ${total.toFixed(2)} · ${data.get('client')} · entrega solicitada ${data.get('required_date')}`;
+    document.querySelector('#review-total').textContent = `Total propuesto: USD ${formatMoney(total)} · ${data.get('client')} · entrega solicitada ${formatDate(data.get('required_date'))}`;
+    const conditions = [
+      data.get('payment_terms').trim() ? `Condiciones: ${data.get('payment_terms').trim()}` : '',
+      data.get('note').trim() ? `Observaciones: ${data.get('note').trim()}` : '',
+    ].filter(Boolean);
+    document.querySelector('#review-conditions').textContent = conditions.join(' · ')
+      || 'Sin condiciones comerciales u observaciones adicionales.';
     document.querySelector('#confirm-sale').textContent = data.get('exception_reason').trim() ? 'Solicitar aprobación de excepción' : 'Confirmar venta';
     document.querySelector('#confirm-sale').disabled = !count; review.hidden = false; review.querySelector('h2').focus();
   });

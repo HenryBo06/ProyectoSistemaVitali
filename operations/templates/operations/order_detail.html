@@ -18,7 +18,26 @@
 {% if maintenance_ui and not order.dataset.verified %}<div class="alert alert-warning" role="status">Las cantidades de este pedido se propusieron manualmente con ventas históricas de referencia. Revisa la explicación de cada producto.</div>{% endif %}
 {% if order.note %}<section class="panel mb-4"><div class="panel-body"><h2 class="panel-title mb-2">Nota del vendedor</h2><p class="mb-0">{{ order.note }}</p></div></section>{% endif %}
 <div class="section-label"><h2>Productos solicitados</h2><small>La venta está confirmada; administración autoriza producción por línea.</small></div>
-{% for line in lines %}<article class="product-line" aria-labelledby="line-{{ line.id }}"><div class="product-line-head"><div><h3 class="panel-title" id="line-{{ line.id }}">{{ line.product }}</h3><span class="small muted">{{ line.unit }} · propuesta del vendedor: {{ line.requested_qty }}</span></div><span class="badge-status {% if line.status == 'approved' %}status-approved{% elif line.status == 'rejected' %}status-rejected{% elif line.status == 'exported' %}status-exported{% else %}status-pending{% endif %}">{{ line.get_status_display }}</span></div><div class="product-line-body"><div class="product-facts"><span>Precio USD {{ line.unit_price }} · Descuento {{ line.discount_percent }} %</span><span>Compromiso futuro: {{ line.future_quantity|default_if_none:"Por confirmar" }} {{ line.unit }}</span><span><strong>Vendido:</strong> {{ line.requested_qty }} {{ line.unit }}</span>{% if maintenance_ui %}<span><strong>Base:</strong> {{ line.method }}{% if line.reference_qty != None %} · {{ line.reference_qty }} en período comparable{% endif %}</span>{% endif %}{% if line.suggested_qty != None %}<span><strong>Sugerencia:</strong> {{ line.suggested_qty }} {{ line.unit }}</span>{% endif %}{% if line.approved_qty != None %}<span><strong>Aprobado:</strong> {{ line.approved_qty }} {{ line.unit }}</span>{% endif %}</div>{% if line.reason %}<p class="helper-block mb-2"><strong>Motivo del vendedor:</strong> {{ line.reason }}</p>{% endif %}{% if line.review_note %}<p class="helper-block mb-2"><strong>Respuesta de administración:</strong> {{ line.review_note }}</p>{% endif %}
+{% for line in lines %}
+<article class="product-line" aria-labelledby="line-{{ line.id }}">
+  <div class="product-line-head">
+    <div>
+      <h3 class="panel-title" id="line-{{ line.id }}">{{ line.product }}</h3>
+      <span class="small muted">{{ line.unit }} · propuesta del vendedor: {{ line.requested_qty|floatformat:"-3" }}</span>
+    </div>
+    <span class="badge-status {% if line.status == 'approved' %}status-approved{% elif line.status == 'rejected' %}status-rejected{% elif line.status == 'exported' %}status-exported{% else %}status-pending{% endif %}">{{ line.get_status_display }}</span>
+  </div>
+  <div class="product-line-body">
+    <div class="product-facts">
+      <span>Precio USD {{ line.unit_price|floatformat:2 }} · Descuento {{ line.discount_percent|floatformat:2 }} %</span>
+      <span>Compromiso futuro: {{ line.future_quantity|default_if_none:"Por confirmar"|floatformat:"-3" }} {{ line.unit }}</span>
+      <span><strong>Vendido:</strong> {{ line.requested_qty|floatformat:"-3" }} {{ line.unit }}</span>
+      {% if maintenance_ui %}<span><strong>Base:</strong> {{ line.method }}{% if line.reference_qty != None %} · {{ line.reference_qty|floatformat:"-3" }} en período comparable{% endif %}</span>{% endif %}
+      {% if line.suggested_qty != None %}<span><strong>Sugerencia:</strong> {{ line.suggested_qty|floatformat:"-3" }} {{ line.unit }}</span>{% endif %}
+      {% if line.approved_qty != None %}<span><strong>Aprobado:</strong> {{ line.approved_qty|floatformat:"-3" }} {{ line.unit }}</span>{% endif %}
+    </div>
+    {% if line.reason %}<p class="helper-block mb-2"><strong>Motivo del vendedor:</strong> {{ line.reason }}</p>{% endif %}
+    {% if line.review_note %}<p class="helper-block mb-2"><strong>Respuesta de administración:</strong> {{ line.review_note }}</p>{% endif %}
   {% if role == 'admin' or request.user.is_staff %}{% if line.status == 'pending' and sources_current and order.sale_confirmed %}
   <div class="review-action-box p-3 bg-light rounded border mt-3">
     <div class="fw-semibold text-dark mb-2">Revisión administrativa de producción</div>
