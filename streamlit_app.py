@@ -2,6 +2,7 @@
 
 import os
 from datetime import date, timedelta
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -104,14 +105,31 @@ def table(rows):
         st.info("Aún no hay registros para mostrar.")
 
 
+def format_number(value, decimal_places=3, *, trim=True):
+    """Presenta números con separadores en español, sin cambiar el valor guardado."""
+    number = Decimal(str(value))
+    rendered = f"{number:,.{decimal_places}f}"
+    if trim:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered.replace(",", "\0").replace(".", ",").replace("\0", ".")
+
+
 def dashboard():
     if not user.is_staff:
-        st.title("Mi trabajo")
+        st.title("Mi trabajo", icon=":material/home_work:")
         st.caption("Disponibilidad, sugerencias y seguimiento de tu cartera.")
         c = context("dashboard")
-        left, right = st.columns(2)
-        left.metric("Clientes asignados", len(c["clients"]))
-        right.metric("Pedidos de mi cartera", c["order_count"])
+        with st.container(horizontal=True):
+            st.metric("Clientes asignados", len(c["clients"]), border=True)
+            st.metric("Pedidos de mi cartera", c["order_count"], border=True)
+            st.metric("Requieren seguimiento", len(c.get("attention_orders", [])), border=True)
+        with st.container(border=True):
+            st.subheader("Siguiente paso: prepara una venta")
+            st.caption("Elige un cliente, revisa disponibilidad y sugerencias, ajusta cantidades y confirma tu decisión.")
+            st.markdown("**1 Cliente**  →  **2 Productos**  →  **3 Revisión**  →  **4 Confirmación**")
+            st.button("Consultar productos y sugerencias", type="primary", icon=":material/arrow_forward:",
+                      on_click=st.session_state.update,
+                      kwargs={"workspace": "Productos y pedidos"})
         st.subheader("Requiere tu atención")
         if c.get("attention_orders"):
             for order in c["attention_orders"]:
@@ -145,31 +163,29 @@ def dashboard():
                         }
                         st.session_state.pending_workspace = "Productos y pedidos"
                         st.rerun()
-        st.subheader("Tu siguiente venta")
-        with st.container(border=True):
-            st.write("**Consulta productos y prepara la entrega**")
-            st.caption("Elige un cliente de tu cartera, revisa la disponibilidad y confirma las condiciones de la venta.")
-            st.button("Consultar productos", type="primary", on_click=st.session_state.update,
-                      kwargs={"workspace": "Productos y pedidos"})
         st.subheader("Mi cartera")
         for client in c["clients"]:
             with st.container(border=True):
                 name_col, action_col = st.columns([3, 1])
                 name_col.write(f"**{client}**")
                 name_col.caption("Cliente asignado a tu cartera")
-                action_col.button("Ver productos", key=f"client:{client}", on_click=st.session_state.update,
+                action_col.button("Preparar venta", key=f"client:{client}", on_click=st.session_state.update,
                                   kwargs={"workspace": "Productos y pedidos", "product_client": client})
         if not c["clients"]:
             st.info("Solicita a administración que te asigne clientes para empezar.")
         return
-    st.title("Resumen de ventas")
+    st.title("Resumen de ventas", icon=":material/monitoring:")
     st.caption("Ventas observadas y trabajo pendiente de tu cartera." if not user.is_staff
                else "Ventas observadas y pedidos pendientes de revisión.")
     c = context("dashboard")
     if not c.get("dataset"):
         st.info("Administración debe cargar el Excel de ventas para empezar.")
         return
-    st.info(f"{c['kpis']['pending_orders_display']} pedidos pendientes · Consulta Pedidos y producción para continuar.")
+    pending_count = c["kpis"]["pending_orders_display"]
+    if pending_count:
+        st.warning(f"{pending_count} pedido(s) pendientes de revisión. Abre Pedidos y producción para continuar.", icon=":material/pending_actions:")
+    else:
+        st.caption("No hay pedidos pendientes de revisión.")
     source(c)
     with st.container(border=True):
         filters = st.columns([2, 1, 1])
@@ -225,7 +241,7 @@ def dashboard():
 
 
 def products():
-    st.title("Productos y pedidos")
+    st.title("Productos y sugerencias", icon=":material/shopping_bag:")
     st.caption("Consulta disponibilidad y sugerencias; confirma ventas sin aprobación administrativa.")
     c = context("recommendations")
     source(c)
@@ -265,10 +281,9 @@ def products():
     })
     st.caption(f"Entrega solicitada: {delivery:%d/%m/%Y} · administración confirmará el compromiso.")
     if not user.is_staff:
-        st.info(
-            "1. Cliente y entrega · 2. Productos · 3. Revisión · 4. Confirmación"
-        )
-    st.subheader("Productos disponibles")
+        st.markdown("**1 Cliente y entrega**  →  **2 Productos**  →  **3 Revisión**  →  **4 Confirmación**")
+        st.caption("Las cantidades sugeridas son orientación. Tú revisas, ajustas y confirmas cada venta.")
+    st.subheader("Productos disponibles" if user.is_staff else "2 · Productos y sugerencias")
     cards = c["recommendations"]
     if not cards:
         if not c.get("catalog_available"):
@@ -287,13 +302,13 @@ def products():
         line_filter = st.selectbox("Línea de producto", ["Todas las líneas", *lines],
                                    key=f"product_line:{client}",
                                    disabled=bool(st.session_state.get("sale_review")))
-        with st.expander("Consultar disponibilidad y sugerencias"):
-            table([{
+        st.caption("Compara la sugerencia con la disponibilidad y confirma cada cantidad antes de continuar.")
+        table([{
             "Producto": card["product"],
-            "Cantidad sugerida": (f"{card['suggested']:,.3f} {card['unit']}"
+            "Cantidad sugerida": (f"{format_number(card['suggested'])} {card['unit']}"
                                   if card["suggested"] is not None else "Decisión manual"),
             "Disponibilidad Vitali": ("Por confirmar" if card["available"] is None
-                                      else f"{card['available']:,.3f} {card.get('stock_unit') or 'unidad por confirmar'}"),
+                                      else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"),
         } for card in cards if line_filter == "Todas las líneas"
           or (card.get("category") or "Sin línea") == line_filter])
         valid_products = [card["product"] for card in cards]
@@ -349,9 +364,9 @@ def products():
                 st.subheader(card["product"])
                 first, second = st.columns(2)
                 first.metric("Cantidad sugerida" if card["suggested"] is not None else "Cantidad para solicitar",
-                             f"{card['suggested']:,.3f} {card['unit']}" if card["suggested"] is not None else "Decisión manual")
+                             f"{format_number(card['suggested'])} {card['unit']}" if card["suggested"] is not None else "Decisión manual")
                 second.metric("Existencia disponible", "Sin inventario" if card["available"] is None
-                              else f"{card['available']:,.3f} {card.get('stock_unit') or 'unidad por confirmar'}")
+                              else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}")
                 if settings.SMARTORDER_MAINTENANCE_UI and card["stock_date"]:
                     st.caption(f"Corte de inventario: {card['stock_date']:%d/%m/%Y}")
                 if card["inventory_warning"]:
@@ -495,7 +510,7 @@ def products():
                 else card["unit"] or "",
             )
         if card["suggested"] is not None and card["suggested"] > 0:
-            if st.button(f"Usar sugerencia · {card['suggested']:,.3f} {card['unit']}", key=f"use-suggestion:{scope}:{product}", disabled=review_active):
+            if st.button(f"Usar sugerencia · {format_number(card['suggested'])} {card['unit']}", key=f"use-suggestion:{scope}:{product}", disabled=review_active):
                 st.session_state[quantity_key] = str(card["suggested"])
     with st.container():
         exception = st.checkbox("Solicitar excepción comercial", key=exception_key,
@@ -614,7 +629,7 @@ def products():
             if not rows:
                 raise ValueError
             table(rows)
-            st.write(f"Total propuesto: USD {total:,.2f}")
+            st.write(f"Total propuesto: USD {format_number(total, 2, trim=False)}")
             st.write(f"Cliente: {reviewed['client']} · entrega solicitada: {reviewed['required_date']}")
             st.write(f"Condiciones: {reviewed['payment_terms']} · observaciones: {reviewed['note']}")
             st.warning("Bajo pedido. Disponibilidad por validar; producción sin autorizar. La fecha solicitada no garantiza entrega.")
@@ -644,7 +659,7 @@ def products():
 
 
 def notification_inbox_screen():
-    st.title("Notificaciones")
+    st.title("Notificaciones", icon=":material/notifications:")
     st.caption("Respuestas administrativas, cambios de entrega y oportunidades revisadas.")
     c = context("notification_inbox")
     groups = (("Novedades operativas", c.get("operational_notifications", [])),
@@ -1081,7 +1096,7 @@ def odoo_order_panel(detail):
 
 
 def orders():
-    st.title("Pedidos y producción")
+    st.title("Pedidos y producción", icon=":material/inventory_2:")
     c = context("orders")
     st.caption("Ventas confirmadas y autorización de producción por producto; hasta 100 pedidos recientes.")
     st.caption("Los indicadores cuentan productos; cada producto tiene su propia decisión.")
@@ -1350,7 +1365,7 @@ def source_center_screen():
 
 
 def pilot_dashboard_screen():
-    st.title("Control administrativo")
+    st.title("Centro de operación", icon=":material/dashboard:")
     c = context("pilot_dashboard", st.session_state.get("pilot_filters"))
     with st.form("pilot_period"):
         start = st.date_input("Desde", value=c["from_date"])
@@ -1361,7 +1376,7 @@ def pilot_dashboard_screen():
             else:
                 st.session_state.pilot_filters = {"from_date": start, "to_date": end}
                 st.rerun()
-    st.metric("Venta confirmada USD", f"{c['confirmed_revenue']:,.2f}")
+    st.metric("Venta confirmada USD", format_number(c["confirmed_revenue"], 2, trim=False))
     st.caption("Después de descuentos; excluye cancelaciones y excepciones pendientes. No representa facturas ni cobros.")
     st.metric("Puntualidad", f"{c['punctuality']:.1f} %" if c["punctuality"] is not None else "Sin datos suficientes")
     st.caption(f"{c['on_time_orders']}/{c['due_orders']} pedidos vencidos con compromiso administrativo; {c['unknown_punctuality']} sin seguimiento suficiente.")

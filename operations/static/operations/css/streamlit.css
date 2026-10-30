@@ -626,3 +626,41 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-color: var(--v-line) !important;
   margin: 0.6rem 0 !important;
 }
+
+/* SmartOrder workspace refresh: align Streamlit's native interface with Django. */
+:root {
+  --v-ink: #172f3a;
+  --v-bottle: #176b63;
+  --v-bottle-dark: #10524d;
+  --v-mango: #bd6a2b;
+  --v-floor: #f3f6f7;
+  --v-crate: #ffffff;
+  --v-line: #d8e1e4;
+  --v-muted: #526873;
+  --v-radius-sm: 7px;
+  --v-radius-md: 10px;
+  --v-radius-lg: 14px;
+  --v-control-height: 44px;
+}
+[data-testid="stAppViewContainer"], [data-testid="stMain"] { background: var(--v-floor) !important; }
+.stApp::before { display: none !important; }
+[data-testid="stMainBlockContainer"] { max-width: 1440px; padding-top: 2rem !important; }
+h1, h2, h3 { color: var(--v-ink) !important; }
+[data-testid="stSidebar"] { background: #fff !important; border-right: 1px solid var(--v-line) !important; }
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked) {
+  background: #eaf4f2 !important; box-shadow: inset 3px 0 var(--v-bottle) !important;
+  color: var(--v-bottle-dark) !important;
+}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover { background: #f1f6f6 !important; }
+[data-testid="stMetric"], [data-testid="stVerticalBlockBorderWrapper"], [data-testid="stForm"] {
+  border-color: #dce5e8 !important; box-shadow: 0 2px 10px rgba(23,47,58,.045) !important;
+}
+[data-testid="stMetricValue"] { color: var(--v-bottle-dark) !important; }
+button[kind="primary"] { background: var(--v-bottle) !important; border-color: var(--v-bottle) !important; }
+button[kind="primary"]:hover { background: var(--v-bottle-dark) !important; border-color: var(--v-bottle-dark) !important; }
+.vitali-identity { border-color: #e5ecee; }
+.vitali-identity strong, .vitali-ticket span { color: var(--v-bottle-dark); }
+.vitali-ticket { border-color: #e5ecee; }
+@media (max-width: 640px) {
+  [data-testid="stMainBlockContainer"] { padding: 2rem .85rem 2rem 1.1rem !important; }
+}

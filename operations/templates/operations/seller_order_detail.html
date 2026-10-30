@@ -27,21 +27,21 @@
   </div>
   <div class="product-line-body">
     <dl class="sale-summary mb-3">
-      <div><dt>Cantidad vendida</dt><dd>{{ line.requested_qty }} {{ line.unit }}</dd></div>
-      <div><dt>Precio unitario</dt><dd>USD {{ line.unit_price }}</dd></div>
-      <div><dt>Descuento</dt><dd>{{ line.discount_percent }} %</dd></div>
+      <div><dt>Cantidad vendida</dt><dd>{{ line.requested_qty|floatformat:"-3" }} {{ line.unit }}</dd></div>
+      <div><dt>Precio unitario</dt><dd>USD {{ line.unit_price|floatformat:2 }}</dd></div>
+      <div><dt>Descuento</dt><dd>{{ line.discount_percent|floatformat:2 }} %</dd></div>
     </dl>
-    {% if line.approved_qty != None %}<p class="mb-2"><strong>Cantidad autorizada para producción:</strong> {{ line.approved_qty }} {{ line.unit }}</p>{% endif %}
+    {% if line.approved_qty != None %}<p class="mb-2"><strong>Cantidad autorizada para producción:</strong> {{ line.approved_qty|floatformat:"-3" }} {{ line.unit }}</p>{% endif %}
     {% if line.review_note %}<p class="helper-block mb-2"><strong>Respuesta de administración:</strong> {{ line.review_note }}</p>{% endif %}
     {% if line.future_quantity == None %}
       <p class="mb-2">Disponibilidad por confirmar; entrega futura pendiente de planificación.</p>
     {% elif line.future_quantity > 0 %}
-      <p class="mb-2">Compromiso futuro: {{ line.future_quantity }} {{ line.unit }} según inventario al confirmar.</p>
+      <p class="mb-2">Compromiso futuro: {{ line.future_quantity|floatformat:"-3" }} {{ line.unit }} según inventario al confirmar.</p>
     {% else %}
       <p class="mb-2">Existencia suficiente según inventario al confirmar.</p>
     {% endif %}
     <p class="form-text mb-2">La existencia observada no constituye una reserva ni confirma entrega.</p>
-    {% if line.suggested_qty != None %}<p class="mb-1 text-muted small">Sugerencia: {{ line.suggested_qty }} {{ line.unit }}</p>{% endif %}
+    {% if line.suggested_qty != None %}<p class="mb-1 text-muted small">Sugerencia: {{ line.suggested_qty|floatformat:"-3" }} {{ line.unit }}</p>{% endif %}
     {% if line.reason %}<p class="mb-0 text-muted small">Motivo: {{ line.reason }}</p>{% endif %}
   </div>
 </article>

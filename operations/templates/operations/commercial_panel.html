@@ -2,7 +2,7 @@
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
     <h2 class="h5 mb-0">Confirmación comercial y entrega</h2>
     <span class="badge-status {% if order.status == 'cancelled' %}status-rejected{% elif order.sale_confirmed %}status-approved{% else %}status-pending{% endif %}">
-      {% if order.status == 'cancelled' %}Pedido cancelado{% elif order.sale_confirmed %}Pedido confirmado{% else %}Excepción comercial pendiente{% endif %}
+      {% if order.status == 'cancelled' %}Venta cancelada{% elif order.sale_confirmed %}Venta confirmada{% else %}Excepción pendiente de revisión{% endif %}
     </span>
   </div>
   <p class="muted small mb-3">Producción independiente de la confirmación comercial.</p>
