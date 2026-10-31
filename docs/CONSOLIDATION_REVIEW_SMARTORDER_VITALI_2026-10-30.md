@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-10-30
 **Rama revisada:** `consolidate-smartorder-plan`
-**Base actual:** `origin/main` en `d5d7b770cd0ae4bdce49360ac0e030a32bc0e384`
+**Base actual:** `origin/main` en `35323af1fbb64495ce7d8e84ee83923d16fceb4a`
 **Referencia inicial:** `5129401fd8e346f088ba377aff039d44eb03a1d3`
 
 ## Alcance y límites
@@ -13,7 +13,7 @@ No se ejecutó Docker, no se desplegó una VM, no se conectó a una base de vent
 
 ## Reconciliación de ramas y cambios
 
-`origin/main` avanzó **16 commits** desde la referencia inicial; el merge-base sigue siendo `5129401`. Se creó esta rama desde el `origin/main` actualizado. El rediseño frontend ya integrado en main se conservó; se reconciliaron únicamente las extensiones del formulario, los requisitos de producción y la ruta Streamlit para la oportunidad comercial. El estado local previo se preservó en el stash `preserve local SmartOrder work before main consolidation`; el archivo generado por Modernization Workflow se mantiene local y no se publica.
+`origin/main` ya avanzó **27 commits** desde la referencia inicial. Durante la revisión se incorporaron 11 commits nuevos (PR #7) después de la primera lectura de main en `d5d7b77`; la rama se rebasó sobre el nuevo head `35323af` antes de cerrar esta auditoría. El merge-base actual es `35323af`. Se conservó el rediseño Streamlit integrado en main (PR #4), así como la actualización de la interfaz Django incorporada en PR #7; se reconciliaron únicamente las extensiones para mostrar la oportunidad comercial, los requisitos de producción y la documentación de despliegue. El estado local previo se preservó en el stash `preserve local SmartOrder work before main consolidation`; el archivo generado por Modernization Workflow se mantiene local y no se publica.
 
 Los cambios revisables de esta rama abarcan:
 
@@ -40,7 +40,7 @@ Estados: **Implementado** = hay código/documentación; **Probado** = hay una ve
 | Como administración, quiero revisar solicitudes antes de compartir producción. | Flujo existente de solicitudes, revisión y XLSX; pruebas en `operations/test_planning_inbox.py` y `operations/test_streamlit.py`. | Implementado en repo y cubierto por suite; prueba operativa/UAT pendiente. |
 | Usar fecha de venta/pedido como semántica de la fecha del Excel. | `SalesDataset.DateSemantics.SALE_ORDER`; evidencia de la decisión en la conversación. | Decisión del usuario del proyecto confirmada; no equivale a aceptación de Vitali. |
 | Probar el cambio contra una línea base verificable. | `docs/BASELINE-2026-10-30.md`; pruebas de la rama actual. | Línea base histórica y suite actual verificadas localmente; no es UAT. |
-| Preservar el rediseño frontend integrado en main. | `origin/main` PR #4 y sus archivos de UI; diff consolidado limitado a la oportunidad comercial. | Integrado y cubierto por la suite; aceptación de cliente no consta. |
+| Preservar el rediseño frontend integrado en main. | `origin/main` PR #4 y actualización Django PR #7; diff consolidado limitado a la oportunidad comercial. | Integrado y cubierto por la suite; aceptación de cliente no consta. |
 | Proteger cuentas de demo con opt-in y secretos de Streamlit. | Código/documentación integrados en main, PR #6; `operations/test_demo_bootstrap.py` en main. | Integrado en main y con pruebas del repo; secretos reales no se incluyen ni se validan aquí. |
 | Persistir base de datos de la instancia de despliegue. | Soporte PostgreSQL en main y CI existente; Compose añade PostgreSQL interno. | Configuración implementada; PostgreSQL Compose/VM no probado en este entorno. |
 | Desplegar Django/Gunicorn detrás de TLS con datos persistentes. | `Dockerfile`, `compose.yaml`, `infra/Caddyfile`, `.env.example`, `VM-INSTALL.md`. | Implementado y validado estáticamente; build, arranque, TLS y persistencia real pendientes/bloqueados por Docker/VM. |
@@ -71,14 +71,14 @@ No se encontraron coincidencias de patrones comunes de credenciales en archivos 
 
 | Comando / evidencia | Resultado |
 |---|---|
-| `git fetch origin main`; comparación con `5129401` | `origin/main` actualizado a `d5d7b770cd0ae4bdce49360ac0e030a32bc0e384`, 16 commits delante; merge-base `5129401`. |
-| `manage.py test operations.test_planning_inbox.PlanningInboxTests.test_seller_sees_commercial_forecast_separate_from_delivery_quantity operations.test_streamlit.StreamlitBridgeTests.test_native_seller_sees_commercial_forecast_separate_from_delivery_quantity --noinput` | 2 pruebas pasaron; validan Django y salida de Streamlit. |
-| `manage.py test operations tests --noinput` | 141 pruebas pasaron en 252.480 s; el runner reportó `System check identified no issues`. |
+| `git fetch origin main`; comparación con `5129401` | `origin/main` actualizado a `35323af1fbb64495ce7d8e84ee83923d16fceb4a`, 27 commits delante; la rama se rebasó sobre ese head y el merge-base actual coincide. Main había avanzado 16 commits al inicio de la revisión y recibió 11 más durante la auditoría. |
+| `manage.py test operations.test_planning_inbox.PlanningInboxTests.test_seller_sees_commercial_forecast_separate_from_delivery_quantity operations.test_streamlit.StreamlitBridgeTests.test_native_seller_sees_commercial_forecast_separate_from_delivery_quantity --noinput` | 2 pruebas pasaron en 4.126 s sobre la base más reciente; validan Django y la salida de Streamlit. |
+| `manage.py test operations tests --noinput` | 145 pruebas pasaron en 168.212 s después del rebase; el runner reportó `System check identified no issues`. |
 | `manage.py check` | Correcto: sin problemas. |
 | `manage.py makemigrations --check --dry-run` | Correcto: no hay migraciones pendientes de generar. |
 | `python -m pip check` | Correcto: dependencias consistentes. |
 | `SMARTORDER_DEBUG=0` y valores sintéticos de entorno; `manage.py check --deploy` | Código de salida 0; solo W005 y W021 (HSTS subdominios/preload). No se emplearon secretos reales. |
-| `SMARTORDER_DEBUG=0`; `manage.py collectstatic --noinput` con `SMARTORDER_STATIC_ROOT` temporal único | 134 archivos copiados y 134 post-procesados; directorio temporal eliminado después. |
+| `SMARTORDER_DEBUG=0`; `manage.py collectstatic --noinput` con `SMARTORDER_STATIC_ROOT` temporal único | 135 archivos copiados y 135 post-procesados; directorio temporal eliminado después del rebase. |
 | Parseo PyYAML de `compose.yaml` y aserciones de topología | Correcto: DB en `backend`, web en `backend` + `outbound`, proxy en `backend`, únicos puertos publicados 80/443, red `backend` interna. Validación estática, no prueba de Docker. |
 | Búsqueda de patrones de secretos en archivos publicables; `git check-ignore .env staticfiles .local-web/smartorder.sqlite3` | Sin coincidencias de patrones; `.env`, estáticos generados y SQLite local ignorados. No se publican. |
 | `git diff --check` y `git diff --cached --check` | Sin errores. |
