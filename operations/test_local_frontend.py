@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 
 
@@ -29,8 +29,9 @@ class LocalFrontendViewTests(TestCase):
                      "name=\"username\"", "name=\"password\"", "csrfmiddlewaretoken"):
             self.assertContains(response, text)
 
+    @override_settings(DEBUG=True)
     def test_local_first_run_does_not_ask_for_installation_code(self):
-        response = self.client.get(reverse("setup"), REMOTE_ADDR="127.0.0.1")
+        response = self.client.get(reverse("setup"), REMOTE_ADDR="127.0.0.1", HTTP_HOST="127.0.0.1:8000")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "En el programa local no necesitas código de instalación")
         self.assertNotContains(response, 'name="setup_code"')
