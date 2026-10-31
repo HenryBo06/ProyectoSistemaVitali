@@ -106,7 +106,18 @@ No se encontraron coincidencias de patrones comunes de credenciales en archivos 
 | `git diff --check` y `git diff --cached --check` | Sin errores. |
 | `docker --version`; `docker compose version` | No ejecutable: el comando `docker` no está instalado/disponible. No se hizo build, arranque, prueba PostgreSQL ni restauración real. |
 
-Los chequeos locales reproducibles pasan. Siguen pendientes el CI remoto del PR, ejecución con Docker/VM, PostgreSQL real, prueba de restauración y validación empresarial.
+Los chequeos locales reproducibles pasan. Siguen pendientes el CI remoto del PR, ejecución con Docker/Compose en la VM, validación de la revisión actual dentro de esa VM, PostgreSQL real, prueba de restauración y validación empresarial.
+
+## Validación posterior en VM (2026-10-30)
+
+| Comando / evidencia | Resultado |
+|---|---|
+| `VBoxManage clonevm bb03c78e-9e4d-4376-b28c-de19d33c5d90 --name SmartOrder-Validation-Copy-20261030 --basefolder "C:\Users\barri\VirtualBox VMs" --register --mode machine` | Clonación real completada al 100 %. Se trabajó sobre la copia; la VM base `SmartOrder-PoC-20261017` no se modificó. |
+| `VBoxManage startvm SmartOrder-Validation-Copy-20261030 --type headless`; `showvminfo` y `guestproperty enumerate` | La copia inició y quedó en estado `running`. Guest Additions informó Ubuntu 24.04.5 LTS y `10.0.2.15`; no había usuarios conectados. |
+| `curl.exe --max-time 12 -sS -L -o NUL -w ... http://127.0.0.1:18000/` y navegador en `http://127.0.0.1:18000/` | HTTP 200 tras una redirección a `/entrar/?next=/`; se mostró la pantalla de inicio de sesión Django. |
+| `curl.exe --max-time 12 -sS -L -o NUL -w ... http://127.0.0.1:18501/` | HTTP 200 desde Streamlit, respuesta de 7,260 bytes. |
+
+Estos resultados prueban que la copia de la VM arranca y que los servicios ya presentes en la imagen responden por los puertos reenviados. No prueban que la revisión de esta rama esté desplegada: no se transfirió código ni se autenticó en el sistema invitado. El usuario indicó que no dispone de las credenciales de la VM, así que no se intentó iniciar sesión ni se solicitaron secretos. Docker/Compose dentro de la VM, Django bajo esta revisión, PostgreSQL, Caddy/TLS, persistencia, reinicio y respaldo/restauración siguen sin verificar. Los intentos de clonación anteriores no se eliminaron.
 
 ## Siguientes fases ejecutables sin datos de Vitali
 
@@ -125,5 +136,6 @@ Los chequeos locales reproducibles pasan. Siguen pendientes el CI remoto del PR,
 - Entorno/VM, DNS, certificados, firewall/egress, retención/cifrado de backups y responsables de operación aprobados por TI.
 - Usuarios piloto, criterios cuantitativos de aceptación, participantes y acta de UAT de Vitali.
 - Plan maestro íntegro y autorización explícita para considerar fases de cliente completadas.
+- Acceso administrativo autorizado a la VM de validación para instalar y probar la revisión actual; no se han compartido credenciales.
 
 Ninguno de estos bloqueos se resuelve inventando un esquema, simulando datos productivos o usando valores de ejemplo como credenciales.
