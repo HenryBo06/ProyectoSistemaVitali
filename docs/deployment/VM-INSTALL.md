@@ -62,7 +62,7 @@ docker compose --env-file .env exec -T db \
   sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-owner --no-acl' \
   > "$db_backup"
 docker compose --env-file .env run --rm -T --no-deps --entrypoint python web \
-  -c 'import sys,tarfile; archive=tarfile.open(fileobj=sys.stdout.buffer, mode="w|gz"); archive.add("/data", arcname="data"); archive.close()' \
+  -c 'import sys,tarfile; archive=tarfile.open(fileobj=sys.stdout.buffer, mode="w|gz"); archive.add("/data", arcname="."); archive.close()' \
   > "$data_backup"
 docker compose --env-file .env exec -T db pg_restore --list < "$db_backup" > /dev/null
 sha256sum "$db_backup" "$data_backup" > "$db_backup.sha256"
@@ -92,12 +92,13 @@ docker compose --env-file .env exec -T db \
   sh "$restore_db"
 
 docker volume create "$restore_volume"
+# El archivo contiene el contenido de /data en la raiz, sin una carpeta data adicional.
 cat "$data_backup" | docker compose --env-file .env run --rm -T --no-deps \
-  -v "$restore_volume:/restore" --entrypoint python web \
+  --user 0:0 -v "$restore_volume:/restore" --entrypoint python web \
   -c 'import sys,tarfile; archive=tarfile.open(fileobj=sys.stdin.buffer, mode="r|gz"); archive.extractall("/restore", filter="data")'
 docker compose --env-file .env run --rm -T --no-deps \
   -v "$restore_volume:/restore:ro" --entrypoint python web \
-  -c 'from pathlib import Path; root=Path("/restore/data"); assert root.is_dir(); print("Restored entries:", sum(1 for _ in root.rglob("*")))'
+  -c 'from pathlib import Path; root=Path("/restore"); assert root.is_dir(); print("Restored entries:", sum(1 for _ in root.rglob("*"))); print("Top-level entries:", [item.name for item in root.iterdir()])'
 ```
 
 Confirme con TI los checksums, la salida de `pg_restore`, el conteo de migraciones y que el archivo restaurado incluye los uploads esperados. Solo después de validar, elimine exclusivamente los recursos temporales creados en esta prueba, usando exactamente los valores de `restore_db` y `restore_volume`:

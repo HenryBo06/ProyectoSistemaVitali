@@ -11,6 +11,19 @@ El archivo `PLAN_MAESTRO_MEJORAS_SMARTORDER_VITALI_2026-10-30.md` no está en el
 
 No se ejecutó Docker, no se desplegó una VM, no se conectó a una base de ventas de Vitali y no se hizo UAT. El respaldo/restauración se documentó, pero no se ejecutó. No se declaran resultados ni aceptación del cliente que no estén evidenciados.
 
+## Revisión técnica posterior del paquete
+
+La revisión recibida identificó tres hallazgos de despliegue/interfaz corregibles sin cambiar la definición comercial y una decisión comercial pendiente:
+
+| Hallazgo | Acción local | Estado / límite |
+|---|---|---|
+| COR-01: restaurar `/data` como UID 10001 en un volumen vacío puede impedir crear archivos. | El comando de extracción del archivo de datos ejecuta solo ese contenedor temporal con `--user 0:0`; el contenedor normal conserva su usuario no root. | Procedimiento corregido; no ejecutado con Docker. Aún se debe verificar propiedad/permisos y lectura por el UID normal en volumen temporal. |
+| COR-04: la estructura del tar de `/data` debe coincidir con la ruta de comprobación tras restaurar. | El respaldo archiva `/data` con raíz `.` y la restauración comprueba entradas directamente bajo `/restore`. | Documentación corregida; no se generó/restauró un archivo desde Docker ni se validó propiedad/permisos del volumen. |
+| COR-02: `reference_date` usaba `floatformat`, por lo que la fecha histórica se mostraba vacía. | Se restauró `date:'d/m/Y'` y se añadió una aserción Django con fecha no nula y cantidad/unidad. | Reproducido primero con un test fallido; el test pasa tras la corrección. |
+| COR-03: no está claro si la oportunidad comercial usa la fecha objetivo de venta/contacto o la fecha solicitada de entrega. | No se modificó el motor ni se reinterpretó la fecha. | Bloqueado por definición del responsable comercial; requiere separar/nombrar ambas fechas y aprobar el horizonte antes de cambiar la lógica. |
+
+La revisión externa también confirmó que no ejecutó la suite completa, Docker, VM, PostgreSQL, restauración real ni UAT. Sus observaciones estructurales no sustituyen esas pruebas.
+
 ## Reconciliación de ramas y cambios
 
 `origin/main` ya avanzó **27 commits** desde la referencia inicial. Durante la revisión se incorporaron 11 commits nuevos (PR #7) después de la primera lectura de main en `d5d7b77`; la rama se rebasó sobre el nuevo head `35323af` antes de cerrar esta auditoría. El merge-base actual es `35323af`. Se conservó el rediseño Streamlit integrado en main (PR #4), así como la actualización de la interfaz Django incorporada en PR #7; se reconciliaron únicamente las extensiones para mostrar la oportunidad comercial, los requisitos de producción y la documentación de despliegue. El estado local previo se preservó en el stash `preserve local SmartOrder work before main consolidation`; el archivo generado por Modernization Workflow se mantiene local y no se publica.
@@ -21,10 +34,11 @@ Los cambios revisables de esta rama abarcan:
 |---|---|
 | `operations/views.py`, `operations/templates/operations/recommendations.html`, `operations/templates/operations/order_form.html` | Proyectan y muestran el pronóstico comercial al vendedor por separado de la cantidad de entrega. No se usa para autocompletar ni autorizar la cantidad. |
 | `streamlit_app.py` | Presenta una columna de oportunidad comercial distinta y un mensaje separado para el administrador. |
-| `operations/test_planning_inbox.py`, `operations/test_streamlit.py` | Prueban el flujo Django, el formulario y la salida real de la UI Streamlit con el pronóstico separado. |
+| `operations/test_planning_inbox.py`, `operations/test_streamlit.py` | Prueban el flujo Django, el formulario y la salida real de la UI Streamlit con el pronóstico separado; el formulario también verifica fecha histórica con cantidad/unidad. |
 | `vitali_web/settings.py`, `requirements.txt`, `.gitignore` | Añaden configuración de producción por entorno, HTTPS/cookies/hosts, WhiteNoise y reglas para secretos/estáticos; se conserva el soporte PostgreSQL ya integrado en main. |
 | `Dockerfile`, `compose.yaml`, `infra/Caddyfile`, `.dockerignore`, `.env.example` | Base de despliegue Linux con usuario no root, PostgreSQL interno, Django/Gunicorn, Caddy, secretos por entorno y datos persistentes. |
-| `docs/BASELINE-2026-10-30.md`, `docs/deployment/VM-INSTALL.md`, `README.md` | Evidencia histórica de línea base, guía operativa y límites del despliegue/backups. |
+| `docs/BASELINE-2026-10-30.md`, `docs/deployment/VM-INSTALL.md`, `README.md` | Evidencia histórica de línea base, guía operativa y límites del despliegue/backups; el tar archiva el contenido de `/data` en su raíz y solo la extracción temporal usa UID 0. |
+| `operations/templates/operations/order_form.html` | La fecha de referencia histórica se renderiza como `dd/mm/yyyy`; se conserva el formato numérico para la cantidad. |
 | `docs/CONSOLIDATION_REVIEW_SMARTORDER_VITALI_2026-10-30.md` | Esta matriz, incidencias, registro de pruebas e inventario provisional. |
 
 No se incluye `.github/modernize/canvas-smartorder-vitali-2026-10-30.json`, `.env`, `.local-web/`, la base local SQLite, archivos cargados, estáticos generados ni otros datos locales.
@@ -39,6 +53,7 @@ Estados: **Implementado** = hay código/documentación; **Probado** = hay una ve
 | Como vendedor, quiero que el pronóstico no se copie como cantidad confirmada. | `order_form.html`; prueba Django verifica que no se propague a `value` ni `data-suggested`; prueba Streamlit exige cantidad manual separada. | Implementado y probado localmente; UAT pendiente. |
 | Como administración, quiero revisar solicitudes antes de compartir producción. | Flujo existente de solicitudes, revisión y XLSX; pruebas en `operations/test_planning_inbox.py` y `operations/test_streamlit.py`. | Implementado en repo y cubierto por suite; prueba operativa/UAT pendiente. |
 | Usar fecha de venta/pedido como semántica de la fecha del Excel. | `SalesDataset.DateSemantics.SALE_ORDER`; evidencia de la decisión en la conversación. | Decisión del usuario del proyecto confirmada; no equivale a aceptación de Vitali. |
+| Mostrar fecha de venta histórica junto a su cantidad y unidad. | `order_form.html`; `test_seller_sees_commercial_forecast_separate_from_delivery_quantity` comprueba `07/01/2026`, `3 kg`. | Corregido y probado localmente; no es UAT. |
 | Probar el cambio contra una línea base verificable. | `docs/BASELINE-2026-10-30.md`; pruebas de la rama actual. | Línea base histórica y suite actual verificadas localmente; no es UAT. |
 | Preservar el rediseño frontend integrado en main. | `origin/main` PR #4 y actualización Django PR #7; diff consolidado limitado a la oportunidad comercial. | Integrado y cubierto por la suite; aceptación de cliente no consta. |
 | Proteger cuentas de demo con opt-in y secretos de Streamlit. | Código/documentación integrados en main, PR #6; `operations/test_demo_bootstrap.py` en main. | Integrado en main y con pruebas del repo; secretos reales no se incluyen ni se validan aquí. |
@@ -61,7 +76,11 @@ La tabla no sustituye al inventario completo del plan maestro, que sigue sin rec
 | P1 | Despliegue no está certificado: Docker no está instalado en el entorno de revisión. | `Dockerfile`/Compose solo tienen validación estática; se requiere build, arranque, health checks, HTTPS, persistencia y reinicio en VM. |
 | P1 | La conexión de ventas de Vitali y los resultados de backtest no son verificables. | Esperar motor, esquema, acceso de solo lectura, semántica de campos y datos aprobados; no reutilizar la DB interna como si fuera el origen. |
 | P1 | Recuperación integral no probada. PostgreSQL y `/data` (incluidos XLSX) son volúmenes separados. | Ejecutar backup fuera de VM y restauración en recursos temporales; verificar también los archivos antes de aceptar RPO/RTO. |
+| P1 | COR-01: la extracción sobre volumen de restauración recién creado necesita permisos de escritura. | El comando de extracción usa `--user 0:0` únicamente para el contenedor temporal; debe validarse en Docker y luego comprobar lectura/permisos con el usuario no root normal. |
+| P1 | COR-04: el formato del respaldo de `/data` debe restaurarse con la misma estructura que se comprueba. | El tar guarda el contenido en raíz y la comprobación lista `/restore`; hay que ejercitar backup y restore reales antes de aceptar la guía. |
+| P1 | COR-03: la previsión de ventas y la fecha de entrega consultada pueden representar horizontes distintos. | No cambiar el motor sin decisión comercial sobre fecha objetivo/horizonte; cubrir con un test donde fecha de venta y entrega difieran. |
 | P1 | Salida de red de `web` necesita política efectiva de egress en el firewall de la VM. | Compose ofrece conectividad saliente pero no implementa por sí mismo una allowlist. TI debe aplicarla y probarla. |
+| Resuelto en esta rama | COR-02: fecha histórica formateada como número en el formulario. | Restaurado el filtro `date:'d/m/Y'`; regresión con fecha no nula pasa. |
 | P2 | `manage.py check --deploy` reporta W005 y W021 porque HSTS no incluye subdominios ni preload. | Se evita ampliar HSTS sin política de todos los subdominios/consentimiento TI. El check termina con código 0 y esos 2 avisos. |
 | P2 | Las imágenes Docker usan tags de versión (`postgres:17`, `caddy:2`), no digest inmutable. | Para el piloto controlado, registrar y fijar digest tras validación del equipo de plataforma; no se ha hecho por falta de ejecución Docker. |
 
@@ -73,6 +92,8 @@ No se encontraron coincidencias de patrones comunes de credenciales en archivos 
 |---|---|
 | `git fetch origin main`; comparación con `5129401` | `origin/main` actualizado a `35323af1fbb64495ce7d8e84ee83923d16fceb4a`, 27 commits delante; la rama se rebasó sobre ese head y el merge-base actual coincide. Main había avanzado 16 commits al inicio de la revisión y recibió 11 más durante la auditoría. |
 | `manage.py test operations.test_planning_inbox.PlanningInboxTests.test_seller_sees_commercial_forecast_separate_from_delivery_quantity operations.test_streamlit.StreamlitBridgeTests.test_native_seller_sees_commercial_forecast_separate_from_delivery_quantity --noinput` | 2 pruebas pasaron en 4.126 s sobre la base más reciente; validan Django y la salida de Streamlit. |
+| Mismo test Django antes de la corrección de COR-02 | Falló al no encontrar `Venta registrada el 07/01/2026: 3 kg`; el HTML mostraba `Venta registrada el : 3 kg`, reproduciendo el defecto. |
+| Mismos dos tests focalizados después de COR-02 | 2 pruebas pasaron en 3.743 s; el test Django incluye fecha histórica no nula y cantidad con unidad. COR-01 solo tiene ajuste documental; no se ejecutó Docker. |
 | `manage.py test operations tests --noinput` | 145 pruebas pasaron en 168.212 s después del rebase; el runner reportó `System check identified no issues`. |
 | `manage.py check` | Correcto: sin problemas. |
 | `manage.py makemigrations --check --dry-run` | Correcto: no hay migraciones pendientes de generar. |

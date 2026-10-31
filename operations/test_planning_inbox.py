@@ -767,6 +767,7 @@ class PlanningInboxTests(LocalCase, TestCase):
             "product": "Alitas", "category": "Congelados", "unit": "kg",
             "suggested": None, "commercial_forecast": Decimal("18.000"),
             "target_date": target_date, "suggestion_mode": "sale",
+            "reference_date": date(2026, 1, 7), "reference_qty": Decimal("3.000"),
             "explanation": "Detalle interno de auditoría que no debe mostrarse.",
         }
         self.client.force_login(self.seller)
@@ -800,6 +801,7 @@ class PlanningInboxTests(LocalCase, TestCase):
         self.assertNotContains(response, "Detalle interno de auditoría")
         self.assertContains(order_response, "Oportunidad comercial, no cantidad de entrega")
         self.assertContains(order_response, "ingresa manualmente la cantidad que corresponda")
+        self.assertContains(order_response, "Venta registrada el 07/01/2026: 3 kg")
         self.assertNotContains(order_response, 'value="18.000"')
         self.assertNotContains(order_response, 'data-suggested="18.000"')
         self.assertEqual(streamlit_context["recommendations"][0]["commercial_forecast"], Decimal("18.000"))
