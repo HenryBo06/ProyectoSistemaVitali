@@ -1,55 +1,49 @@
 {% extends 'operations/base.html' %}
-{% block title %}Crear administrador{% endblock %}
+{% block title %}Configuración inicial{% endblock %}
 {% block anonymous_content %}
-<div class="login-shell">
-  <section class="login-story" aria-label="Acerca de SmartOrder AI">
-    <div class="brand">
-      <span class="brand-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span>
-      <span class="brand-product">SmartOrder AI</span>
-    </div>
-    <div>
-      <p class="page-eyebrow">{% if remote_setup %}Primer inicio alojado{% else %}Primer inicio local{% endif %}</p>
-      <h1>Prepara tu espacio de trabajo.</h1>
-      <p>Crea la cuenta de administración. Después podrás cargar ventas e inventario y asignar clientes a vendedores.</p>
-    </div>
-    <small>Esta pantalla solo aparece antes de crear la primera cuenta.</small>
-  </section>
+<div class="local-auth">
+  <header class="auth-identity" aria-label="Vitali Alimentos">
+    <span class="auth-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span>
+    <span class="auth-identity-rule" aria-hidden="true"></span>
+    <span class="auth-identity-label">Sistema de gestión comercial</span>
+  </header>
 
-  <section class="login-form-wrap" aria-labelledby="setup-title">
-    <div class="login-card">
-      <p class="page-eyebrow">Configuración inicial</p>
+  <div class="auth-intro">
+    <p class="auth-eyebrow">{% if remote_setup %}Instalación alojada{% else %}Primer inicio local{% endif %}</p>
+    <h1>SmartOrder AI</h1>
+    <p>Configura la primera cuenta de administración para empezar a trabajar.</p>
+  </div>
+
+  <section class="auth-card" aria-labelledby="setup-title">
+    <div class="auth-card-heading">
+      <span class="auth-card-kicker"><span class="auth-status-dot" aria-hidden="true"></span> Solo la primera vez</span>
       <h2 id="setup-title">Crear administrador</h2>
-      <p class="muted mb-4">
-        Elige un usuario y una contraseña.
-        {% if remote_setup %}
-          Introduce también el código privado configurado para esta instalación.
-        {% else %}
-          No necesitas un código de instalación para el uso local.
-        {% endif %}
-      </p>
-      <form method="post" action="{% url 'setup' %}">
-        {% csrf_token %}
-        {% if remote_setup %}
-        <div class="mb-3">
-          <label class="form-label" for="setup-code">Código de instalación</label>
-          <input class="form-control form-control-lg" id="setup-code" name="setup_code"
-                 type="password" autocomplete="off" required>
-        </div>
-        {% endif %}
-        <div class="mb-3">
-          <label class="form-label" for="setup-username">Usuario</label>
-          <input class="form-control form-control-lg" id="setup-username" name="username"
-                 autocomplete="username" required autofocus>
-        </div>
-        <div class="mb-4">
-          <label class="form-label" for="setup-password">Contraseña</label>
-          <input class="form-control form-control-lg" id="setup-password" name="password"
-                 type="password" autocomplete="new-password" minlength="8" required>
-          <div class="form-text">Usa al menos 8 caracteres y evita contraseñas comunes.</div>
-        </div>
-        <button class="btn btn-primary btn-lg w-100" type="submit">Crear cuenta y entrar</button>
-      </form>
+      <p>{% if remote_setup %}Introduce el código privado de esta instalación y elige tus credenciales.{% else %}En el programa local no necesitas código de instalación. Elige un usuario y una contraseña segura.{% endif %}</p>
     </div>
+    <form method="post" action="{% url 'setup' %}" class="auth-form">
+      {% csrf_token %}
+      {% if remote_setup %}
+      <div>
+        <label class="form-label" for="setup-code">Código de instalación</label>
+        <input class="form-control form-control-lg" id="setup-code" name="setup_code"
+               type="password" autocomplete="off" required>
+      </div>
+      {% endif %}
+      <div>
+        <label class="form-label" for="setup-username">Usuario administrador</label>
+        <input class="form-control form-control-lg" id="setup-username" name="username"
+               autocomplete="username" required autofocus>
+      </div>
+      <div>
+        <label class="form-label" for="setup-password">Contraseña</label>
+        <input class="form-control form-control-lg" id="setup-password" name="password"
+               type="password" autocomplete="new-password" minlength="8" required>
+        <p class="form-text">Usa una contraseña segura y evita combinaciones comunes.</p>
+      </div>
+      <button class="btn btn-primary btn-lg w-100" type="submit">Crear cuenta y continuar <span aria-hidden="true">→</span></button>
+    </form>
+    <p class="auth-card-help">Esta configuración solo aparece cuando aún no existen usuarios.</p>
   </section>
+  <footer class="auth-footer">Vitali Alimentos <span aria-hidden="true">·</span> SmartOrder AI</footer>
 </div>
 {% endblock %}

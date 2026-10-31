@@ -1,32 +1,45 @@
 {% extends 'operations/base.html' %}
-{% block title %}Acceder{% endblock %}
+{% block title %}Iniciar sesión{% endblock %}
 {% block anonymous_content %}
-<div class="login-shell">
-  <section class="login-story" aria-label="Acerca de SmartOrder AI">
-    <div class="brand"><span class="brand-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span><span class="brand-product">SmartOrder AI</span></div>
-    <div>
-      <p class="page-eyebrow">Pedidos internos</p>
-      <h1>De la venta a la entrega.</h1>
-      <p>Consulta productos, confirma ventas y sigue su avance a producción en un solo lugar.</p>
-    </div>
-    <small>Gestión comercial y entregas</small>
-  </section>
-  <section class="login-form-wrap" aria-labelledby="login-title">
-    <div class="login-card">
-      <p class="page-eyebrow">Tu espacio de trabajo</p>
+<div class="local-auth">
+  <header class="auth-identity" aria-label="Vitali Alimentos">
+    <span class="auth-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span>
+    <span class="auth-identity-rule" aria-hidden="true"></span>
+    <span class="auth-identity-label">Sistema de gestión comercial</span>
+  </header>
+
+  <div class="auth-intro">
+    <p class="auth-eyebrow">Ventas · Pedidos · Producción</p>
+    <h1>SmartOrder AI</h1>
+    <p>Tu espacio para gestionar ventas, pedidos y seguimiento operativo.</p>
+  </div>
+
+  <section class="auth-card" aria-labelledby="login-title">
+    <div class="auth-card-heading">
+      <span class="auth-card-kicker"><span class="auth-status-dot" aria-hidden="true"></span> Acceso al sistema</span>
       <h2 id="login-title">Iniciar sesión</h2>
-      <p class="muted mb-4">Entra con la cuenta que te asignó administración.</p>
-      {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
-      {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
-      <form method="post" action="{% url 'login' %}">
-        {% csrf_token %}
-        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
-        <div class="mb-3"><label class="form-label" for="id_username">Usuario</label><input class="form-control form-control-lg" type="text" id="id_username" name="username" autocomplete="username" value="{{ form.username.value|default_if_none:'' }}" required autofocus></div>
-        <div class="mb-4"><label class="form-label" for="id_password">Contraseña</label><input class="form-control form-control-lg" type="password" id="id_password" name="password" autocomplete="current-password" required></div>
-        <button class="btn btn-primary btn-lg w-100" type="submit">Entrar</button>
-      </form>
-      <p class="form-text mt-3">Si no puedes acceder, solicita a administración que revise tu cuenta.</p>
+      <p>Utiliza la cuenta asignada por administración.</p>
     </div>
+
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% if error %}<div class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+    <form method="post" action="{% url 'login' %}" class="auth-form">
+      {% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <div>
+        <label class="form-label" for="id_username">Usuario</label>
+        <input class="form-control form-control-lg" type="text" id="id_username" name="username"
+               autocomplete="username" value="{{ form.username.value|default_if_none:'' }}" required autofocus>
+      </div>
+      <div>
+        <label class="form-label" for="id_password">Contraseña</label>
+        <input class="form-control form-control-lg" type="password" id="id_password" name="password"
+               autocomplete="current-password" required>
+      </div>
+      <button class="btn btn-primary btn-lg w-100" type="submit">Entrar a mi espacio <span aria-hidden="true">→</span></button>
+    </form>
+    <p class="auth-card-help">¿No puedes acceder? Solicita a administración que revise tu cuenta.</p>
   </section>
+  <footer class="auth-footer">Vitali Alimentos <span aria-hidden="true">·</span> SmartOrder AI</footer>
 </div>
 {% endblock %}

@@ -1,4 +1,8 @@
 <nav class="side-nav" aria-label="Secciones">
+  <div class="nav-intro">
+    <span class="nav-intro-mark" aria-hidden="true">V</span>
+    <span><strong>Panel de trabajo</strong><small>{% if request.user.is_staff %}Control administrativo{% else %}Gestión de mi cartera{% endif %}</small></span>
+  </div>
   <p class="nav-caption">Inicio</p>
   {% if request.user.is_staff %}
   <a class="side-link {% if nav == 'pilot_dashboard' %}active{% endif %}"
@@ -93,6 +97,7 @@
   {% endif %}
 
   <div class="side-nav-footer">
+    <p class="nav-footer-caption">Sesión de {{ request.user.username }}</p>
     <form action="{% url 'logout' %}" method="post">
       {% csrf_token %}
       <button class="side-link side-logout" type="submit">Cerrar sesión</button>
