@@ -112,7 +112,7 @@ Los chequeos locales reproducibles pasan. Siguen pendientes el CI remoto del PR,
 
 | Comando / evidencia | Resultado |
 |---|---|
-| `VBoxManage clonevm bb03c78e-9e4d-4376-b28c-de19d33c5d90 --name SmartOrder-Validation-Copy-20261030 --basefolder "C:\Users\barri\VirtualBox VMs" --register --mode machine` | Clonación real completada al 100 %. Se trabajó sobre la copia; la VM base `SmartOrder-PoC-20261017` no se modificó. |
+| `VBoxManage clonevm bb03c78e-9e4d-4376-b28c-de19d33c5d90 --name SmartOrder-Validation-Copy-20261030 --basefolder "<directorio local de VirtualBox>" --register --mode machine` | Clonación real completada al 100 %. Se trabajó sobre la copia; la VM base `SmartOrder-PoC-20261017` no se modificó. Se omite la ruta local del host. |
 | `VBoxManage startvm SmartOrder-Validation-Copy-20261030 --type headless`; `showvminfo` y `guestproperty enumerate` | La copia inició y quedó en estado `running`. Guest Additions informó Ubuntu 24.04.5 LTS y `10.0.2.15`; no había usuarios conectados. |
 | `curl.exe --max-time 12 -sS -L -o NUL -w ... http://127.0.0.1:18000/` y navegador en `http://127.0.0.1:18000/` | HTTP 200 tras una redirección a `/entrar/?next=/`; se mostró la pantalla de inicio de sesión Django. |
 | `curl.exe --max-time 12 -sS -L -o NUL -w ... http://127.0.0.1:18501/` | HTTP 200 desde Streamlit, respuesta de 7,260 bytes. |
