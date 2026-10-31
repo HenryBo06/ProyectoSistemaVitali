@@ -22,9 +22,16 @@ class LocalFrontendAssetsTests(SimpleTestCase):
 
 
 class LocalFrontendViewTests(TestCase):
+    def assertModernDjangoShell(self, response):
+        self.assertContains(
+            response,
+            'href="/static/operations/css/local-frontend.css?v=local-20261030a"',
+        )
+
     def test_login_has_branded_access_form(self):
         response = self.client.get(reverse("login"))
         self.assertEqual(response.status_code, 200)
+        self.assertModernDjangoShell(response)
         for text in ("VITALI", "SmartOrder AI", "Iniciar sesión", "local-auth",
                      "name=\"username\"", "name=\"password\"", "csrfmiddlewaretoken"):
             self.assertContains(response, text)
@@ -46,14 +53,15 @@ class LocalFrontendViewTests(TestCase):
         self.client.force_login(admin)
         admin_home = self.client.get(reverse("pilot_dashboard"))
         self.assertEqual(admin_home.status_code, 200)
+        self.assertModernDjangoShell(admin_home)
         self.assertContains(admin_home, "Control administrativo")
         self.assertContains(admin_home, "autorización de producción corresponden a administración")
-        self.assertContains(admin_home, "local-frontend.css")
         self.assertEqual(self.client.get(reverse("users")).status_code, 200)
 
         self.client.force_login(seller)
         seller_home = self.client.get(reverse("dashboard"))
         self.assertEqual(seller_home.status_code, 200)
+        self.assertModernDjangoShell(seller_home)
         self.assertContains(seller_home, "Gestión de mi cartera")
         self.assertContains(seller_home, "exclusivamente a administración")
         self.assertEqual(self.client.get(reverse("users")).status_code, 403)

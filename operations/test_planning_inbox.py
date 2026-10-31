@@ -796,14 +796,22 @@ class PlanningInboxTests(LocalCase, TestCase):
         self.assertContains(response, "Oportunidad comercial")
         self.assertContains(response, "18.000")
         self.assertContains(response, "entrega manual")
+        self.assertContains(response, 'class="commercial-forecast"')
+        self.assertContains(response, '/static/operations/css/local-frontend.css?v=local-20261030a')
         self.assertContains(response, "No es una cantidad de entrega ni autoriza fabricación.")
         self.assertContains(response, "Decisión manual")
         self.assertNotContains(response, "Detalle interno de auditoría")
         self.assertContains(order_response, "Oportunidad comercial, no cantidad de entrega")
+        self.assertContains(order_response, 'class="helper-block commercial-forecast mb-2"')
+        self.assertContains(order_response, '/static/operations/css/local-frontend.css?v=local-20261030a')
         self.assertContains(order_response, "ingresa manualmente la cantidad que corresponda")
         self.assertContains(order_response, "Venta registrada el 07/01/2026: 3 kg")
         self.assertNotContains(order_response, 'value="18.000"')
         self.assertNotContains(order_response, 'data-suggested="18.000"')
+        order, _ = self._order(quantity="5")
+        detail_response = self.client.get(reverse("order_detail", args=[order.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, '/static/operations/css/local-frontend.css?v=local-20261030a')
         self.assertEqual(streamlit_context["recommendations"][0]["commercial_forecast"], Decimal("18.000"))
         self.assertIsNone(streamlit_context["recommendations"][0]["suggested"])
 
@@ -825,3 +833,14 @@ class PlanningInboxTests(LocalCase, TestCase):
                           if card["product"] == "Alitas")
         self.assertIsInstance(admin_card["sale_evaluation"], dict)
         self.assertEqual(admin_card["sale_evaluation"]["targets"], 8)
+
+    def test_seller_cannot_open_unassigned_client_dashboard_or_recommendations(self):
+        self.client.force_login(self.seller)
+
+        dashboard_response = self.client.get(reverse("dashboard"), {"client": "Cliente B"})
+        recommendations_response = self.client.get(
+            reverse("recommendations"), {"client": "Cliente B"},
+        )
+
+        self.assertEqual(dashboard_response.status_code, 403)
+        self.assertEqual(recommendations_response.status_code, 403)

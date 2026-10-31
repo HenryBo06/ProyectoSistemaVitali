@@ -312,6 +312,17 @@
 }
 .local-app .workbench { border-radius: 12px; }
 .local-app .seller-next-step { border-radius: 14px; }
+.local-app .product-summary-facts > .commercial-forecast {
+  border: 1px solid #d4e7df;
+  background: #edf7f2;
+}
+.local-app .product-summary-facts > .commercial-forecast dt { color: #2c6156; font-weight: 650; }
+.local-app .product-summary-facts > .commercial-forecast dd { color: #145b51; }
+.local-app .helper-block.commercial-forecast {
+  border-left-color: var(--v-bottle);
+  background: #f3faf7;
+  color: #385d5a;
+}
 
 /* Centered first-run and sign-in experience: same brand language as the new UI. */
 .local-app-anonymous {

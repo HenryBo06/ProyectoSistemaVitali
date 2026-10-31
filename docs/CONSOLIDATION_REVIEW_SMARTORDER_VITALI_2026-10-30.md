@@ -139,3 +139,35 @@ Estos resultados prueban que la copia de la VM arranca y que los servicios ya pr
 - Acceso administrativo autorizado a la VM de validación para instalar y probar la revisión actual; no se han compartido credenciales.
 
 Ninguno de estos bloqueos se resuelve inventando un esquema, simulando datos productivos o usando valores de ejemplo como credenciales.
+
+## Evidencia funcional y visual adicional (2026-10-30)
+
+La previsualización se ejecutó contra una base SQLite temporal con usuario, asignaciones, productos y ventas ficticios bajo `%TEMP%`; no se usó la base del repositorio ni información de Vitali. El acceso de prueba y sus datos no se incluyen en el commit ni en el paquete. El navegador confirmó que login y recursos estáticos respondieron y cargó `app.css` y el CSS local de Django.
+
+| Flujo/caso | Evidencia observada | Estado |
+|---|---|---|
+| Iniciar sesión y abrir el dashboard del vendedor. | Previsualización local con la cuenta sintética `preview-seller`; se observaron navegación comercial y cartera ficticia. | Probado visualmente con datos ficticios. |
+| Mostrar pronóstico de venta por separado de entrega y cantidad solicitada. | Recomendaciones de 10 kg y 20 kg para el 01/11/2026; el formulario mostró los mismos datos, cantidades de pedido vacías y decisión manual. | Probado visualmente; no es UAT. |
+| Preparar y revisar un pedido sin copiar el pronóstico. | Se ingresaron manualmente 3 kg de Alitas; el resumen calculó USD 37.50. El pronóstico de 10 kg no fue usado como cantidad. | Probado en navegador con datos ficticios. |
+| Confirmación comercial y autorización de fabricación separada. | La venta se confirmó con producción pendiente; después, el panel administrativo mostró la decisión independiente. Al autorizar 3 kg, la pantalla pasó a “Producción autorizada”. | Probado en navegador con datos ficticios; no es aceptación de cliente ni prueba de producción física. |
+| Visualización responsive de paneles y oportunidad comercial. | Capturas de dashboard administrativo/vendedor y recomendaciones en móvil, y de recomendaciones/formulario en escritorio, en `docs/evidence/`. La página no presentó overflow horizontal; la tabla de unidades tiene un contenedor de desplazamiento horizontal propio. | Observado visualmente en navegador; cobertura limitada a esas páginas y tamaños. |
+| Acceso a clientes no asignados. | El código devuelve 403 cuando un vendedor consulta en dashboard/recomendaciones un cliente ajeno a su cartera. `test_seller_cannot_open_unassigned_client_dashboard_or_recommendations` comprueba ambos endpoints. | Implementado y probado localmente; no es UAT. |
+| Revisión y autorización administrativa. | La previsualización administrativa mostró el pedido sintético y el control explícito de autorización por línea. | Probado con datos ficticios; no prueba notificaciones reales, producción, despacho ni aceptación empresarial. |
+
+Las capturas son artefactos generados por navegador a partir del entorno sintético, no fotografías de la VM:
+
+| Archivo | Vista |
+|---|---|
+| `docs/evidence/smartorder-admin-dashboard-mobile.png` | Dashboard administrativo, viewport móvil |
+| `docs/evidence/smartorder-admin-order-detail-desktop.png` | Detalle administrativo con producción separada, datos sintéticos, escritorio |
+| `docs/evidence/smartorder-seller-dashboard-mobile.png` | Dashboard vendedor, viewport móvil |
+| `docs/evidence/smartorder-recommendations-mobile.png` | Recomendaciones y oportunidad comercial, viewport móvil |
+| `docs/evidence/smartorder-recommendations-desktop.png` | Recomendaciones, viewport escritorio |
+| `docs/evidence/smartorder-order-form-desktop.png` | Formulario con cantidades manuales y pronóstico separado, viewport escritorio |
+
+| Comando / evidencia | Resultado |
+|---|---|
+| `.\.venv-web\Scripts\python.exe manage.py test operations tests --noinput` | **146 pruebas pasaron** en 164.113 s, exit code 0; `System check identified no issues`. Incluye regresión de cliente no asignado, cobertura Django/Streamlit y salida UI Streamlit. Los avisos de `Forbidden` y `ScriptRunContext` observados durante la suite son esperados por sus pruebas/bare-mode; el runner finalizó correctamente. |
+| Navegador local sobre SQLite temporal; 390 px y 1440 px | Recomendaciones y formulario renderizaron el CSS de Django; forecast de 10/20 kg separado de cantidades vacías/manuales; sin overflow horizontal de página. Dashboard presenta tabla dentro de contenedor desplazable. Evidencias PNG listadas arriba. |
+
+La matriz de requisitos incluida arriba sigue siendo provisional. La matriz íntegra de casos del documento `VALIDACION_INTEGRAL_SMARTORDER_DJANGO_STREAMLIT_VM.md` y los identificadores originales del plan maestro no pudieron cargarse desde el workspace/Library de esta sesión; no se atribuyen IDs ni cobertura a contenido no disponible. El original del plan maestro sigue siendo requisito para completar trazabilidad por requisito, historia y caso. Docker, VM con esta revisión, PostgreSQL de despliegue, Caddy/TLS, restauración real, bases externas, inferencia productiva y UAT continúan sin aprobación.
