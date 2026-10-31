@@ -95,6 +95,7 @@ No se encontraron coincidencias de patrones comunes de credenciales en archivos 
 | Mismo test Django antes de la corrección de COR-02 | Falló al no encontrar `Venta registrada el 07/01/2026: 3 kg`; el HTML mostraba `Venta registrada el : 3 kg`, reproduciendo el defecto. |
 | Mismos dos tests focalizados después de COR-02 | 2 pruebas pasaron en 3.743 s; el test Django incluye fecha histórica no nula y cantidad con unidad. COR-01 solo tiene ajuste documental; no se ejecutó Docker. |
 | `manage.py test operations tests --noinput` | 145 pruebas pasaron en 168.212 s después del rebase; el runner reportó `System check identified no issues`. |
+| `manage.py test operations tests --noinput` en `a819125` | 145 pruebas pasaron en 123.151 s; exit code 0 y `System check identified no issues`. Ejecutado localmente, no contra una VM desplegada. |
 | `manage.py check` | Correcto: sin problemas. |
 | `manage.py makemigrations --check --dry-run` | Correcto: no hay migraciones pendientes de generar. |
 | `python -m pip check` | Correcto: dependencias consistentes. |
