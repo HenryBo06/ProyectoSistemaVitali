@@ -241,3 +241,17 @@ La prueba pública de Streamlit no convierte la app en una instalación de uso c
 ### Verificación de Streamlit
 
 Con las dependencias instaladas, `python manage.py test operations tests` también ejecuta las comprobaciones de la interfaz nativa: acceso, navegación por rol, filtros sin ventas y pantallas administrativas. La prueba del puente comprueba permisos, pedido, revisión y exportación con sesión persistida, y la invalidación de sesión al cambiar la contraseña.
+
+## Entrega académica: IA para pedidos sugeridos
+
+Material alineado con los dos requisitos de presentación de clase. El informe distingue el modelo XGBoost implementado de las herramientas de desarrollo y presenta la tarjeta local con datos sintéticos como demostración, no como resultado comercial.
+
+- Presentación PowerPoint: [`entregables/SmartOrder_AI_Presentacion_IA.pptx`](entregables/SmartOrder_AI_Presentacion_IA.pptx)
+- Auditoría técnica: [`docs/IA_AUDITORIA_SMARTORDER.md`](docs/IA_AUDITORIA_SMARTORDER.md)
+- Herramientas IA: [`docs/PRESENTACION_IA_HERRAMIENTAS.md`](docs/PRESENTACION_IA_HERRAMIENTAS.md)
+- Explicación del modelo: [`docs/EXPLICACION_MODELO_IA.md`](docs/EXPLICACION_MODELO_IA.md)
+- Guía de demo: [`docs/GUIA_DEMOSTRACION_CLASE.md`](docs/GUIA_DEMOSTRACION_CLASE.md)
+- Guion de exposición: [`docs/GUION_EXPOSICION.md`](docs/GUION_EXPOSICION.md)
+- Capturas locales: [`docs/EVIDENCIAS_FRONTEND.md`](docs/EVIDENCIAS_FRONTEND.md)
+
+El laboratorio usa `.local-web-lab/`, datos sintéticos y credenciales locales ignoradas por Git. No publiques ese directorio.
