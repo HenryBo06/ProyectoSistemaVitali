@@ -9,6 +9,7 @@
   </div>
   <a class="btn btn-primary" href="{% url 'orders' %}">Revisar pedidos <span aria-hidden="true">→</span></a>
 </div>
+<div class="dashboard-context" role="note">Las ventas confirmadas no autorizan la fabricación automáticamente. La revisión y autorización de producción corresponden a administración.</div>
 <form class="filter-bar mb-4">
   <div class="filter-title">
     <strong>Rango de fechas</strong>
@@ -26,18 +27,25 @@
   <button class="btn btn-outline-primary" type="submit">Aplicar período</button>
 </form>
 <div class="row g-3 mb-4" aria-label="Indicadores ejecutivos">
-  <div class="col-sm-6">
+  <div class="col-sm-6 col-xl-4">
     <div class="stat stat-featured">
       <span class="stat-label">Venta confirmada</span>
       <strong class="stat-value">USD {{ confirmed_revenue|floatformat:2 }}</strong>
       <span class="stat-note">Después de descuentos; excluye cancelaciones y excepciones pendientes. No representa facturación ni cobros.</span>
     </div>
   </div>
-  <div class="col-sm-6">
+  <div class="col-sm-6 col-xl-4">
     <div class="stat">
       <span class="stat-label">Puntualidad</span>
       <strong class="stat-value">{% if punctuality != None %}{{ punctuality|floatformat:1 }} %{% else %}Sin datos suficientes{% endif %}</strong>
       <span class="stat-note">{{ on_time_orders }}/{{ due_orders }} pedidos vencidos con compromiso · {{ unknown_punctuality }} sin seguimiento suficiente.</span>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-4">
+    <div class="stat">
+      <span class="stat-label">Acciones por revisar</span>
+      <strong class="stat-value">{{ actions|length }}</strong>
+      <span class="stat-note">Tareas de revisión del período seleccionado, no pedidos autorizados.</span>
     </div>
   </div>
 </div>
