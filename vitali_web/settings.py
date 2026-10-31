@@ -33,7 +33,20 @@ def _local_secret() -> str:
 
 SECRET_KEY = _local_secret()
 DEBUG = os.environ.get("SMARTORDER_DEBUG", "1") == "1"
-ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]", "testserver"]
+ALLOWED_HOSTS = [host.strip() for host in os.environ.get(
+    "SMARTORDER_ALLOWED_HOSTS", "127.0.0.1,localhost,[::1],testserver"
+).split(",") if host.strip()]
+CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in os.environ.get(
+    "SMARTORDER_CSRF_TRUSTED_ORIGINS", ""
+).split(",") if origin.strip()]
+SECURE_SSL_REDIRECT = os.environ.get(
+    "SMARTORDER_SSL_REDIRECT", "0" if DEBUG else "1"
+) == "1"
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = int(os.environ.get("SMARTORDER_HSTS_SECONDS", "0"))
+if os.environ.get("SMARTORDER_TRUST_X_FORWARDED_PROTO") == "1":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SMARTORDER_SETUP_CODE = os.environ.get("SMARTORDER_SETUP_CODE", "").strip()
 
 INSTALLED_APPS = [
@@ -55,6 +68,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+if not DEBUG:
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 
 ROOT_URLCONF = "vitali_web.urls"
 TEMPLATES = [
@@ -125,7 +140,13 @@ TIME_ZONE = "America/El_Salvador"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATIC_ROOT = Path(os.environ.get("SMARTORDER_STATIC_ROOT", BASE_DIR / "staticfiles")).resolve()
+if not DEBUG:
+    STORAGES = {
+        "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+        "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+    }
 MEDIA_URL = "media/"
 MEDIA_ROOT = Path(os.environ.get("SMARTORDER_MEDIA_ROOT", WEB_HOME / "uploads")).resolve()
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

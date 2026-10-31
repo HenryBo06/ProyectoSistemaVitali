@@ -134,6 +134,7 @@ def _invalidate_sessions(user):
 def _seller_cards(cards):
     fields = (
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
+        "commercial_forecast", "target_date",
         "discount_percent", "tariff_available", "available", "stock_unit", "stock_date",
         "inventory_warning", "reference_date", "reference_qty", "client_stock",
         "client_stock_location", "client_stock_target", "client_stock_projected",
@@ -159,6 +160,19 @@ def _seller_cards(cards):
             text = f"Oportunidad para revisar: la entrega coincide con {event}."
         else:
             text = "Se revisaron las ventas registradas de este cliente para este producto y fecha."
+        commercial_forecast = card.get("commercial_forecast")
+        if commercial_forecast is not None:
+            unit_text = f" {unit}" if unit else ""
+            target_date = card.get("target_date")
+            target_text = f" para la fecha consultada {target_date:%d/%m/%Y}" if target_date else ""
+            message = (
+                f"{text} Oportunidad comercial: venta esperada "
+                f"{commercial_forecast:g}{unit_text}{target_text}. "
+                "No es una cantidad de entrega ni autoriza fabricación."
+            )
+            if card.get("suggested") is not None:
+                message += f" Cantidad de entrega sugerida: {card['suggested']:g} {unit}."
+            return message
         if card.get("suggested") is not None:
             return f"{text} Sugerimos revisar {card['suggested']:g} {unit} para esta entrega; puedes ajustarla."
         return f"{text} No hay evidencia suficiente para proponer una cantidad automática; revísala manualmente."

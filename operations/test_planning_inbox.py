@@ -761,6 +761,50 @@ class PlanningInboxTests(LocalCase, TestCase):
         self.assertIn("18 kg", seller_card["explanation"])
         self.assertNotIn("comparaciones cronológicas", seller_card["explanation"])
 
+    def test_seller_sees_commercial_forecast_separate_from_delivery_quantity(self):
+        target_date = timezone.localdate() + timedelta(days=2)
+        card = {
+            "product": "Alitas", "category": "Congelados", "unit": "kg",
+            "suggested": None, "commercial_forecast": Decimal("18.000"),
+            "target_date": target_date, "suggestion_mode": "sale",
+            "explanation": "Detalle interno de auditoría que no debe mostrarse.",
+        }
+        self.client.force_login(self.seller)
+        with patch("operations.views.recommendation_cards", return_value=[card]):
+            response = self.client.get(reverse("recommendations"), {
+                "client": "Cliente A", "mode": "sale",
+                "required_date": target_date.isoformat(),
+            })
+            order_response = self.client.get(reverse("order_create"), {
+                "client": "Cliente A", "mode": "sale",
+                "required_date": target_date.isoformat(),
+            })
+            streamlit_context = screen_context(
+                "recommendations",
+                sign_in(self.seller.username, "ClaveDelVendedor123"),
+                params={
+                    "client": "Cliente A", "mode": "sale",
+                    "required_date": target_date.isoformat(),
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        seller_card = response.context["recommendations"][0]
+        self.assertEqual(seller_card["commercial_forecast"], Decimal("18.000"))
+        self.assertIsNone(seller_card["suggested"])
+        self.assertContains(response, "Oportunidad comercial")
+        self.assertContains(response, "18.000")
+        self.assertContains(response, "entrega manual")
+        self.assertContains(response, "No es una cantidad de entrega ni autoriza fabricación.")
+        self.assertContains(response, "Decisión manual")
+        self.assertNotContains(response, "Detalle interno de auditoría")
+        self.assertContains(order_response, "Oportunidad comercial, no cantidad de entrega")
+        self.assertContains(order_response, "ingresa manualmente la cantidad que corresponda")
+        self.assertNotContains(order_response, 'value="18.000"')
+        self.assertNotContains(order_response, 'data-suggested="18.000"')
+        self.assertEqual(streamlit_context["recommendations"][0]["commercial_forecast"], Decimal("18.000"))
+        self.assertIsNone(streamlit_context["recommendations"][0]["suggested"])
+
     def test_empty_seller_recommendation_explains_missing_client_series(self):
         Assignment.objects.create(user=self.seller, client="Cliente sin ventas")
         self.client.force_login(self.seller)

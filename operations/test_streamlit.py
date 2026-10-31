@@ -130,6 +130,42 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
             call_screen("setup", key, data={"username": "otro", "password": "UnaClaveMuySegura2026"})
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    def test_native_seller_sees_commercial_forecast_separate_from_delivery_quantity(self):
+        from decimal import Decimal
+        from streamlit.testing.v1 import AppTest
+        from unittest.mock import patch
+
+        target_date = timezone.localdate() + timedelta(days=2)
+        seller_key = sign_in(self.seller.username, "ClaveDelVendedor123")
+        context = screen_context("recommendations", seller_key, {
+            "client": "Cliente A", "mode": "sale", "required_date": target_date,
+        })
+        card = {
+            **context["recommendations"][0],
+            "unit": "kg",
+            "suggested": None,
+            "commercial_forecast": Decimal("18.000"),
+            "target_date": target_date,
+        }
+
+        app = AppTest.from_file(
+            str(Path(__file__).resolve().parents[1] / "streamlit_app.py"),
+            default_timeout=30,
+        ).run()
+        app.session_state["session_key"] = seller_key
+        app.session_state["workspace"] = "Productos y pedidos"
+        with patch("operations.views.recommendation_cards", return_value=[card]):
+            app.run()
+
+        self.assertFalse(app.exception)
+        forecast_table = next(
+            table.value for table in app.dataframe
+            if "Oportunidad comercial · no entrega" in table.value.columns
+        )
+        self.assertIn("18.000 kg", str(forecast_table.values))
+        self.assertIn("Decisión manual", str(forecast_table["Cantidad sugerida"].values))
+
+    @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
     @override_settings(SMARTORDER_SELLER_EDIT=True, SMARTORDER_SELLER_CANCEL=True)
     def test_native_future_sale_edit_cancel_and_admin_detail_match_local(self):
         from streamlit.testing.v1 import AppTest

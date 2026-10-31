@@ -322,6 +322,12 @@ def products():
             "Producto": card["product"],
             "Cantidad sugerida": (f"{format_number(card['suggested'])} {card['unit']}"
                                   if card["suggested"] is not None else "Decisión manual"),
+            "Oportunidad comercial · no entrega": (
+                f"{card['commercial_forecast']:,.3f} {card['unit']}"
+                + (f" · fecha consultada {card['target_date']:%d/%m/%Y}"
+                   if card.get("target_date") else "")
+                if card.get("commercial_forecast") is not None else "No disponible"
+            ),
             "Disponibilidad Vitali": ("Por confirmar" if card["available"] is None
                                       else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"),
         } for card in cards if line_filter == "Todas las líneas"
@@ -387,6 +393,12 @@ def products():
                 if card["inventory_warning"]:
                     st.warning(card["inventory_warning"])
                 st.caption(card["explanation"])
+                if card.get("commercial_forecast") is not None:
+                    st.info(
+                        f"Oportunidad comercial: venta esperada "
+                        f"{card['commercial_forecast']:,.3f} {card['unit']} para la fecha consultada. "
+                        "No es una cantidad de entrega ni autoriza fabricación."
+                    )
                 with st.expander("Planificación de cantidades") :
                     st.write(card["explanation"])
                     if card["reference_qty"] is not None:
