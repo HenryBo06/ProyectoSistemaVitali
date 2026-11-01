@@ -31,13 +31,13 @@
   {% if maintenance_ui and item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
   {% if item.inventory_warning %}<div class="alert alert-warning" role="status">{{ item.inventory_warning }}</div>{% endif %}
   <p class="muted">{{ item.explanation }}</p>
-  {% if role == 'vendedor' and item.reference_date and item.reference_qty != None %}<p class="helper-block">Venta registrada el {{ item.reference_date|date:'d/m/Y' }}: {{ item.reference_qty }} {{ item.unit }} para este cliente.</p>{% endif %}
   {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}<p><strong>Conteo del cliente:</strong> {% if item.client_stock != None %}{{ item.client_stock }} {{ item.unit }} en {{ item.client_stock_location }}{% else %}hoy pendiente o vencido{% endif %} · <strong>Objetivo:</strong> {{ item.client_stock_target|default_if_none:'por definir' }} {% if item.client_stock_target != None %}{{ item.unit }}{% endif %}</p>{% if item.client_stock_projected != None %}<p>Proyección al {{ required_date|date:'d/m/Y' }}: {{ item.client_stock_projected }} {{ item.unit }} · entradas confirmadas {{ item.client_stock_incoming }} · salidas confirmadas {{ item.client_stock_outgoing }}.</p>{% endif %}{% endif %}
   {% if role == 'admin' %}
   <details class="product-evidence">
     <summary>Histórico y datos de cálculo</summary>
     <p>Ventas: {{ item.sales_usd_display }} · Días con venta: {{ item.days_with_sale }}</p>
     <p>Referencia: {{ item.reference_qty|default_if_none:'Sin dato' }} · {{ item.reference_period }}</p>
+    {% if item.reference_date and item.reference_qty != None %}<p>Venta registrada el {{ item.reference_date|date:'d/m/Y' }}: {{ item.reference_qty|floatformat:'-3' }} {{ item.unit }}.</p>{% endif %}
     <p>Entradas antes de entrega: {{ item.incoming }} · Compromisos previos: {{ item.commitments_before }} · Compromisos de la semana: {{ item.commitments }}</p>
     {% if item.sale_evaluation %}
     <hr>

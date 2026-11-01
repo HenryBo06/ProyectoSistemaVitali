@@ -31,6 +31,20 @@ class SalesRoleTests(LocalCase, TestCase):
         payload.update(extra)
         return self.post_sale(payload)
 
+    def test_seller_restock_card_excludes_historical_fields_and_private_explanation(self):
+        from .views import _seller_cards
+
+        card = _seller_cards([{
+            "product": "Alitas", "unit": "kg", "suggested": None,
+            "suggestion_mode": "client_restock", "reference_date": date(2026, 1, 7),
+            "reference_qty": Decimal("777"),
+            "explanation": "Venta histórica privada 777 kg el 07/01/2026",
+        }])[0]
+        self.assertNotIn("reference_date", card)
+        self.assertNotIn("reference_qty", card)
+        self.assertNotIn("777", card["explanation"])
+        self.assertNotIn("07/01/2026", card["explanation"])
+
     def test_linked_production_cannot_exceed_confirmed_sale(self):
         from .models import OdooOrderLink
         self.create_sale()
@@ -59,8 +73,8 @@ class SalesRoleTests(LocalCase, TestCase):
                 for field in ("sales_usd_display", "incoming", "method", "forecast"):
                     self.assertNotIn(field, card)
             if page == "recommendations":
-                self.assertIn("reference_date", context["recommendations"][0])
-                self.assertIn("reference_qty", context["recommendations"][0])
+                self.assertNotIn("reference_date", context["recommendations"][0])
+                self.assertNotIn("reference_qty", context["recommendations"][0])
         self.create_sale()
         detail = screen_context("order_detail", key, order_id=OrderRequest.objects.get().pk)
         self.assertFalse(hasattr(detail["order"], "dataset"))

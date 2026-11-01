@@ -118,8 +118,8 @@ class OperationalUITests(LocalCase, TransactionTestCase):
                 self.assertTrue(all(card["suggested"] is not None for card in shared["recommendations"]))
                 for card in shared["recommendations"]:
                     self.assertNotIn("forecast", card)
-                    self.assertIn("reference_date", card)
-                    self.assertIn("reference_qty", card)
+                    self.assertNotIn("reference_date", card)
+                    self.assertNotIn("reference_qty", card)
                     self.assertNotIn("audit_windows", card)
                     self.assertNotIn("sales_usd_display", card)
                 explicit = {"required_date": today.isoformat()}

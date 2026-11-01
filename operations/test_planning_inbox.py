@@ -757,12 +757,13 @@ class PlanningInboxTests(LocalCase, TestCase):
             "reference_date": date(2025, 4, 17), "reference_qty": 20,
             "explanation": "Mediana de 4 fechas; validada en 8 comparaciones cronológicas.",
         }])[0]
-        self.assertIn("20 kg", seller_card["explanation"])
+        self.assertNotIn("20 kg", seller_card["explanation"])
         self.assertIn("18 kg", seller_card["explanation"])
         self.assertNotIn("comparaciones cronológicas", seller_card["explanation"])
 
     def test_seller_sees_commercial_forecast_separate_from_delivery_quantity(self):
-        target_date = timezone.localdate() + timedelta(days=2)
+        target_date = timezone.localdate() + timedelta(days=1)
+        delivery_date = timezone.localdate() + timedelta(days=2)
         card = {
             "product": "Alitas", "category": "Congelados", "unit": "kg",
             "suggested": None, "commercial_forecast": Decimal("18.000"),
@@ -774,24 +775,26 @@ class PlanningInboxTests(LocalCase, TestCase):
         with patch("operations.views.recommendation_cards", return_value=[card]):
             response = self.client.get(reverse("recommendations"), {
                 "client": "Cliente A", "mode": "sale",
-                "required_date": target_date.isoformat(),
+                "required_date": delivery_date.isoformat(),
             })
             order_response = self.client.get(reverse("order_create"), {
                 "client": "Cliente A", "mode": "sale",
-                "required_date": target_date.isoformat(),
+                "required_date": delivery_date.isoformat(),
             })
             streamlit_context = screen_context(
                 "recommendations",
                 sign_in(self.seller.username, "ClaveDelVendedor123"),
                 params={
                     "client": "Cliente A", "mode": "sale",
-                    "required_date": target_date.isoformat(),
+                    "required_date": delivery_date.isoformat(),
                 },
             )
 
         self.assertEqual(response.status_code, 200)
         seller_card = response.context["recommendations"][0]
         self.assertEqual(seller_card["commercial_forecast"], Decimal("18.000"))
+        self.assertEqual(seller_card["target_date"], target_date)
+        self.assertEqual(response.context["required_date"], delivery_date)
         self.assertIsNone(seller_card["suggested"])
         self.assertContains(response, "Oportunidad comercial")
         self.assertContains(response, "18.000")
@@ -805,7 +808,16 @@ class PlanningInboxTests(LocalCase, TestCase):
         self.assertContains(order_response, 'class="helper-block commercial-forecast mb-2"')
         self.assertContains(order_response, '/static/operations/css/local-frontend.css?v=local-20261030a')
         self.assertContains(order_response, "ingresa manualmente la cantidad que corresponda")
-        self.assertContains(order_response, "Venta registrada el 07/01/2026: 3 kg")
+        self.assertNotContains(order_response, "Venta registrada el 07/01/2026: 3 kg")
+        self.assertNotIn("reference_date", seller_card)
+        self.assertNotIn("reference_qty", seller_card)
+        self.assertNotIn("reference_date", streamlit_context["recommendations"][0])
+        self.assertNotIn("reference_qty", streamlit_context["recommendations"][0])
+        self.client.force_login(self.admin)
+        with patch("operations.views.recommendation_cards", return_value=[card]):
+            admin_response = self.client.get(reverse("recommendations"), {"client": "Cliente A"})
+        self.assertContains(admin_response, "Venta registrada el 07/01/2026: 3 kg.")
+        self.client.force_login(self.seller)
         self.assertNotContains(order_response, 'value="18.000"')
         self.assertNotContains(order_response, 'data-suggested="18.000"')
         order, _ = self._order(quantity="5")

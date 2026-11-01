@@ -313,16 +313,24 @@
 .local-app .workbench { border-radius: 12px; }
 .local-app .seller-next-step { border-radius: 14px; }
 .local-app .product-summary-facts > .commercial-forecast {
-  border: 1px solid #d4e7df;
-  background: #edf7f2;
+  border: 1px solid #bdd9e4;
+  background: #edf6fa;
 }
-.local-app .product-summary-facts > .commercial-forecast dt { color: #2c6156; font-weight: 650; }
-.local-app .product-summary-facts > .commercial-forecast dd { color: #145b51; }
+.local-app .product-summary-facts > .commercial-forecast dt { color: #315b6d; font-weight: 650; }
+.local-app .product-summary-facts > .commercial-forecast dd { color: #17495f; }
 .local-app .helper-block.commercial-forecast {
-  border-left-color: var(--v-bottle);
-  background: #f3faf7;
-  color: #385d5a;
+  border-left-color: #23627d;
+  background: #edf6fa;
+  color: #17495f;
 }
+.local-app .product-summary { border-top: 3px solid #176b63; }
+.local-app .sale-product:has(.product-toggle:checked) {
+  border-color: #176b63;
+  box-shadow: 0 0 0 1px #176b63;
+}
+.local-app .sale-product .sale-qty { border-color: #6c9d91; }
+.local-app #sale-review { border-left: 4px solid #176b63; }
+.local-app .review-action-box { border-left: 4px solid #23627d !important; }
 
 /* Centered first-run and sign-in experience: same brand language as the new UI. */
 .local-app-anonymous {

@@ -136,7 +136,7 @@ def _seller_cards(cards):
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
         "commercial_forecast", "target_date",
         "discount_percent", "tariff_available", "available", "stock_unit", "stock_date",
-        "inventory_warning", "reference_date", "reference_qty", "client_stock",
+        "inventory_warning", "client_stock",
         "client_stock_location", "client_stock_target", "client_stock_projected",
         "client_stock_incoming", "client_stock_outgoing", "suggestion_mode",
         "suggestion_event", "delivery_outside_forecast", "order_unit", "unit_mismatch",
@@ -144,7 +144,7 @@ def _seller_cards(cards):
 
     def seller_explanation(card):
         if card.get("suggestion_mode") == "client_restock":
-            return card.get("explanation") or "Se requiere revisión manual de las existencias del cliente."
+            return "Revisa las existencias y la cantidad de reposición del cliente."
         if card.get("unit_mismatch"):
             return (f"El histórico está en {card.get('unit')}; la tarifa de este cliente usa "
                     f"{card.get('order_unit')}. No se convierte la cantidad; indica una cantidad manual "
@@ -153,10 +153,7 @@ def _seller_cards(cards):
             return "La fecha de entrega supera el horizonte de siete días; indica la cantidad manualmente."
         unit = card.get("unit") or ""
         event = card.get("suggestion_event")
-        if event and card.get("reference_date") and card.get("reference_qty") is not None:
-            text = (f"Este cliente registró una venta de {card['reference_qty']:g} {unit} el "
-                    f"{card['reference_date']:%d/%m/%Y} durante {event}.")
-        elif event:
+        if event:
             text = f"Oportunidad para revisar: la entrega coincide con {event}."
         else:
             text = "Se revisaron las ventas registradas de este cliente para este producto y fecha."

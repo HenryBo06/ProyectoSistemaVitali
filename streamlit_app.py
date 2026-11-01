@@ -362,9 +362,6 @@ def products():
                     continue
                 st.markdown(f"**{card['product']}**")
                 st.write(card["explanation"])
-                if card.get("reference_date") and card.get("reference_qty") is not None:
-                    st.caption(f"Venta registrada el {card['reference_date']:%d/%m/%Y}: "
-                               f"{card['reference_qty']} {card['unit']} para este cliente.")
                 if mode == "client_restock":
                     stock = (f"{card['client_stock']} {card['unit']} en {card['client_stock_location']}"
                              if card["client_stock"] is not None else "Conteo de hoy pendiente o vencido")

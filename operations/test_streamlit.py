@@ -146,6 +146,8 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
             "suggested": None,
             "commercial_forecast": Decimal("18.000"),
             "target_date": target_date,
+            "reference_date": date(2001, 2, 3),
+            "reference_qty": Decimal("987654"),
         }
 
         app = AppTest.from_file(
@@ -164,6 +166,9 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         )
         self.assertIn("18.000 kg", str(forecast_table.values))
         self.assertIn("Decisión manual", str(forecast_table["Cantidad sugerida"].values))
+        rendered = str([item.value for group in (app.caption, app.markdown, app.info) for item in group])
+        self.assertNotIn("987654", rendered)
+        self.assertNotIn("03/02/2001", rendered)
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
     @override_settings(SMARTORDER_SELLER_EDIT=True, SMARTORDER_SELLER_CANCEL=True)

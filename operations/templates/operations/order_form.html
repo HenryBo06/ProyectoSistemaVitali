@@ -78,7 +78,6 @@
     </div>
     <p class="muted mb-2">{{ item.explanation }}</p>
     {% if role == 'vendedor' and suggestion_mode == 'sale' and item.commercial_forecast != None %}<p class="helper-block commercial-forecast mb-2" role="status"><strong>Oportunidad comercial, no cantidad de entrega:</strong> venta esperada de {{ item.commercial_forecast|floatformat:"-3" }}{% if item.unit %} {{ item.unit }}{% endif %}{% if item.target_date %} para la fecha consultada {{ item.target_date|date:'d/m/Y' }}{% endif %}. No confirma una venta, disponibilidad ni fabricación; ingresa manualmente la cantidad que corresponda.</p>{% endif %}
-    {% if item.reference_date and item.reference_qty != None %}<p class="helper-block mb-2">Venta registrada el {{ item.reference_date|date:'d/m/Y' }}: {{ item.reference_qty|floatformat:"-3" }}{% if item.unit %} {{ item.unit }}{% endif %} para este cliente.</p>{% endif %}
     {% if item.client_stock != None %}<p class="helper-block mb-2">Conteo de hoy en {{ item.client_stock_location }}: {{ item.client_stock }} {{ item.unit }} · objetivo de administración: {{ item.client_stock_target }} {{ item.unit }}.</p>{% endif %}
     {% if item.inventory_warning %}<div class="alert alert-warning mb-2" role="status">{{ item.inventory_warning }}</div>{% endif %}
     <div class="sale-fields product-fields" {% if not item.entered_quantity %}hidden{% endif %}>

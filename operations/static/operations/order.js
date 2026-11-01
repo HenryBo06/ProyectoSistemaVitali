@@ -71,7 +71,7 @@
   form.querySelectorAll('.use-suggestion').forEach(button => button.addEventListener('click', () => {
     const product = button.closest('.sale-product'), toggle = product.querySelector('.product-toggle');
     const quantity = document.getElementById(button.dataset.quantity);
-    toggle.checked = true; product.querySelector('.product-fields').hidden = false;
+    toggle.checked = true; toggle.dispatchEvent(new Event('change', { bubbles: true }));
     quantity.value = quantity.dataset.suggested; quantity.focus(); review.hidden = true;
     updateSelectionStatus();
   }));
@@ -79,14 +79,16 @@
     if (!form.reportValidity()) return;
     const data = new FormData(form), products = data.getAll('product'), quantities = data.getAll('quantity');
     const prices = data.getAll('unit_price'), discounts = data.getAll('discount_percent'), units = data.getAll('unit');
-    const target = document.querySelector('#review-lines'); target.replaceChildren(); let total = 0, count = 0;
+    const target = document.querySelector('#review-lines'); target.replaceChildren(); let total = 0, count = 0, missingPrice = false;
     products.forEach((product, index) => {
       if (!quantities[index].trim()) return; const row = document.createElement('p');
-      row.textContent = `${product}: ${formatNumber(quantities[index])} ${units[index]} · USD ${formatMoney(prices[index])} · descuento ${formatNumber(discounts[index], 2)} %`;
+      const priceAvailable = prices[index].trim() !== '';
+      if (!priceAvailable) missingPrice = true;
+      row.textContent = `${product}: ${formatNumber(quantities[index])} ${units[index]} · ${priceAvailable ? `USD ${formatMoney(prices[index])}` : 'Tarifa pendiente'} · descuento ${formatNumber(discounts[index], 2)} %`;
       target.append(row); count++; total += Math.round(Number(quantities[index]) * Number(prices[index]) * (1 - Number(discounts[index]) / 100) * 100) / 100;
     });
     if (!count) target.textContent = 'Selecciona un producto e indica su cantidad.';
-    document.querySelector('#review-total').textContent = `Total propuesto: USD ${formatMoney(total)} · ${data.get('client')} · entrega solicitada ${formatDate(data.get('required_date'))}`;
+    document.querySelector('#review-total').textContent = `${missingPrice ? 'Total pendiente de tarifa' : `Total propuesto: USD ${formatMoney(total)}`} · ${data.get('client')} · entrega solicitada ${formatDate(data.get('required_date'))}`;
     const conditions = [
       data.get('payment_terms').trim() ? `Condiciones: ${data.get('payment_terms').trim()}` : '',
       data.get('note').trim() ? `Observaciones: ${data.get('note').trim()}` : '',
