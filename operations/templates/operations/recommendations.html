@@ -49,7 +49,6 @@
       <div>
         <span>En el cliente</span>
         <strong>{% if item.client_stock != None %}{{ item.client_stock|floatformat:'-3' }} {{ item.unit }}{% else %}Conteo pendiente{% endif %}</strong>
-        {% if item.client_stock != None and item.client_stock_location %}<small>{{ item.client_stock_location }}</small>{% endif %}
       </div>
       <div>
         <span>Objetivo de reposición</span>

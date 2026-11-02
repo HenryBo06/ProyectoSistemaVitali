@@ -96,7 +96,7 @@ class SalesRoleTests(LocalCase, TestCase):
             client_stock_incoming=Decimal("0"), client_stock_outgoing=Decimal("0"),
         )
         for value in ("Reposición sugerida", "En el cliente", "2 kg",
-                      "Objetivo de reposición", "7 kg", "Bodega Demo",
+                      "Objetivo de reposición", "7 kg",
                       "Ver proyección de existencias", "Preparar reposición"):
             with self.subTest(value=value):
                 self.assertIn(value, text)
