@@ -34,6 +34,8 @@ def ready(url: str, limit: int = 120) -> None:
 
 def seed_synthetic_restock() -> None:
     """Add LAB-only stock and target so the corrected layout is tested with data."""
+    import sys
+    sys.path.insert(0, str(ROOT))
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "vitali_web.settings")
     import django
     django.setup()
