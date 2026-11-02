@@ -730,3 +730,31 @@ button[kind="primary"]:hover { background: var(--v-bottle-dark) !important; bord
 main:has(.seller-density-marker) .vitali-ticket span { font-size: .88rem; letter-spacing: .13em; }
 main:has(.seller-density-marker) [class*="st-key-seller-mobile-catalog-row"] strong { font-size: .93rem; font-weight: 650; }
 main:has(.seller-density-marker) [class*="st-key-seller-mobile-catalog-row"] [data-testid="stCaptionContainer"] { font-size: .82rem; }
+
+/* Lovable-guided compact seller header: reserve room for Streamlit's sidebar
+   toggle instead of letting the toggle overlap the application wordmark. */
+main:has(.seller-density-marker) .vitali-ticket {
+  min-height: 2.15rem;
+  margin-bottom: .55rem;
+  padding-bottom: .35rem;
+}
+main:has(.seller-density-marker) h1 { font-size: 1.22rem !important; line-height: 1.25 !important; }
+main:has(.seller-density-marker) h2 { font-size: 1.02rem !important; }
+main:has(.seller-density-marker) [data-testid="stMetricValue"] { font-size: 1.12rem !important; }
+@media (max-width: 640px) {
+  main:has(.seller-density-marker) [data-testid="stMainBlockContainer"] {
+    padding-top: .55rem !important;
+    padding-bottom: 1.2rem !important;
+  }
+  main:has(.seller-density-marker) .vitali-ticket {
+    padding-left: 3.1rem;
+    min-height: 2.3rem;
+    margin-bottom: .3rem;
+    padding-bottom: .2rem;
+    align-items: center;
+  }
+  main:has(.seller-density-marker) .vitali-ticket span { font-size: .82rem; letter-spacing: .08em; }
+  main:has(.seller-density-marker) .vitali-ticket em { display: none; }
+  main:has(.seller-density-marker) h1 { font-size: 1.16rem !important; }
+  main:has(.seller-density-marker) h2 { font-size: 1rem !important; margin-top: .55rem !important; }
+}

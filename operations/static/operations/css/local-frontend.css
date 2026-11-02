@@ -624,3 +624,48 @@ body.order-reviewing #sale-configuration { display: none; }
 .local-app .seller-dashboard .seller-client-list .client-name,
 .local-app .seller-dashboard .seller-client-list a { font-size: .92rem; }
 .local-app .seller-recommendations .seller-product-summary .badge-status { font-weight: 600; }
+
+/* Compact seller navigation inspired by Lovable's restrained task tabs.
+   Exactly one row on phones; never stack three full-size buttons. */
+.local-app .seller-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .35rem;
+  max-width: 650px;
+  margin: 0 0 .65rem;
+}
+.local-app .seller-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 40px;
+  padding: .35rem .55rem;
+  border: 1px solid #a9c6c0;
+  border-radius: 8px;
+  color: var(--v-bottle-dark);
+  background: #fff;
+  text-align: center;
+  text-decoration: none;
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.local-app .seller-mode-tab.is-active { color: #fff; background: var(--v-bottle); border-color: var(--v-bottle); }
+.local-app .seller-mode-tab:focus-visible { outline: 2px solid var(--v-bottle); outline-offset: 2px; }
+.local-app .seller-page-heading h1,
+.local-app .seller-dashboard .page-heading h1 { font-size: 1.18rem; line-height: 1.25; }
+.local-app .seller-dashboard .section-heading-inline h2 { font-size: 1rem; }
+.local-app .seller-product-summary h2 { font-size: .92rem; font-weight: 650; }
+.local-app .seller-product-summary .seller-row-action { font-size: .84rem; }
+.local-app .seller-page-heading .btn { font-size: .84rem; padding: .48rem .7rem; min-height: 38px; }
+@media (max-width: 575.98px) {
+  .local-app .seller-page-heading { gap: .3rem .65rem; margin-bottom: .45rem; padding-bottom: .45rem; }
+  .local-app .seller-page-heading p:not(.page-eyebrow) { display: none; }
+  .local-app .seller-page-heading .page-eyebrow { font-size: .7rem; margin-bottom: .2rem; }
+  .local-app .seller-mode-tabs { gap: .3rem; margin-bottom: .55rem; }
+  .local-app .seller-mode-tab { padding-inline: .35rem; font-size: .82rem; }
+  .local-app .seller-recommendations { margin-top: .45rem; }
+  .local-app .seller-product-summary { padding: .55rem .65rem; }
+  .local-app .seller-product-summary .product-summary-facts { gap: .2rem .65rem; }
+}

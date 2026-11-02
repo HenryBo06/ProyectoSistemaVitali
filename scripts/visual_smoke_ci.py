@@ -72,11 +72,18 @@ def django_smoke(browser) -> None:
     page.goto(f"http://127.0.0.1:8000/recomendaciones/?{query}", wait_until="domcontentloaded")
     page.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=30000)
     page.get_by_text("Producto avícola LAB (simulado)", exact=True).first.wait_for(timeout=30000)
+    tabs = page.locator(".seller-mode-tabs")
+    if not tabs.is_visible() or tabs.bounding_box()["height"] > 51:
+        raise AssertionError("Django seller navigation must fit one row on mobile.")
+    links = tabs.locator("a")
+    ys = [round(links.nth(i).bounding_box()["y"]) for i in range(links.count())]
+    if len(ys) != 3 or max(ys) - min(ys) > 2:
+        raise AssertionError(f"Django seller mode tabs stack or misalign: {ys}")
     heading_size = page.locator(".seller-page-heading h1").first.evaluate(
         "(element) => parseFloat(getComputedStyle(element).fontSize)")
     product_size = page.locator(".seller-product-summary h2").first.evaluate(
         "(element) => parseFloat(getComputedStyle(element).fontSize)")
-    if not (19 <= heading_size <= 23 and 14 <= product_size <= 16):
+    if not (17 <= heading_size <= 21 and 14 <= product_size <= 16):
         raise AssertionError(f"Django type scale is inconsistent: {heading_size}px / {product_size}px")
     summary = page.locator(".seller-restock-summary")
     if summary.count() != 1:
@@ -117,7 +124,7 @@ def streamlit_smoke(browser) -> None:
     page.get_by_role("heading", name="Productos para ofrecer").wait_for(timeout=60000)
     title_size = page.get_by_role("heading", name="Productos y sugerencias").evaluate(
         "(element) => parseFloat(getComputedStyle(element).fontSize)")
-    if not (20 <= title_size <= 24):
+    if not (18 <= title_size <= 21):
         raise AssertionError(f"Streamlit seller page heading is oversized: {title_size}px")
     desktop = page.locator(".st-key-seller-desktop-catalog").first
     mobile = page.locator(".st-key-seller-mobile-catalog").first
@@ -151,6 +158,17 @@ def streamlit_smoke(browser) -> None:
     page.wait_for_timeout(250)
     if page.locator("body").evaluate("(e) => e.scrollWidth > window.innerWidth + 2"):
         raise AssertionError("Streamlit mobile has horizontal document overflow.")
+
+    # The mobile expand-sidebar icon must not intersect SmartOrder's heading.
+    overlap = page.evaluate("""() => {
+      const text = document.querySelector('.vitali-ticket span');
+      const toggle = document.querySelector('[data-testid="stHeader"] button[aria-label="Expand sidebar"]');
+      if (!text || !toggle) return false;
+      const a = text.getBoundingClientRect(), b = toggle.getBoundingClientRect();
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }""")
+    if overlap:
+        raise AssertionError("Streamlit mobile navigation button overlaps the application identity.")
     page.screenshot(path=str(OUT / "streamlit-catalog-mobile.png"), full_page=False)
     context.close()
 

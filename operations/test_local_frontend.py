@@ -23,6 +23,17 @@ class LocalFrontendAssetsTests(SimpleTestCase):
         self.assertIn("main:has(.seller-density-marker) [data-testid=\"stMetricValue\"] { font-size: 1.2rem", streamlit)
 
 
+    def test_seller_navigation_is_single_row_and_semantic(self):
+        template = (ROOT / "operations/templates/operations/recommendations.html").read_text(encoding="utf-8")
+        css = (ROOT / "operations/static/operations/css/local-frontend.css").read_text(encoding="utf-8")
+        streamlit = (ROOT / "operations/static/operations/css/streamlit.css").read_text(encoding="utf-8")
+        self.assertIn('class="seller-mode-tabs"', template)
+        self.assertIn('aria-label="Tipo de consulta comercial"', template)
+        self.assertIn(".seller-mode-tabs {", css)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr));", css)
+        self.assertIn(".seller-mode-tab:focus-visible", css)
+        self.assertIn("padding-left: 3.1rem;", streamlit)
+
     def test_restock_summary_spans_full_card_width(self):
         local_css = (ROOT / "operations/static/operations/css/local-frontend.css").read_text(encoding="utf-8")
         template = (ROOT / "operations/templates/operations/recommendations.html").read_text(encoding="utf-8")
@@ -45,7 +56,7 @@ class LocalFrontendViewTests(TestCase):
     def assertModernDjangoShell(self, response):
         self.assertContains(
             response,
-            'href="/static/operations/css/local-frontend.css?v=seller-density-20261102f"',
+            'href="/static/operations/css/local-frontend.css?v=seller-density-20261102g"',
         )
 
     def test_login_has_branded_access_form(self):
