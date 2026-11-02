@@ -342,6 +342,30 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         self.assertTrue(any(item.label == "Evaluación de sugerencia comercial" for item in app.expander))
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    def test_seller_dashboard_shows_upcoming_delivery_details(self):
+        from streamlit.testing.v1 import AppTest
+
+        delivery = timezone.localdate() + timedelta(days=3)
+        OrderRequest.objects.create(
+            seller=self.seller, client="Cliente A", dataset=self.dataset,
+            required_date=delivery, committed_date=delivery, sale_confirmed=True,
+            status=OrderRequest.Status.REVIEWED,
+        )
+        app = AppTest.from_file(
+            str(Path(__file__).resolve().parents[1] / "streamlit_app.py"),
+            default_timeout=30,
+        )
+        app.session_state["session_key"] = sign_in(self.seller.username, "ClaveDelVendedor123")
+        app.session_state["workspace"] = "Mi trabajo"
+        app.run()
+
+        self.assertFalse(app.exception)
+        visible_text = " ".join(item.value for item in app.markdown)
+        self.assertIn("Cliente A", visible_text)
+        self.assertIn(delivery.strftime("%d/%m/%Y"), visible_text)
+        self.assertIn("Producción revisada", visible_text)
+
+    @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
     def test_native_client_stock_inbox_and_admin_planning_screens(self):
         from streamlit.testing.v1 import AppTest
 

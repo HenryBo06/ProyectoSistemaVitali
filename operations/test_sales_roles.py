@@ -1,6 +1,7 @@
 """Privacy and confirmed-sale boundaries shared by both interfaces."""
 from datetime import date, timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -30,6 +31,69 @@ class SalesRoleTests(LocalCase, TestCase):
                    "discount_percent": ["10"], "payment_terms": "30 días"}
         payload.update(extra)
         return self.post_sale(payload)
+
+    def seller_card_page(self, page, mode, **values):
+        from django.utils.html import strip_tags
+
+        card = {
+            "product": "Alitas", "unit": "kg", "unit_confirmed": True,
+            "suggested": None, "commercial_forecast": None,
+            "suggestion_mode": mode, "available": Decimal("2"), "stock_unit": "kg",
+            "reference_date": date(2026, 1, 7), "reference_qty": Decimal("987654"),
+        }
+        card.update(values)
+        with patch("operations.views.recommendation_cards", return_value=[card]):
+            response = self.client.get(reverse(page), {
+                "client": "Cliente A", "mode": mode,
+                "required_date": (timezone.localdate() + timedelta(days=2)).isoformat(),
+            })
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "987654")
+        self.assertNotContains(response, "07/01/2026")
+        if page == "order_create":
+            self.assertContains(response, 'name="quantity" type="number" min="0.001" step="0.001" value=""')
+        return " ".join(strip_tags(response.content.decode()).split())
+
+    def test_sale_opportunity_uses_only_commercial_forecast_when_missing(self):
+        for page in ("order_create", "recommendations"):
+            with self.subTest(page=page):
+                text = self.seller_card_page(
+                    page, "sale", suggested=Decimal("5"), commercial_forecast=None,
+                )
+                self.assertIn("Sin estimación", text)
+                self.assertIn("Cantidad sugerida para entrega", text)
+                self.assertIn("5 kg", text)
+
+    def test_client_restock_uses_suggested_when_commercial_forecast_is_missing(self):
+        for page in ("order_create", "recommendations"):
+            with self.subTest(page=page):
+                text = self.seller_card_page(
+                    page, "client_restock", suggested=Decimal("5"), commercial_forecast=None,
+                )
+                self.assertIn("Cantidad recomendada para reponer", text)
+                self.assertIn("5 kg", text)
+                self.assertNotIn("Oportunidad comercial", text)
+
+    def test_sale_displays_forecast_and_delivery_suggestion_as_distinct_values(self):
+        for page in ("order_create", "recommendations"):
+            with self.subTest(page=page):
+                text = self.seller_card_page(
+                    page, "sale", suggested=Decimal("5"),
+                    commercial_forecast=Decimal("18"),
+                )
+                self.assertIn("Oportunidad comercial", text)
+                self.assertIn("18 kg", text)
+                self.assertIn("Cantidad sugerida para entrega", text)
+                self.assertIn("5 kg", text)
+
+    def test_restock_keeps_forecast_separate_from_replenishment_quantity(self):
+        text = self.seller_card_page(
+            "order_create", "client_restock", suggested=Decimal("5"),
+            commercial_forecast=Decimal("18"),
+        )
+        self.assertIn("Cantidad recomendada para reponer: 5 kg", text)
+        self.assertIn("Oportunidad comercial", text)
+        self.assertIn("18 kg", text)
 
     def test_seller_restock_card_excludes_historical_fields_and_private_explanation(self):
         from .views import _seller_cards
@@ -89,6 +153,26 @@ class SalesRoleTests(LocalCase, TestCase):
         self.assertEqual(card["unit"], "")
         self.assertFalse(card["unit_confirmed"])
         self.assertFalse(card["tariff_available"])
+        self.assertContains(page, 'id="unit-1" name="unit" value="kg"')
+        self.assertContains(page, "Tarifa comercial autorizada en kg.")
+
+    def test_commercial_tariff_unit_is_not_inferred_from_inventory_unit(self):
+        from .models import PriceTariff
+
+        PriceTariff.objects.filter(client="Cliente A", product="Alitas").update(unit="caja")
+        page = self.client.get(reverse("order_create"), {"client": "Cliente A"})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'id="unit-1" name="unit" value="caja"')
+        self.assertContains(page, "La disponibilidad está en kg; no se convierte automáticamente.")
+
+    def test_missing_commercial_tariff_asks_seller_to_confirm_unit(self):
+        from .models import PriceTariff
+
+        PriceTariff.objects.filter(client="Cliente A", product="Alitas").delete()
+        page = self.client.get(reverse("order_create"), {"client": "Cliente A"})
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, 'id="unit-1" name="unit" value=""')
+        self.assertContains(page, "Unidad comercial pendiente: confírmala con el cliente.")
 
     def test_sale_is_confirmed_without_production_approval_and_can_repeat_week(self):
         response = self.create_sale()

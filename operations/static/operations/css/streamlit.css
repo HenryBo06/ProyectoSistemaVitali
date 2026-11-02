@@ -603,7 +603,7 @@ main:has(.seller-density-marker) [class*="st-key-seller-mobile-catalog-row"] [da
   main:has(.seller-density-marker) [data-testid="stMetric"] { padding: .45rem .55rem !important; }
   main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
   main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] [data-testid="stColumn"] { min-width: calc(50% - .3rem) !important; flex: 1 1 calc(50% - .3rem) !important; }
-  main:has(.seller-density-marker) [data-testid="stElementContainer"]:has([data-testid="stDataFrame"]) { display: none !important; }
+  main:has(.seller-density-marker) [class~="st-key-seller-desktop-catalog"] { display: none !important; }
   main:has(.seller-density-marker) [class~="st-key-seller-mobile-catalog"] { display: block !important; }
 }
 

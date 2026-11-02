@@ -164,9 +164,10 @@ def dashboard():
                         st.rerun()
         if c.get("upcoming_orders"):
             st.subheader("Próximas entregas")
-            table([{"Cliente": order.client, "Pedido": order.pk,
-                    "Fecha comprometida": order.committed_date,
-                    "Estado": order.status_display} for order in c["upcoming_orders"]])
+            for order in c["upcoming_orders"]:
+                with st.container(border=True):
+                    st.write(f"**{order.client} · #{order.pk}**")
+                    st.write(f"Entrega {order.committed_date:%d/%m/%Y} · {order.status_display}")
         if c.get("opportunities"):
             st.subheader("Oportunidades para revisar")
             for item in c["opportunities"][:3]:
@@ -318,19 +319,20 @@ def products():
         line_filter = st.selectbox("Línea de producto", ["Todas las líneas", *lines],
                                    key=f"product_line:{client}",
                                    disabled=bool(st.session_state.get("sale_review")))
-        table([{
-            "Producto": card["product"],
-            "Oportunidad comercial · no es cantidad de entrega": (
-                f"{format_number(card['commercial_forecast'])} {card['unit']}"
-                + (f" · fecha consultada {card['target_date']:%d/%m/%Y}"
-                   if card.get("target_date") else "")
-                if card.get("commercial_forecast") is not None else "Decisión manual · sin estimación"
-            ),
-            "Disponibilidad": ("Por confirmar" if card["available"] is None
-                                      else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"),
-            "Tarifa autorizada": f"USD {format_number(card['unit_price'], 2, trim=False)}" if card.get("unit_price") is not None else "Pendiente",
-        } for card in cards if line_filter == "Todas las líneas"
-          or (card.get("category") or "Sin línea") == line_filter])
+        with st.container(key="seller-desktop-catalog"):
+            table([{
+                "Producto": card["product"],
+                "Oportunidad comercial · no es cantidad de entrega": (
+                    f"{format_number(card['commercial_forecast'])} {card['unit']}"
+                    + (f" · fecha consultada {card['target_date']:%d/%m/%Y}"
+                       if card.get("target_date") else "")
+                    if card.get("commercial_forecast") is not None else "Decisión manual · sin estimación"
+                ),
+                "Disponibilidad": ("Por confirmar" if card["available"] is None
+                                          else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"),
+                "Tarifa autorizada": f"USD {format_number(card['unit_price'], 2, trim=False)}" if card.get("unit_price") is not None else "Pendiente",
+            } for card in cards if line_filter == "Todas las líneas"
+              or (card.get("category") or "Sin línea") == line_filter])
         with st.container(key="seller-mobile-catalog"):
             for line_number, card in enumerate(cards):
                 if line_filter != "Todas las líneas" and (card.get("category") or "Sin línea") != line_filter:

@@ -55,7 +55,7 @@
     <div class="product-line-head mb-2">
       <label class="product-choice">
         <input type="checkbox" class="product-toggle" {% if item.entered_quantity or item.product in selected_products %}checked{% endif %}>
-        {{ item.product }}{% if item.unit %} · {{ item.unit }}{% endif %}
+        {{ item.product }}{% if item.order_unit %} · {{ item.order_unit }}{% endif %}
       </label>
       <span class="badge-status {% if item.commercial_forecast != None %}status-approved{% else %}status-manual{% endif %}">
         {% if item.commercial_forecast != None %}Oportunidad{% else %}Sin estimación{% endif %}
@@ -63,7 +63,13 @@
     </div>
     <div class="product-facts mb-2">
       <span><strong>Disponible:</strong> {% if item.available != None %}{{ item.available|floatformat:"-3" }} {{ item.stock_unit|default:'unidad por confirmar' }}{% else %}Por confirmar{% endif %}</span>
-      <span><strong>{% if suggestion_mode == 'client_restock' %}Cantidad sugerida{% else %}Oportunidad comercial · no es cantidad pedida{% endif %}:</strong> {% if item.commercial_forecast != None %}{{ item.commercial_forecast|floatformat:"-3" }} {{ item.unit }}{% elif item.suggested != None %}{{ item.suggested|floatformat:"-3" }} {{ item.unit }}{% else %}Sin estimación{% endif %}</span>
+      {% if suggestion_mode == 'client_restock' %}
+      <span><strong>Cantidad recomendada para reponer:</strong> {% if item.suggested != None %}{{ item.suggested|floatformat:"-3" }} {{ item.unit }}{% else %}Sin recomendación{% endif %}</span>
+      {% if item.commercial_forecast != None %}<span><strong>Oportunidad comercial · referencia de venta, no es reposición:</strong> {{ item.commercial_forecast|floatformat:"-3" }} {{ item.unit }}</span>{% endif %}
+      {% else %}
+      <span><strong>Oportunidad comercial · no es cantidad pedida:</strong> {% if item.commercial_forecast != None %}{{ item.commercial_forecast|floatformat:"-3" }} {{ item.unit }}{% else %}Sin estimación{% endif %}</span>
+      {% if item.suggested != None %}<span><strong>Cantidad sugerida para entrega:</strong> {{ item.suggested|floatformat:"-3" }} {{ item.unit }}</span>{% endif %}
+      {% endif %}
       <span><strong>Tarifa:</strong> {% if item.unit_price != None %}USD {{ item.unit_price|floatformat:2 }}{% else %}Pendiente{% endif %}</span>
     </div>
     {% if item.explanation and item.suggested != None or item.explanation and item.commercial_forecast != None %}<details class="seller-explanation"><summary>Ver explicación</summary><p>{{ item.explanation }}</p></details>{% endif %}
@@ -76,8 +82,9 @@
         {% if item.suggested != None and item.suggested > 0 %}<button type="button" class="btn btn-sm btn-outline-primary mt-2 use-suggestion" data-quantity="qty-{{ forloop.counter }}">Usar cantidad sugerida: {{ item.suggested }} {{ item.unit }}</button>{% endif %}
       </div>
       <div>
-        <label class="form-label" for="unit-{{ forloop.counter }}">Unidad</label>
-        <input class="form-control sale-unit" id="unit-{{ forloop.counter }}" name="unit" value="{% if item.entered_unit %}{{ item.entered_unit }}{% elif item.unit_mismatch %}{{ item.order_unit }}{% else %}{{ item.unit }}{% endif %}" placeholder="{% if item.unit %}{{ item.unit }}{% else %}Indica la unidad{% endif %}" {% if item.unit_confirmed and not item.unit_mismatch %}readonly{% endif %}>
+        <label class="form-label" for="unit-{{ forloop.counter }}">Unidad comercial</label>
+        <input class="form-control sale-unit" id="unit-{{ forloop.counter }}" name="unit" value="{% if item.entered_unit %}{{ item.entered_unit }}{% else %}{{ item.order_unit }}{% endif %}" placeholder="{% if item.order_unit %}{{ item.order_unit }}{% else %}Confirma la unidad{% endif %}" {% if item.order_unit and not item.unit_mismatch %}readonly{% endif %}>
+        {% if item.order_unit %}<div class="form-text">Tarifa comercial autorizada en {{ item.order_unit }}.{% if item.stock_unit and item.stock_unit != item.order_unit %} La disponibilidad está en {{ item.stock_unit }}; no se convierte automáticamente.{% endif %}</div>{% else %}<div class="form-text">Unidad comercial pendiente: confírmala con el cliente. La unidad de inventario puede ser distinta.</div>{% endif %}
       </div>
       <div>
         <label class="form-label" for="price-{{ forloop.counter }}">Precio USD</label>
