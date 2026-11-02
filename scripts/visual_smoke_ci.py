@@ -92,9 +92,15 @@ def streamlit_smoke(browser) -> None:
     # Streamlit may keep the desktop sidebar open across a viewport resize.
     # Close it before asserting that the actual catalogue is unobscured.
     collapse = page.locator('[data-testid="stSidebar"] button[aria-label="Collapse sidebar"]')
-    if collapse.count() and collapse.first.is_visible():
-        collapse.first.click()
-        page.wait_for_timeout(300)
+    if collapse.count():
+        # Streamlit re-renders responsive sidebar buttons; DOM-level click avoids
+        # Playwright trying to interact with a handle that has been detached.
+        page.evaluate("""() => {
+          const button = document.querySelector(
+            '[data-testid="stSidebar"] button[aria-label="Collapse sidebar"]');
+          if (button) button.click();
+        }""")
+        page.wait_for_timeout(500)
     if desktop.is_visible():
         raise AssertionError("Streamlit desktop table is still visible at mobile breakpoint.")
     first_row = page.locator('[class*="st-key-seller-mobile-catalog-row"]').first
