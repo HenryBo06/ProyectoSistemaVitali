@@ -3,6 +3,8 @@ name: SmartOrder CI
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [codex/smartorder-densidad-20261101]
   workflow_dispatch:
 
 jobs:
