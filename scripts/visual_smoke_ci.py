@@ -57,9 +57,14 @@ def django_smoke(browser) -> None:
             raise AssertionError("Restock summary overflows its own container.")
     if page.locator("body").evaluate("(e) => e.scrollWidth > window.innerWidth + 2"):
         raise AssertionError("Django mobile has horizontal document overflow.")
+    # Screenshot from document top: a sticky bar captured mid-scroll is not a layout defect.
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(200)
     page.screenshot(path=str(OUT / "django-restock-mobile.png"), full_page=True)
 
     page.set_viewport_size({"width": 1440, "height": 900})
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(200)
     page.screenshot(path=str(OUT / "django-restock-desktop.png"), full_page=True)
     context.close()
 
@@ -84,13 +89,28 @@ def streamlit_smoke(browser) -> None:
 
     page.set_viewport_size({"width": 390, "height": 844})
     mobile.wait_for(state="visible", timeout=20000)
+    # Streamlit may keep the desktop sidebar open across a viewport resize.
+    # Close it before asserting that the actual catalogue is unobscured.
+    collapse = page.locator('[data-testid="stSidebar"] button[aria-label="Collapse sidebar"]')
+    if collapse.count() and collapse.first.is_visible():
+        collapse.first.click()
+        page.wait_for_timeout(300)
     if desktop.is_visible():
         raise AssertionError("Streamlit desktop table is still visible at mobile breakpoint.")
-    if not page.locator('[class*="st-key-seller-mobile-catalog-row"]').first.is_visible():
+    first_row = page.locator('[class*="st-key-seller-mobile-catalog-row"]').first
+    first_row.scroll_into_view_if_needed()
+    if not first_row.is_visible():
         raise AssertionError("Streamlit mobile catalogue has no visible product rows.")
+    unobscured = first_row.evaluate("""(element) => {
+      const box = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.left + box.width/2, box.top + Math.min(box.height/2, 45));
+      return hit === element || element.contains(hit);
+    }""")
+    if not unobscured:
+        raise AssertionError("Streamlit mobile catalogue is covered by a sidebar or another overlay.")
     if page.locator("body").evaluate("(e) => e.scrollWidth > window.innerWidth + 2"):
         raise AssertionError("Streamlit mobile has horizontal document overflow.")
-    page.screenshot(path=str(OUT / "streamlit-catalog-mobile.png"), full_page=True)
+    page.screenshot(path=str(OUT / "streamlit-catalog-mobile.png"), full_page=False)
     context.close()
 
 
