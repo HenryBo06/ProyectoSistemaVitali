@@ -72,6 +72,12 @@ def django_smoke(browser) -> None:
     page.goto(f"http://127.0.0.1:8000/recomendaciones/?{query}", wait_until="domcontentloaded")
     page.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=30000)
     page.get_by_text("Producto avícola LAB (simulado)", exact=True).first.wait_for(timeout=30000)
+    heading_size = page.locator(".seller-page-heading h1").first.evaluate(
+        "(element) => parseFloat(getComputedStyle(element).fontSize)")
+    product_size = page.locator(".seller-product-summary h2").first.evaluate(
+        "(element) => parseFloat(getComputedStyle(element).fontSize)")
+    if not (19 <= heading_size <= 23 and 14 <= product_size <= 16):
+        raise AssertionError(f"Django type scale is inconsistent: {heading_size}px / {product_size}px")
     summary = page.locator(".seller-restock-summary")
     if summary.count() != 1:
         raise AssertionError("Expected one populated synthetic restock summary.")
@@ -109,6 +115,10 @@ def streamlit_smoke(browser) -> None:
     page.get_by_text("Productos y pedidos", exact=True).click()
     page.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=60000)
     page.get_by_role("heading", name="Productos para ofrecer").wait_for(timeout=60000)
+    title_size = page.get_by_role("heading", name="Productos y sugerencias").evaluate(
+        "(element) => parseFloat(getComputedStyle(element).fontSize)")
+    if not (20 <= title_size <= 24):
+        raise AssertionError(f"Streamlit seller page heading is oversized: {title_size}px")
     desktop = page.locator(".st-key-seller-desktop-catalog").first
     mobile = page.locator(".st-key-seller-mobile-catalog").first
     if not desktop.is_visible() or mobile.is_visible():

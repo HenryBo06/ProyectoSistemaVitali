@@ -11,6 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LocalFrontendAssetsTests(SimpleTestCase):
+    def test_seller_typography_is_scaled_without_reducing_inputs(self):
+        css = (ROOT / "operations/static/operations/css/local-frontend.css").read_text(encoding="utf-8")
+        streamlit = (ROOT / "operations/static/operations/css/streamlit.css").read_text(encoding="utf-8")
+        self.assertIn(".seller-page-heading h1 { font-size: 1.34rem;", css)
+        self.assertIn(".seller-product-summary h2 { font-size: .96rem;", css)
+        self.assertIn(".seller-page-heading + .d-flex .btn", css)
+        self.assertIn(".seller-restock-facts strong { margin-top: .1rem; font-size: .9rem;", css)
+        self.assertIn("h1 { font-size: 1.44rem !important;", streamlit)
+        self.assertIn("h2 { font-size: 1.08rem !important;", streamlit)
+        self.assertIn("main:has(.seller-density-marker) [data-testid=\"stMetricValue\"] { font-size: 1.2rem", streamlit)
+
+
     def test_restock_summary_spans_full_card_width(self):
         local_css = (ROOT / "operations/static/operations/css/local-frontend.css").read_text(encoding="utf-8")
         template = (ROOT / "operations/templates/operations/recommendations.html").read_text(encoding="utf-8")
@@ -33,7 +45,7 @@ class LocalFrontendViewTests(TestCase):
     def assertModernDjangoShell(self, response):
         self.assertContains(
             response,
-            'href="/static/operations/css/local-frontend.css?v=seller-density-20261102e"',
+            'href="/static/operations/css/local-frontend.css?v=seller-density-20261102f"',
         )
 
     def test_login_has_branded_access_form(self):
