@@ -669,3 +669,20 @@ body.order-reviewing #sale-configuration { display: none; }
   .local-app .seller-product-summary { padding: .55rem .65rem; }
   .local-app .seller-product-summary .product-summary-facts { gap: .2rem .65rem; }
 }
+
+/* The seller already knows what Cliente and Entrega mean; omit the redundant
+   filter card title, while retaining explicit labels and server-side filters. */
+.local-app .seller-mode-tabs + .filter-bar {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: .5rem .75rem;
+  padding: .65rem .8rem;
+}
+.local-app .seller-mode-tabs + .filter-bar .filter-title { display: none; }
+@media (max-width: 575.98px) {
+  .local-app .seller-mode-tabs + .filter-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .45rem;
+    padding: .65rem .75rem;
+  }
+  .local-app .seller-page-heading .btn { margin-top: .4rem; }
+}
