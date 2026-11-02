@@ -62,3 +62,16 @@ Todas las imágenes Streamlit corresponden a viewports de 1440 × 900 y 390 × 8
 - CI de PR #10: el job histórico registró 147 pruebas aprobadas y falló únicamente en `git diff --check HEAD^ HEAD` porque el PDF se trató como texto. `.gitattributes` asigna el atributo `binary` a PDF y DOCX; los documentos originales no se modificaron.
 - La suite local de esta rama descubrió y aprobó 123 pruebas (`manage.py test --verbosity 1`). El número difiere de los 147 reportados por CI en PR #10.
 - También pasaron `manage.py check`, `compileall` de `streamlit_app.py`, `node --check` de `order.js`, `git diff --check` y `git check-attr` para los documentos PDF/DOCX.
+
+## Aclaración de descubrimiento de pruebas
+
+La diferencia de 123 frente a 147 fue causada por usar un comando sin etiquetas. Django, al ejecutar `python manage.py test` sin argumentos de etiqueta, descubre por defecto los tests de las aplicaciones instaladas; `operations` aporta 123 casos. El paquete `tests/` está en la raíz del repositorio y no es una aplicación instalada, por lo que esos 24 casos no entran en el descubrimiento implícito.
+
+| Descubrimiento | Casos |
+| --- | ---: |
+| Sin etiquetas (`python manage.py test`) | 123 |
+| Etiqueta `operations` | 123 |
+| Etiqueta `tests` | 24 |
+| Etiquetas del CI (`operations tests`) | 147 |
+
+Se ejecutó el comando exacto del CI: `python manage.py test operations tests --noinput` — **147 pruebas en 194.477 s, OK**. Con `DiscoverRunner.build_suite` se compararon los identificadores de prueba entre `d835af5` y `b25e1b6`: 147 en cada árbol, cero diferencias, cero archivos de prueba eliminados y cero definiciones `test_*` retiradas. Algunas aserciones existentes se actualizaron para verificar la nueva presentación sin disminuir sus controles.
