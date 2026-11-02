@@ -25,7 +25,7 @@ class LocalFrontendViewTests(TestCase):
     def assertModernDjangoShell(self, response):
         self.assertContains(
             response,
-            'href="/static/operations/css/local-frontend.css?v=local-20261030a"',
+            'href="/static/operations/css/local-frontend.css?v=seller-density-20261101d"',
         )
 
     def test_login_has_branded_access_form(self):
@@ -63,5 +63,5 @@ class LocalFrontendViewTests(TestCase):
         self.assertEqual(seller_home.status_code, 200)
         self.assertModernDjangoShell(seller_home)
         self.assertContains(seller_home, "Gestión de mi cartera")
-        self.assertContains(seller_home, "exclusivamente a administración")
+        self.assertContains(seller_home, "administración autoriza producción")
         self.assertEqual(self.client.get(reverse("users")).status_code, 403)

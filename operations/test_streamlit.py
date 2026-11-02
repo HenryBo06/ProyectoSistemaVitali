@@ -162,11 +162,13 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
         self.assertFalse(app.exception)
         forecast_table = next(
             table.value for table in app.dataframe
-            if "Oportunidad comercial · no entrega" in table.value.columns
+            if "Oportunidad comercial · no es cantidad de entrega" in table.value.columns
         )
-        self.assertIn("18.000 kg", str(forecast_table.values))
-        self.assertIn("Decisión manual", str(forecast_table["Cantidad sugerida"].values))
+        self.assertIn("18 kg", str(forecast_table.values))
+        self.assertNotIn("Cantidad sugerida", forecast_table.columns)
         rendered = str([item.value for group in (app.caption, app.markdown, app.info) for item in group])
+        self.assertIn("Oportunidad · no es cantidad solicitada", rendered)
+        self.assertIn("Disponibilidad:", rendered)
         self.assertNotIn("987654", rendered)
         self.assertNotIn("03/02/2001", rendered)
 

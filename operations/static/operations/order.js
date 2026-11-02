@@ -15,6 +15,10 @@
     });
   });
   const review = document.querySelector('#sale-review');
+  const hideReview = () => {
+    review.hidden = true;
+    document.body.classList.remove('order-reviewing');
+  };
   const lineFilter = document.querySelector('#product-line-filter');
   const selectionStatus = document.querySelector('#selection-status');
   const formatNumber = (value, places = 3) => Number(value).toLocaleString('es-SV', {
@@ -44,12 +48,12 @@
       product.hidden = lineFilter.value !== '*' && product.dataset.category !== lineFilter.value;
     });
   }
-  if (lineFilter) lineFilter.addEventListener('change', () => { filterProducts(); review.hidden = true; });
+  if (lineFilter) lineFilter.addEventListener('change', () => { filterProducts(); hideReview(); });
   filterProducts();
   form.addEventListener('submit', event => { if (review.hidden) { event.preventDefault(); document.querySelector('#review-sale').click(); } });
   function exception() { form.querySelectorAll('.fixed-price').forEach(input => input.readOnly = !document.querySelector('#exception').value.trim()); }
   exception();
-  form.addEventListener('input', () => { review.hidden = true; exception(); });
+  form.addEventListener('input', () => { hideReview(); exception(); });
   form.querySelectorAll('.product-toggle').forEach(toggle => {
     const product = toggle.closest('.sale-product');
     product.querySelector('.product-fields').hidden = !toggle.checked;
@@ -62,7 +66,7 @@
       quantity.required = toggle.checked;
       unit.required = toggle.checked;
       if (!toggle.checked) quantity.value = '';
-      review.hidden = true;
+      hideReview();
       updateSelectionStatus();
     };
     toggle.addEventListener('change', syncProduct);
@@ -72,7 +76,7 @@
     const product = button.closest('.sale-product'), toggle = product.querySelector('.product-toggle');
     const quantity = document.getElementById(button.dataset.quantity);
     toggle.checked = true; toggle.dispatchEvent(new Event('change', { bubbles: true }));
-    quantity.value = quantity.dataset.suggested; quantity.focus(); review.hidden = true;
+    quantity.value = quantity.dataset.suggested; quantity.focus(); hideReview();
     updateSelectionStatus();
   }));
   document.querySelector('#review-sale').addEventListener('click', () => {
@@ -96,7 +100,10 @@
     document.querySelector('#review-conditions').textContent = conditions.join(' · ')
       || 'Sin condiciones comerciales u observaciones adicionales.';
     document.querySelector('#confirm-sale').textContent = data.get('exception_reason').trim() ? 'Solicitar aprobación de excepción' : 'Confirmar venta';
-    document.querySelector('#confirm-sale').disabled = !count; review.hidden = false; review.querySelector('h2').focus();
+    document.querySelector('#confirm-sale').disabled = !count;
+    review.hidden = false;
+    document.body.classList.toggle('order-reviewing', count > 0);
+    review.querySelector('h2').focus();
   });
-  document.querySelector('#edit-sale').addEventListener('click', () => { review.hidden = true; document.querySelector('#review-sale').focus(); });
+  document.querySelector('#edit-sale').addEventListener('click', () => { hideReview(); document.querySelector('#review-sale').focus(); });
 })();

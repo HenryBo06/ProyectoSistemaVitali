@@ -1,33 +1,22 @@
 {% extends 'operations/base.html' %}
 {% block title %}Mi trabajo{% endblock %}
-{% block content %}
+{% block content %}<div class="seller-dashboard">
 <div class="page-heading seller-heading">
   <div>
     <p class="page-eyebrow">Espacio del vendedor</p>
     <h1>Mi trabajo</h1>
-    <p>Revisa sugerencias para tu cartera, prepara ventas y da seguimiento a las entregas acordadas.</p>
+  <p>Clientes, productos y ventas de tu cartera.</p>
   </div>
   <a class="btn btn-primary btn-lg" href="{% url 'order_create' %}">Preparar una venta <span aria-hidden="true">→</span></a>
 </div>
-<div class="dashboard-context" role="note">Al confirmar una venta, la solicitud queda registrada. La autorización para producirla corresponde exclusivamente a administración.</div>
-
-<section class="seller-next-step panel" aria-labelledby="seller-next-title">
-  <div class="seller-next-copy">
-    <p class="page-eyebrow">Siguiente paso</p>
-    <h2 id="seller-next-title">Elige un cliente y revisa los productos</h2>
-    <p>Consulta cantidades sugeridas y disponibilidad. Tú decides qué incluir; cada venta se confirma con tu revisión.</p>
-  </div>
-  <ol class="seller-flow" aria-label="Pasos para preparar una venta">
-    <li><span>1</span> Cliente</li><li><span>2</span> Productos</li><li><span>3</span> Revisar</li><li><span>4</span> Confirmar</li>
-  </ol>
-</section>
+<div class="seller-rule" role="note">Tú confirmas la venta; administración autoriza producción.</div>
 
 <div class="row g-3 my-2" aria-label="Resumen de cartera">
-  <div class="col-sm-6"><div class="stat"><span class="stat-label">Clientes asignados</span><strong class="stat-value">{{ clients|length }}</strong><span class="stat-note">Cartera disponible para consulta</span></div></div>
-  <div class="col-sm-6"><div class="stat"><span class="stat-label">Pedidos de mi cartera</span><strong class="stat-value">{{ order_count }}</strong><span class="stat-note">Solicitudes registradas</span></div></div>
+  {% if clients %}<div class="col-auto"><div class="stat seller-stat"><span class="stat-label">Clientes</span><strong class="stat-value">{{ clients|length }}</strong></div></div>{% endif %}
+  {% if order_count %}<div class="col-auto"><div class="stat seller-stat"><span class="stat-label">Pedidos</span><strong class="stat-value">{{ order_count }}</strong></div></div>{% endif %}
 </div>
 
-<div class="section-label"><h2>Tu cartera</h2><small>Abre un cliente para consultar productos y empezar una venta.</small></div>
+  <div class="section-label"><h2>Clientes</h2><small>Selecciona un cliente para preparar una venta.</small></div>
 <section class="panel seller-client-panel" aria-label="Clientes asignados">
   <ul class="client-list seller-client-list">
     {% for client in clients %}
@@ -75,4 +64,5 @@
   {% endfor %}
 </div>
 {% endif %}
+</div>
 {% endblock %}

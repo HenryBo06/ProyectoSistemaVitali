@@ -546,6 +546,67 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   color: var(--v-muted);
 }
 
+/* Seller task pages: tighter rhythm, with Streamlit-native controls and mobile navigation. */
+main:has(.seller-density-marker) [data-testid="stMainBlockContainer"] {
+  max-width: 1440px;
+  padding-top: 1.15rem !important;
+  padding-bottom: 2rem !important;
+}
+main:has(.seller-density-marker) h1 { font-size: 1.65rem !important; margin-bottom: .2rem !important; }
+main:has(.seller-density-marker) h2 { font-size: 1.2rem !important; margin: .75rem 0 .35rem !important; }
+main:has(.seller-density-marker) [data-testid="stMetric"] {
+  padding: .55rem .8rem !important;
+  border: 1px solid var(--v-line) !important;
+  border-radius: var(--v-radius-md) !important;
+  background: var(--v-crate) !important;
+}
+main:has(.seller-density-marker) [data-testid="stMetricValue"] { font-size: 1.35rem !important; }
+main:has(.seller-density-marker) [data-testid="stMetricLabel"] { font-size: .82rem !important; }
+main:has(.seller-density-marker) [data-testid="stVerticalBlock"] { gap: .55rem !important; }
+main:has(.seller-density-marker) [data-testid="stDataFrame"] { margin-block: .25rem; }
+main:has(.seller-density-marker) [data-testid="stTextInput"] label,
+main:has(.seller-density-marker) [data-testid="stSelectbox"] label,
+main:has(.seller-density-marker) [data-testid="stNumberInput"] label { font-size: .84rem !important; }
+main:has(.seller-density-marker) [data-testid="stSidebar"] [data-testid="stRadio"] label { min-height: 42px !important; }
+main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] {
+  border: 1px solid var(--v-line);
+  border-radius: var(--v-radius-md);
+  background: var(--v-crate);
+  padding: .65rem .8rem;
+  margin-bottom: .45rem;
+}
+main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] [data-testid="stHorizontalBlock"] { gap: .55rem; }
+main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] [data-testid="stTextInput"] { margin-bottom: 0; }
+main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] [data-testid="stTextInput"] input { min-height: 40px; }
+main:has(.seller-density-marker) [class~="st-key-seller-mobile-catalog"] { display: none !important; }
+main:has(.seller-density-marker) [class*="st-key-seller-mobile-catalog-row"] { padding: .55rem .7rem; margin-bottom: .35rem; }
+main:has(.seller-density-marker) [class*="st-key-seller-mobile-catalog-row"] [data-testid="stCaptionContainer"] { margin: 0; }
+@media (max-width: 640px) {
+  main:has(.seller-density-marker) [data-testid="stMainBlockContainer"] {
+    padding: 1rem .8rem 1.5rem !important;
+  }
+  [data-testid="stAppViewContainer"]:has(.seller-density-marker) [data-testid="stSidebar"] {
+    max-width: min(86vw, 310px) !important;
+  }
+  [data-testid="stAppViewContainer"]:has(.seller-density-marker) [data-testid="stSidebar"] > div:first-child { padding: .7rem !important; }
+  [data-testid="stHeader"] button[aria-label="Expand sidebar"],
+  [data-testid="stSidebar"] button[aria-label="Collapse sidebar"] {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  [data-testid="stHeader"] button[aria-label="Expand sidebar"] {
+    transform: translateY(14px) !important;
+    z-index: 1000001 !important;
+  }
+  main:has(.seller-density-marker) [data-testid="stMetric"] { padding: .45rem .55rem !important; }
+  main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+  main:has(.seller-density-marker) [class*="st-key-seller-order-line-"] [data-testid="stColumn"] { min-width: calc(50% - .3rem) !important; flex: 1 1 calc(50% - .3rem) !important; }
+  main:has(.seller-density-marker) [data-testid="stElementContainer"]:has([data-testid="stDataFrame"]) { display: none !important; }
+  main:has(.seller-density-marker) [class~="st-key-seller-mobile-catalog"] { display: block !important; }
+}
+
 /* File Uploaders (MD3 dropzone) */
 [data-testid="stFileUploader"] section[data-testid="stFileUploaderDropzone"] {
   border: 1.5px dashed var(--v-line) !important;

@@ -3,6 +3,7 @@
 import os
 from datetime import date, timedelta
 from decimal import Decimal
+from html import escape
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -120,6 +121,12 @@ def table(rows):
         st.info("Aún no hay registros para mostrar.")
 
 
+def compact_seller_marker():
+    if not user.is_staff:
+        st.markdown('<span class="seller-density-marker" aria-hidden="true"></span>',
+                    unsafe_allow_html=True)
+
+
 def format_number(value, decimal_places=3, *, trim=True):
     """Presenta números con separadores en español, sin cambiar el valor guardado."""
     number = Decimal(str(value))
@@ -131,39 +138,35 @@ def format_number(value, decimal_places=3, *, trim=True):
 
 def dashboard():
     if not user.is_staff:
+        compact_seller_marker()
         st.title("Mi trabajo", icon=":material/home_work:")
-        st.caption("Disponibilidad, sugerencias y seguimiento de tu cartera.")
+        st.caption("Clientes y ventas de tu cartera.")
         c = context("dashboard")
         with st.container(horizontal=True):
-            st.metric("Clientes asignados", len(c["clients"]), border=True)
-            st.metric("Pedidos de mi cartera", c["order_count"], border=True)
-            st.metric("Requieren seguimiento", len(c.get("attention_orders", [])), border=True)
-        with st.container(border=True):
-            st.subheader("Siguiente paso: prepara una venta")
-            st.caption("Elige un cliente, revisa disponibilidad y sugerencias, ajusta cantidades y confirma tu decisión.")
-            st.markdown("**1 Cliente**  →  **2 Productos**  →  **3 Revisión**  →  **4 Confirmación**")
-            st.button("Consultar productos y sugerencias", type="primary", icon=":material/arrow_forward:",
-                      on_click=st.session_state.update,
-                      kwargs={"workspace": "Productos y pedidos"})
-        st.subheader("Requiere tu atención")
+            if c["clients"]:
+                st.metric("Clientes", len(c["clients"]))
+            if c["order_count"]:
+                st.metric("Pedidos", c["order_count"])
+            if c.get("attention_orders"):
+                st.metric("Por atender", len(c["attention_orders"]))
+        st.button("Preparar una venta", type="primary", icon=":material/arrow_forward:",
+                  on_click=st.session_state.update,
+                  kwargs={"workspace": "Productos y pedidos"})
+        if c.get("attention_orders"):
+            st.subheader("Pedidos por seguir")
         if c.get("attention_orders"):
             for order in c["attention_orders"]:
-                with st.container(border=True):
-                    st.write(f"**{order.client} · pedido #{order.pk}**")
-                    st.caption(f"Entrega solicitada {order.required_date:%d/%m/%Y} · {order.status_display}")
+                with st.container(horizontal=True, border=True):
+                    st.write(f"**{order.client} · #{order.pk}** · {order.status_display}")
                     if st.button("Abrir seguimiento", key=f"attention:{order.pk}"):
                         st.session_state.pending_order_target = order.pk
                         st.session_state.pending_workspace = "Pedidos y producción"
                         st.rerun()
-        else:
-            st.info("No tienes novedades operativas pendientes.")
-        st.subheader("Próximas entregas")
         if c.get("upcoming_orders"):
+            st.subheader("Próximas entregas")
             table([{"Cliente": order.client, "Pedido": order.pk,
                     "Fecha comprometida": order.committed_date,
                     "Estado": order.status_display} for order in c["upcoming_orders"]])
-        else:
-            st.caption("Aún no hay entregas comprometidas.")
         if c.get("opportunities"):
             st.subheader("Oportunidades para revisar")
             for item in c["opportunities"][:3]:
@@ -178,12 +181,11 @@ def dashboard():
                         }
                         st.session_state.pending_workspace = "Productos y pedidos"
                         st.rerun()
-        st.subheader("Mi cartera")
+        st.subheader("Clientes")
         for client in c["clients"]:
-            with st.container(border=True):
+            with st.container(horizontal=True, border=True):
                 name_col, action_col = st.columns([3, 1])
                 name_col.write(f"**{client}**")
-                name_col.caption("Cliente asignado a tu cartera")
                 action_col.button("Preparar venta", key=f"client:{client}", on_click=st.session_state.update,
                                   kwargs={"workspace": "Productos y pedidos", "product_client": client})
         if not c["clients"]:
@@ -256,8 +258,9 @@ def dashboard():
 
 
 def products():
+    compact_seller_marker()
     st.title("Productos y sugerencias", icon=":material/shopping_bag:")
-    st.caption("Consulta disponibilidad y sugerencias; confirma ventas sin aprobación administrativa.")
+    st.caption("Oportunidades, disponibilidad y tarifas autorizadas.")
     c = context("recommendations")
     source(c)
     if not c.get("clients"):
@@ -294,11 +297,9 @@ def products():
     c = context("recommendations", {
         "client": client, "required_date": delivery, "mode": mode, **event_params,
     })
-    st.caption(f"Entrega solicitada: {delivery:%d/%m/%Y} · administración confirmará el compromiso.")
     if not user.is_staff:
-        st.markdown("**1 Cliente y entrega**  →  **2 Productos**  →  **3 Revisión**  →  **4 Confirmación**")
-        st.caption("Las cantidades sugeridas son orientación. Tú revisas, ajustas y confirmas cada venta.")
-    st.subheader("Productos disponibles" if user.is_staff else "2 · Productos y sugerencias")
+        st.caption(f"Entrega solicitada: {delivery:%d/%m/%Y} · la cantidad del pedido la decides tú.")
+    st.subheader("Productos disponibles" if user.is_staff else "Productos para ofrecer")
     cards = c["recommendations"]
     if not cards:
         if not c.get("catalog_available"):
@@ -317,21 +318,39 @@ def products():
         line_filter = st.selectbox("Línea de producto", ["Todas las líneas", *lines],
                                    key=f"product_line:{client}",
                                    disabled=bool(st.session_state.get("sale_review")))
-        st.caption("Compara la sugerencia con la disponibilidad y confirma cada cantidad antes de continuar.")
         table([{
             "Producto": card["product"],
-            "Cantidad sugerida": (f"{format_number(card['suggested'])} {card['unit']}"
-                                  if card["suggested"] is not None else "Decisión manual"),
-            "Oportunidad comercial · no entrega": (
-                f"{card['commercial_forecast']:,.3f} {card['unit']}"
+            "Oportunidad comercial · no es cantidad de entrega": (
+                f"{format_number(card['commercial_forecast'])} {card['unit']}"
                 + (f" · fecha consultada {card['target_date']:%d/%m/%Y}"
                    if card.get("target_date") else "")
-                if card.get("commercial_forecast") is not None else "No disponible"
+                if card.get("commercial_forecast") is not None else "Decisión manual · sin estimación"
             ),
-            "Disponibilidad Vitali": ("Por confirmar" if card["available"] is None
+            "Disponibilidad": ("Por confirmar" if card["available"] is None
                                       else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"),
+            "Tarifa autorizada": f"USD {format_number(card['unit_price'], 2, trim=False)}" if card.get("unit_price") is not None else "Pendiente",
         } for card in cards if line_filter == "Todas las líneas"
           or (card.get("category") or "Sin línea") == line_filter])
+        with st.container(key="seller-mobile-catalog"):
+            for line_number, card in enumerate(cards):
+                if line_filter != "Todas las líneas" and (card.get("category") or "Sin línea") != line_filter:
+                    continue
+                opportunity = (
+                    f"{format_number(card['commercial_forecast'])} {card['unit']}"
+                    if card.get("commercial_forecast") is not None else "sin estimación"
+                )
+                availability = (
+                    f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"
+                    if card["available"] is not None else "por confirmar"
+                )
+                tariff = (
+                    format_number(card["unit_price"], 2, trim=False)
+                    if card.get("unit_price") is not None else "pendiente"
+                )
+                with st.container(key=f"seller-mobile-catalog-row-{line_number}", border=True):
+                    st.markdown(f"**{escape(str(card['product']))}**")
+                    st.caption(f"Oportunidad · no es cantidad solicitada: {opportunity}")
+                    st.caption(f"Disponibilidad: {availability} · Tarifa autorizada: USD {tariff}")
         valid_products = [card["product"] for card in cards]
         previous_selection = list(st.session_state.get("products_selected", []))
         incompatible_products = [item for item in previous_selection if item not in valid_products]
@@ -349,7 +368,7 @@ def products():
                                if item in valid_products and item not in visible_products]
         product_options = list(dict.fromkeys([*visible_products, *selected_other_line]))
         if selected_other_line:
-            st.caption("Los productos ya seleccionados de otras líneas se conservan.")
+            st.caption("Se conservan los productos seleccionados de otras líneas.")
         selected = st.multiselect(
             "Productos a solicitar", product_options,
             placeholder="Selecciona productos para esta venta",
@@ -511,9 +530,8 @@ def products():
         st.session_state[exception_key] = bool(
             st.session_state.get("sale_draft_conditions", {}).get("exception_reason")
         )
-    st.subheader("2. Productos y condiciones")
-    st.caption("Selecciona los productos de esta venta. Completa la cantidad y unidad; las cantidades manuales o ajustadas requieren un motivo.")
-    st.caption("Las cantidades y notas se conservan al cambiar contexto; una unidad incompatible requiere volver a indicar la cantidad.")
+    st.subheader("Preparar venta")
+    st.caption("Indica la cantidad solicitada y su motivo. Las oportunidades no rellenan el pedido.")
     if st.session_state.get("sale_incompatible_lines"):
         st.warning("Se limpiaron los datos incompatibles y se regeneraron las condiciones del nuevo contexto: "
                    + ", ".join(st.session_state.sale_incompatible_lines))
@@ -534,7 +552,7 @@ def products():
                 else card["unit"] or "",
             )
         if card["suggested"] is not None and card["suggested"] > 0:
-            if st.button(f"Usar sugerencia · {format_number(card['suggested'])} {card['unit']}", key=f"use-suggestion:{scope}:{product}", disabled=review_active):
+            if st.button(f"Usar referencia · {format_number(card['suggested'])} {card['unit']}", key=f"use-suggestion:{scope}:{product}", disabled=review_active):
                 st.session_state[quantity_key] = str(card["suggested"])
     with st.container():
         exception = st.checkbox("Solicitar excepción comercial", key=exception_key,
@@ -543,20 +561,21 @@ def products():
                    "quantity": [], "unit": [], "reason": [], "unit_price": [], "discount_percent": [],
                    "submission_token": st.session_state.sale_token, "suggestion_mode": mode,
                    "event_id": event_id or ""}
-        for product in selected:
+        for line_number, product in enumerate(selected):
             card = by_product[product]
-            st.write(f"**{product}**")
-            quantity_col, unit_col = st.columns(2)
-            qty = quantity_col.text_input("Cantidad solicitada", key=f"qty:{scope}:{product}", disabled=review_active)
-            unit = unit_col.text_input(
-                "Unidad", disabled=(card["unit_confirmed"] and not card.get("unit_mismatch"))
-                or review_active, key=f"unit:{scope}:{product}",
-            )
-            price_col, discount_col = st.columns(2)
-            price = price_col.text_input("Precio unitario USD", value=str(card["unit_price"] or ""), disabled=not exception or review_active, key=f"price:{scope}:{product}:{exception}")
-            discount = discount_col.text_input("Descuento %", value=str(card["discount_percent"]), disabled=not exception or review_active, key=f"discount:{scope}:{product}:{exception}")
-            reason = st.text_input("Motivo de cantidad manual o ajuste", key=f"reason:{scope}:{product}", disabled=review_active)
-            st.divider()
+            with st.container(key=f"seller-order-line-{line_number}", border=True):
+                st.markdown(f"**{product}** · tarifa autorizada USD {format_number(card['unit_price'], 2, trim=False) if card['unit_price'] is not None else 'pendiente'} · oportunidad {format_number(card['commercial_forecast']) + ' ' + card['unit'] if card.get('commercial_forecast') is not None else 'sin estimación'}")
+                quantity_col, unit_col = st.columns(2)
+                qty = quantity_col.text_input("Cantidad solicitada", key=f"qty:{scope}:{product}", disabled=review_active)
+                unit = unit_col.text_input(
+                    "Unidad", disabled=(card["unit_confirmed"] and not card.get("unit_mismatch"))
+                    or review_active, key=f"unit:{scope}:{product}",
+                )
+                with st.expander("Precio y descuento", expanded=exception):
+                    price_col, discount_col = st.columns(2)
+                    price = price_col.text_input("Precio unitario USD", value=str(card["unit_price"] or ""), disabled=not exception or review_active, key=f"price:{scope}:{product}:{exception}")
+                    discount = discount_col.text_input("Descuento %", value=str(card["discount_percent"]), disabled=not exception or review_active, key=f"discount:{scope}:{product}:{exception}")
+                reason = st.text_input("Motivo de cantidad manual o ajuste", key=f"reason:{scope}:{product}", disabled=review_active)
             payload["unit_price"].append(price)
             payload["discount_percent"].append(discount)
             for field, value in (("product", product), ("quantity", qty), ("unit", unit), ("reason", reason)):
@@ -574,17 +593,17 @@ def products():
             payload["discount_percent"].append(new_discount)
             for field, value in (("product", new_product), ("quantity", new_qty), ("unit", new_unit), ("reason", new_reason)):
                 payload[field].append(value)
-        st.subheader("Condiciones de la venta")
         conditions = st.session_state.get("sale_draft_conditions", {})
-        payload["payment_terms"] = st.text_input("Condiciones comerciales", max_chars=255,
-                                                 value=conditions.get("payment_terms", ""),
-                                                 key=f"payment_terms:{scope}", disabled=review_active)
-        payload["note"] = st.text_area("Observaciones del pedido", value=conditions.get("note", ""),
-                                       key=f"sale_note:{scope}", disabled=review_active)
-        payload["exception_reason"] = st.text_area(
-            "Motivo de excepción comercial", value=conditions.get("exception_reason", ""),
-            disabled=not exception or review_active, key=f"exception_reason:{scope}",
-        ) if exception else ""
+        with st.expander("Condiciones y excepciones (opcional)", expanded=bool(conditions.get("payment_terms") or conditions.get("note") or exception)):
+            payload["payment_terms"] = st.text_input("Condiciones comerciales", max_chars=255,
+                                                     value=conditions.get("payment_terms", ""),
+                                                     key=f"payment_terms:{scope}", disabled=review_active)
+            payload["note"] = st.text_area("Observaciones del pedido", value=conditions.get("note", ""),
+                                           key=f"sale_note:{scope}", disabled=review_active)
+            payload["exception_reason"] = st.text_area(
+                "Motivo de excepción comercial", value=conditions.get("exception_reason", ""),
+                disabled=not exception or review_active, key=f"exception_reason:{scope}",
+            ) if exception else ""
         submit_action = st.radio(
             "Al continuar", ("Revisar pedido", "Guardar borrador"), horizontal=True,
             key=f"sale_submit_action:{scope}", disabled=review_active,
@@ -606,7 +625,7 @@ def products():
                 "reason": new_reason, "price": new_price, "discount": new_discount,
             }
             st.session_state.sale_draft_saved_for = scope
-        elif submitted:
+        elif submitted and submit_action == "Revisar pedido":
             from decimal import Decimal, InvalidOperation
             try:
                 if not payload["product"]:
@@ -637,7 +656,7 @@ def products():
         st.success("Borrador guardado. Puedes cambiar el cliente, la fecha o los productos; las líneas compatibles se conservarán.")
     reviewed = st.session_state.get("sale_review")
     if reviewed:
-        st.subheader("3. Revisa antes de confirmar")
+        st.subheader("Revisar venta")
         from decimal import Decimal, InvalidOperation
         try:
             rows, total = [], Decimal(0)
@@ -655,9 +674,9 @@ def products():
             table(rows)
             st.write(f"Total propuesto: USD {format_number(total, 2, trim=False)}")
             st.write(f"Cliente: {reviewed['client']} · entrega solicitada: {reviewed['required_date']}")
-            st.write(f"Condiciones: {reviewed['payment_terms']} · observaciones: {reviewed['note']}")
-            st.warning("Bajo pedido. Disponibilidad por validar; producción sin autorizar. La fecha solicitada no garantiza entrega.")
-            st.caption("La revisión bloquea los campos. Edita el pedido y revísalo nuevamente antes de confirmar.")
+            if reviewed["payment_terms"] or reviewed["note"]:
+                st.caption(f"Condiciones: {reviewed['payment_terms']} · {reviewed['note']}")
+            st.warning("Disponibilidad por validar. La venta no autoriza producción ni garantiza la fecha de entrega.")
             if st.button("Editar pedido"):
                 st.session_state.pop("sale_review", None)
                 st.rerun()
