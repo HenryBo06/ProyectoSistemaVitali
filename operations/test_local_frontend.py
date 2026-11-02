@@ -11,6 +11,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class LocalFrontendAssetsTests(SimpleTestCase):
+    def test_restock_summary_spans_full_card_width(self):
+        local_css = (ROOT / "operations/static/operations/css/local-frontend.css").read_text(encoding="utf-8")
+        template = (ROOT / "operations/templates/operations/recommendations.html").read_text(encoding="utf-8")
+        self.assertIn("seller-restock-summary", template)
+        self.assertIn(".seller-product-summary .seller-restock-summary {", local_css)
+        self.assertIn("grid-column: 1 / -1;", local_css)
+        self.assertIn("grid-template-columns: repeat(2, minmax(0, 1fr));", local_css)
+
     def test_django_uses_separate_local_stylesheet_without_touching_streamlit(self):
         base = (ROOT / "operations/templates/operations/base.html").read_text(encoding="utf-8")
         local_css = (ROOT / "operations/static/operations/css/local-frontend.css").read_text(encoding="utf-8")
@@ -25,7 +33,7 @@ class LocalFrontendViewTests(TestCase):
     def assertModernDjangoShell(self, response):
         self.assertContains(
             response,
-            'href="/static/operations/css/local-frontend.css?v=seller-density-20261101d"',
+            'href="/static/operations/css/local-frontend.css?v=seller-density-20261102e"',
         )
 
     def test_login_has_branded_access_form(self):

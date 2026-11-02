@@ -41,7 +41,7 @@
   <div id="sale-configuration">
   <div class="section-label">
     <h2>Productos</h2>
-    <small>El pronóstico orienta; tú defines cantidad y unidad.</small>
+    <small>{% if suggestion_mode == 'client_restock' %}La reposición sugerida orienta; tú confirmas la cantidad que solicitarás.{% else %}El pronóstico orienta; tú defines cantidad y unidad.{% endif %}</small>
   </div>
   <p class="selection-status" id="selection-status" role="status" aria-live="polite"></p>
   <div class="order-product-tools mb-2">
@@ -57,8 +57,8 @@
         <input type="checkbox" class="product-toggle" {% if item.entered_quantity or item.product in selected_products %}checked{% endif %}>
         {{ item.product }}{% if item.order_unit %} · {{ item.order_unit }}{% endif %}
       </label>
-      <span class="badge-status {% if item.commercial_forecast != None %}status-approved{% else %}status-manual{% endif %}">
-        {% if item.commercial_forecast != None %}Oportunidad{% else %}Sin estimación{% endif %}
+      <span class="badge-status {% if suggestion_mode == 'client_restock' %}{% if item.suggested != None %}status-approved{% else %}status-manual{% endif %}{% elif item.commercial_forecast != None %}status-approved{% else %}status-manual{% endif %}">
+        {% if suggestion_mode == 'client_restock' %}{% if item.suggested != None %}Reposición sugerida{% else %}Reposición manual{% endif %}{% elif item.commercial_forecast != None %}Oportunidad{% else %}Sin estimación{% endif %}
       </span>
     </div>
     <div class="product-facts mb-2">

@@ -86,6 +86,31 @@ class SalesRoleTests(LocalCase, TestCase):
                 self.assertIn("Cantidad sugerida para entrega", text)
                 self.assertIn("5 kg", text)
 
+    def test_restock_seller_summary_is_compact_and_preserves_stock_context(self):
+        text = self.seller_card_page(
+            "recommendations", "client_restock",
+            suggested=Decimal("5"), commercial_forecast=None,
+            client_stock=Decimal("2"), client_stock_target=Decimal("7"),
+            client_stock_location="Bodega Demo",
+            client_stock_projected=Decimal("4"),
+            client_stock_incoming=Decimal("0"), client_stock_outgoing=Decimal("0"),
+        )
+        for value in ("Reposición sugerida", "En el cliente", "2 kg",
+                      "Objetivo de reposición", "7 kg", "Bodega Demo",
+                      "Ver proyección de existencias", "Preparar reposición"):
+            with self.subTest(value=value):
+                self.assertIn(value, text)
+        self.assertNotIn("Sin estimación", text)
+
+    def test_restock_order_form_labels_valid_recommendation(self):
+        text = self.seller_card_page(
+            "order_create", "client_restock",
+            suggested=Decimal("5"), commercial_forecast=None,
+        )
+        self.assertIn("Reposición sugerida", text)
+        self.assertIn("Cantidad recomendada para reponer", text)
+        self.assertNotIn("Sin estimación", text)
+
     def test_restock_keeps_forecast_separate_from_replenishment_quantity(self):
         text = self.seller_card_page(
             "order_create", "client_restock", suggested=Decimal("5"),

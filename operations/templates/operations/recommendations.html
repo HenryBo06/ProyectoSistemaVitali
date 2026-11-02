@@ -43,8 +43,28 @@
   {% if role == 'vendedor' %}
   {% if item.explanation and item.suggested != None or item.explanation and item.commercial_forecast != None %}<details class="seller-explanation"><summary>Ver explicación</summary><p>{{ item.explanation }}</p></details>{% endif %}
   {% else %}<p class="muted">{{ item.explanation }}</p>{% endif %}
-  {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}<p><strong>Conteo del cliente:</strong> {% if item.client_stock != None %}{{ item.client_stock }} {{ item.unit }} en {{ item.client_stock_location }}{% else %}hoy pendiente o vencido{% endif %} · <strong>Objetivo:</strong> {{ item.client_stock_target|default_if_none:'por definir' }} {% if item.client_stock_target != None %}{{ item.unit }}{% endif %}</p>{% if item.client_stock_projected != None %}<p>Proyección al {{ required_date|date:'d/m/Y' }}: {{ item.client_stock_projected }} {{ item.unit }} · entradas confirmadas {{ item.client_stock_incoming }} · salidas confirmadas {{ item.client_stock_outgoing }}.</p>{% endif %}{% endif %}
-  {% if role == 'vendedor' %}<a class="seller-row-action" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}&amp;product={{ item.product|urlencode }}">Preparar venta <span aria-hidden="true">→</span></a>{% endif %}
+  {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}
+  <section class="seller-restock-summary" aria-label="Existencias del cliente y objetivo de reposición">
+    <div class="seller-restock-facts">
+      <div>
+        <span>En el cliente</span>
+        <strong>{% if item.client_stock != None %}{{ item.client_stock|floatformat:'-3' }} {{ item.unit }}{% else %}Conteo pendiente{% endif %}</strong>
+        {% if item.client_stock != None and item.client_stock_location %}<small>{{ item.client_stock_location }}</small>{% endif %}
+      </div>
+      <div>
+        <span>Objetivo de reposición</span>
+        <strong>{% if item.client_stock_target != None %}{{ item.client_stock_target|floatformat:'-3' }} {{ item.unit }}{% else %}Por definir{% endif %}</strong>
+      </div>
+    </div>
+    {% if item.client_stock_projected != None %}
+    <details class="seller-restock-details">
+      <summary>Ver proyección de existencias</summary>
+      <p>Proyección al {{ required_date|date:'d/m/Y' }}: {{ item.client_stock_projected|floatformat:'-3' }} {{ item.unit }}. Entradas confirmadas: {{ item.client_stock_incoming|floatformat:'-3' }}. Salidas confirmadas: {{ item.client_stock_outgoing|floatformat:'-3' }}.</p>
+    </details>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if role == 'vendedor' %}<a class="seller-row-action" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}&amp;product={{ item.product|urlencode }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Preparar venta{% endif %} <span aria-hidden="true">→</span></a>{% endif %}
   {% if role == 'admin' %}
   <details class="product-evidence">
     <summary>Histórico y datos de cálculo</summary>

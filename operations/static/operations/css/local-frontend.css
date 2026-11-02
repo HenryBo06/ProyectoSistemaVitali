@@ -587,3 +587,29 @@ body.order-reviewing #sale-configuration { display: none; }
   .local-app .order-destination { grid-template-columns: 1fr; }
   .local-app .order-destination .btn { grid-column: auto; width: 100%; }
 }
+
+/* Restock facts are one full-width grid item, never auto-placed in a narrow seller column. */
+.local-app .seller-product-summary .seller-restock-summary {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: .5rem .65rem;
+  background: var(--v-crate);
+  border-radius: 8px;
+}
+.local-app .seller-restock-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem .85rem;
+}
+.local-app .seller-restock-facts > div { min-width: 0; overflow-wrap: anywhere; }
+.local-app .seller-restock-facts span,
+.local-app .seller-restock-facts strong { display: block; }
+.local-app .seller-restock-facts span,
+.local-app .seller-restock-facts small { font-size: .78rem; color: var(--v-muted); }
+.local-app .seller-restock-facts strong { margin-top: .1rem; font-size: .95rem; color: var(--v-ink); }
+.local-app .seller-restock-details { margin-top: .4rem; font-size: .82rem; }
+.local-app .seller-restock-details summary { cursor: pointer; }
+.local-app .seller-restock-details p { margin: .4rem 0 0; overflow-wrap: anywhere; }
+@media (max-width: 420px) {
+  .local-app .seller-restock-facts { gap: .35rem .55rem; }
+}
