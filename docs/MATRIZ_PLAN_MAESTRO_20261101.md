@@ -64,8 +64,8 @@ SHA-256 del plan recibido: `c63b1c8f74eec7a9343bdb32c4206039b1ce96773d4c18d48020
 | CP-013 | HU-006 | Usar última versión válida al fallar | Sin afirmar frescura falsa | Bloqueado | Requiere infraestructura, fuente, entorno o decisión externa. |
 | CP-014 | HU-007 | Vendedor consulta conector | Acceso denegado en backend | Bloqueado | Requiere infraestructura, fuente, entorno o decisión externa. |
 | CP-015 | HU-007 | Rotar secreto | Nueva credencial efectiva, logs limpios | Bloqueado | Requiere infraestructura, fuente, entorno o decisión externa. |
-| CP-016 | HU-008 | Ventas aptas sin dato de entrega | Pronóstico comercial visible | Probado | test_seller_sees_commercial_forecast_separate_from_delivery_quantity |
-| CP-017 | HU-008 | Stock no validado | No promete entrega ni fabricación | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
+| CP-016 | HU-008 | Ventas aptas sin dato de entrega | Pronóstico comercial visible | Pendiente | Presentación probada con tarjeta simulada; falta ejecutar caso completo con serie apta. |
+| CP-017 | HU-008 | Stock no validado | No promete entrega ni fabricación | Pendiente | El motor bloquea entregas para fechas de venta; falta escenario de stock no validado completo. |
 | CP-018 | HU-009 | Revisar motivo de predicción y bloqueo | Explicación comprensible y veraz | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-019 | HU-010 | Acceder a cliente no asignado | 403 / rechazo sin fuga | Probado | test_seller_cannot_open_unassigned_client_dashboard_or_recommendations |
 | CP-020 | HU-010 | Ver cliente asignado | Información autorizada | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
@@ -74,20 +74,20 @@ SHA-256 del plan recibido: `c63b1c8f74eec7a9343bdb32c4206039b1ce96773d4c18d48020
 | CP-023 | HU-012 | Cambiar fuente antes de confirmar | Revalidación/alerta | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-024 | HU-013 | Cambiar cantidad con motivo | Auditoría valor antes/después | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-025 | HU-013 | Cantidad inválida o motivo vacío | Error visible, formulario conservado | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
-| CP-026 | HU-014 | Doble clic al confirmar | Pedido único | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
-| CP-027 | HU-014 | Reenviar token con contenido distinto | Rechazo sin sobreescritura | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
+| CP-026 | HU-014 | Doble clic al confirmar | Pedido único | Pendiente | Reenvío secuencial idempotente probado; falta doble clic/concurrencia en navegador. |
+| CP-027 | HU-014 | Reenviar token con contenido distinto | Rechazo sin sobreescritura | Probado | test_retries_reuse_order_but_changed_content_is_rejected; alcance local |
 | CP-028 | HU-015 | Tarifa, unidad y descuento de excepción | Total correcto y aprobación adecuada | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-029 | HU-016 | Venta confirmada aún no fabricada | Estado de venta, no producción | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-030 | HU-016 | ERP desconectado | Estado anterior fechado / pendiente | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-031 | HU-017 | Reposición con conteo atrasado | Modo revisión manual | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
-| CP-032 | HU-018 | Admin autoriza una línea | Autorización independiente y auditada | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
+| CP-032 | HU-018 | Admin autoriza una línea | Autorización independiente y auditada | Pendiente | Autorización posterior observada en Django; falta cotejar evidencia completa de auditoría. |
 | CP-033 | HU-018 | Vendedor intenta autorizar | Acceso denegado | Probado | test_seller_cannot_upload_manage_users_review_or_export |
 | CP-034 | HU-019 | Actualizar inventario entre pedido y revisión | Revalidación exigida | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-035 | HU-020 | Asignar y revocar cliente | Permisos efectivos en lista y URL | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-036 | HU-021 | Abrir dashboard con datos faltantes | KPIs coherentes, sin falsos ceros | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-037 | HU-022 | Revisar auditoría y probar acceso indebido | Log íntegro y acceso por rol | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-038 | HU-023 | Backtesting real con corte temporal | Métricas/base/coverage reproducibles | Bloqueado | Requiere infraestructura, fuente, entorno o decisión externa. |
-| CP-039 | HU-023 | Evaluar periodo con cero real | WAPE no definido, sin división errónea | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
+| CP-039 | HU-023 | Evaluar periodo con cero real | WAPE no definido, sin división errónea | Probado | test_score_reports_signed_bias_and_marks_zero_actual_denominator_unavailable; alcance local |
 | CP-040 | HU-024 | Consultar recomendación pasada | Modelo/fecha/datos originales intactos | Pendiente | Pendiente de ejecución y cotejo específico contra el caso completo. |
 | CP-041 | HU-025 | Importar VM a hipervisor elegido | Arranque y web accesibles | Bloqueado | Requiere infraestructura, fuente, entorno o decisión externa. |
 | CP-042 | HU-025 | Instalar desde host limpio | Sin dependencias de portátil del dev | Bloqueado | Requiere infraestructura, fuente, entorno o decisión externa. |
