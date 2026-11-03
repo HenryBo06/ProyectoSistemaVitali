@@ -2,7 +2,7 @@
 
 Implementado: extracción e inspección sin mutaciones de CSV UTF-8 y XLSX, selección explícita de formato de fecha y separador decimal, mapeo configurable de cabeceras a un contrato canónico, controles de calidad, detección de columnas nuevas, presencia de referencias repetidas y estadísticas de cobertura. Sólo administración puede ver muestras y encabezados. Limitado a 20 MB y 150 mil filas, con vista previa de cinco registros y como máximo 25 problemas detallados.
 
-**No se activa una fuente por inspeccionarla.** La integración de la etapa Load con las tablas de ventas existentes debe esperar a que se confirme el esquema real del CSV y la granularidad/identificadores de Odoo. Sin identificador único fiable no se deben ejecutar upserts incrementales ni combinar snapshots de forma automática. Se conservarán los contratos, pruebas y verificaciones manuales.
+**No se activa una fuente por inspeccionarla.** La etapa Load ya utiliza el importador canónico `import_sales` y conserva los modelos existentes. Sigue pendiente decidir las claves de línea y la semántica de fechas para cualquier carga incremental; sin identificador único fiable no se deben ejecutar upserts ni combinar snapshots automáticamente. Se conservan los controles de verificación humana.
 
 El gestor de conexiones PostgreSQL existente se mantiene separado: conexión autorizada no implica autorización para extraer tablas arbitrarias ni modificar la fuente. Conectar el extractor SQL requiere consultas predefinidas, permisos SELECT y aprobación del origen; no se ejecutan consultas SQL proporcionadas en la UI.
 
@@ -24,7 +24,7 @@ La etapa de carga de snapshots completos pasa ahora por \`/administracion/etl/\`
 
 La carga clásica XLSX sigue disponible temporalmente para no romper integraciones y pruebas previas. La retirada definitiva requiere actualizar el recorrido de aceptación y migrar todos los consumidores; hasta entonces es una ruta heredada que debe usarse solo por compatibilidad.
 
-Los datos reales todavía necesitan las decisiones comerciales COR-03 y de cobertura. Esta etapa **no** implementa mezcla incremental de snapshots, extracción SQL ni conexión con Odoo real, ni acredita aceptación empresarial. La unidad comercial debe estar presente en todas las filas antes de activar el histórico mediante ETL.
+Los datos reales todavía necesitan las decisiones comerciales COR-03 y de cobertura. Esta etapa **no** implementa mezcla incremental de snapshots, extracción SQL ni conexión con Odoo real, ni acredita aceptación empresarial. Cuando el origen carece de unidades, administración puede elegir presentaciones provisionales kg/unidad/lb; estas cargas permanecen **sin verificar** para proteger las sugerencias automáticas.
 
 
 ## Compatibilidad con el Excel de demostración 2025
@@ -45,3 +45,16 @@ Mientras Vitali no proporcione su catálogo oficial, la interfaz de asignación 
 - Cuando alguna fila requiere una unidad asignada provisionalmente, el histórico nuevo permanece **sin verificar**, aun si el archivo fue declarado de procedencia real. Los controles de cobertura e inferencia automática se mantienen.
 - Un archivo que ya trae \`Unidad\` no se reescribe ni convierte silenciosamente. Las unidades explícitas ajenas al catálogo provisional requieren revisión comercial antes de estandarizarse; este cambio no modifica históricos previos.
 - El registro de auditoría documenta \`unit_assumption_status=provisional\` y \`units_pending_company_confirmation=true\` sin guardar datos comerciales del archivo.
+
+
+## Aceptación de venta contextual y unificación de interfaces
+
+La prioridad histórica de productos utiliza **días distintos con venta por cliente-producto** en el histórico activo; ordena por mayor recurrencia y USD solo para empates. No compara cantidades entre kg, unidad y lb. Vendedores ven posición y frecuencia, no cifras internas de facturación del cliente; si los datos están desactualizados o no verificados, ninguna prioridad histórica se convierte en cantidad predictiva. Django y Streamlit consumen el mismo \`recommendation_cards\` y preservan el mismo orden.
+
+Streamlit dispone ahora de la **misma ruta de aprobación ETL** que Django (no otro cargador): ejecuta las vistas Django con el puente autenticado, exige perfil versionado, huella SHA-256, inspección válida, segunda carga idéntica y las tres confirmaciones. Si el archivo carece de \`Unidad\`, ofrece exclusivamente kg/unidad/lb por producto y mantiene el histórico sin verificar. Entre reruns solo almacena el resumen de inspección ligado al administrador; no persiste en memoria de sesión los bytes del origen. La ruta clásica XLSX permanece como compatibilidad temporal, expresamente identificada como tal.
+
+### Evaluación retrospectiva diagnóstica del Excel proporcionado
+
+En el Excel 2025 aportado por el usuario (no versionado en GitHub) hay 1.294 filas, 10 clientes y 8 productos. Se observan 80 pares cliente-producto y 365 fechas distintas a nivel global; los pares solo cuentan con 7–26 transacciones registradas. En una evaluación de cada serie ordenada cronológicamente, con el 75 % inicial de eventos como historial y el tramo restante como prueba secuencial, la mediana de las últimas cuatro cantidades observadas obtuvo MAE 221,59 en 354 transacciones de prueba, contra MAE 269,36 del último evento; WAPE 53,56 % contra 65,11 % respectivamente. Esto **solo evalúa cantidad por transacción condicionada a que existe una transacción**, no el día ni la demanda futura, y las cantidades carecen de unidad comercial validada. No es una validación del pronóstico de 7 días del motor productivo ni autoriza pedidos automáticos. Los días no observados no se imputan como cero en esta prueba.
+
+Para aceptación MVP, validar el recorrido de cliente-producto, consulta, cantidad manual, revisión administrativa y exportación. Las acciones reales sobre inventario/producción y pronóstico operativo requieren datos recientes, fechas, cobertura y unidades confirmadas por Vitali.

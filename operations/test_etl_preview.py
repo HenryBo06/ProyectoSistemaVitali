@@ -425,3 +425,45 @@ class EtlPreviewTests(TestCase):
         event = AccessEvent.objects.get(action="etl_snapshot_activated")
         self.assertEqual(event.details["unit_assumption_status"], "provisional")
         self.assertTrue(event.details["units_pending_company_confirmation"])
+
+
+    def test_streamlit_bridge_runs_same_reviewed_load_as_django(self):
+        import json
+        from operations.streamlit_bridge import call_screen, screen_context, sign_in
+        from .models import EtlMappingProfile, SalesLine, EtlLoadRun
+        session_key = sign_in("etl_admin", "secretpass-1")
+        self.assertTrue(session_key)
+        mapping = {"Fecha": "Fecha", "Cliente": "Cliente", "Producto": "Producto",
+                   "Cantidad_kg_unid": "Cantidad", "Precio_Unitario_USD": "Precio"}
+        profile = EtlMappingProfile.objects.create(
+            alias="bridge-etl", name="Streamlit / Django", version=1,
+            mapping=mapping, created_by=self.admin,
+        )
+        raw = b"Fecha,Cliente,Producto,Cantidad,Precio\n2025-01-01,A,B,2,10\n"
+        inspected, messages, _ = call_screen(
+            "etl_preview", session_key,
+            data={"action": "preview", "profile_id": profile.pk},
+            files={"etl_file": SimpleUploadedFile("bridge.csv", raw)},
+        )
+        self.assertEqual(inspected.status_code, 200)
+        report = inspected.context_data["report"]
+        self.assertTrue(report["ready_to_review"])
+        self.assertIsNotNone(report["inspection_id"])
+        available = screen_context("etl_preview", session_key)["loadable_inspections"]
+        self.assertTrue(any(entry.pk == report["inspection_id"] for entry in available))
+        loaded, messages, _ = call_screen(
+            "etl_preview", session_key,
+            data={
+                "action": "load", "inspection_id": report["inspection_id"],
+                "unit_product": ["B"], "unit_value": ["lb"],
+                "provenance": "simulated", "date_semantics": "sale_order",
+                "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+                "approved_load": "on",
+            },
+            files={"etl_load_file": SimpleUploadedFile("bridge.csv", raw)},
+        )
+        self.assertEqual(loaded.status_code, 302)
+        line = SalesLine.objects.get()
+        self.assertEqual(line.unit, "lb")
+        self.assertFalse(line.dataset.verified)
+        self.assertEqual(EtlLoadRun.objects.count(), 1)

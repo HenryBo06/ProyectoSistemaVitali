@@ -1019,6 +1019,11 @@ def planning_screen():
 def uploads():
     st.title("Datos en Excel")
     st.caption("Carga fuentes completas. Revisa su origen y la correspondencia de unidades antes de usarlas para decidir.")
+    st.info(
+        "La carga clásica de XLSX se mantiene temporalmente para compatibilidad. "
+        "Para CSV/XLSX con huella SHA-256, perfil versionado y aprobación, "
+        "usa el espacio «Preparación ETL de datos» del menú de administración."
+    )
     sales, stock = st.tabs(["Ventas", "Inventario"])
     with sales:
         c = context("sales_upload")
@@ -1470,96 +1475,240 @@ def pilot_dashboard_screen():
 
 
 def etl_preview_screen():
+    """Use Django's role-checked, fingerprinted inspection and approved-load workflow."""
     st.title("Preparación ETL de datos")
-    st.caption("Extraer, transformar y validar sin activar ni reemplazar históricos.")
-    st.info("Las fuentes externas, CSV y Excel requieren contrato de columnas y controles de calidad antes de alimentar la inferencia.")
+    st.caption("Inspeccionar, validar y aprobar históricos CSV/XLSX sin rutas de carga paralelas.")
+    st.info(
+        "La inspección no activa datos. La carga posterior verifica el mismo archivo "
+        "por SHA-256, el perfil y las confirmaciones comerciales."
+    )
     c = context("etl_preview")
     profiles = c["profiles"]
     with st.form("etl_data_preflight"):
         source_file = st.file_uploader("Archivo CSV UTF-8 o Excel", type=["csv", "xlsx"])
         profile_options = [""] + [str(item.pk) for item in profiles]
-        profile_names = {str(item.pk): f"{item.alias} · v{item.version} · {item.name}" for item in profiles}
-        profile_id = st.selectbox("Perfil versionado (opcional)", profile_options,
-            format_func=lambda x: profile_names.get(x, "Mapeo manual o alias conocidos"))
+        profile_names = {
+            str(item.pk): f"{item.alias} · v{item.version} · {item.name}"
+            for item in profiles
+        }
+        profile_id = st.selectbox(
+            "Perfil versionado para poder activar la carga", profile_options,
+            format_func=lambda x: profile_names.get(x, "Solo inspección; mapeo manual o alias conocidos"),
+        )
         d1, d2 = st.columns(2)
-        date_format = d1.selectbox("Formato de fecha", ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
-                                   format_func=lambda value: {"%Y-%m-%d": "AAAA-MM-DD",
-                                       "%d/%m/%Y": "DD/MM/AAAA", "%m/%d/%Y": "MM/DD/AAAA"}[value])
-        decimal_separator = d2.selectbox("Separador decimal", [".", ","],
-                                          format_func=lambda value: "Punto" if value == "." else "Coma")
+        date_format = d1.selectbox(
+            "Formato de fecha", ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
+            format_func=lambda value: {
+                "%Y-%m-%d": "AAAA-MM-DD", "%d/%m/%Y": "DD/MM/AAAA",
+                "%m/%d/%Y": "MM/DD/AAAA",
+            }[value],
+        )
+        decimal_separator = d2.selectbox(
+            "Separador decimal", [".", ","],
+            format_func=lambda value: "Punto" if value == "." else "Coma",
+        )
         sheet_name = st.text_input("Hoja de Excel (opcional)")
         with st.expander("Columnas diferentes: mapeo manual"):
-            mapping = st.text_area("JSON de campos canónicos y encabezados reales",
-                help='Ejemplo: {"Fecha":"Día de venta","Cliente":"Cuenta","Producto":"Artículo","Cantidad_kg_unid":"Cantidad","Precio_Unitario_USD":"Precio"}')
-        submitted = st.form_submit_button("Inspeccionar sin cargar", type="primary")
+            mapping = st.text_area(
+                "JSON de campos canónicos y encabezados reales",
+                help='Ejemplo: {"Fecha":"Día de venta","Cliente":"Cuenta","Producto":"Artículo","Cantidad_kg_unid":"Cantidad","Precio_Unitario_USD":"Precio"}',
+            )
+        submitted = st.form_submit_button("Paso 1 · Inspeccionar sin cargar", type="primary")
+
     if submitted:
         if source_file is None:
             st.warning("Seleccione un archivo para inspeccionar.")
-            return
-        from django.core.files.uploadedfile import SimpleUploadedFile
-        response = action("etl_preview", {"action": "preview", "profile_id": profile_id,
-            "date_format": date_format, "decimal_separator": decimal_separator,
-            "sheet_name": sheet_name, "mapping": mapping},
-            files={"etl_file": SimpleUploadedFile(
-                source_file.name, source_file.getvalue())})
-        if response is None:
-            return
-        report = getattr(response, "context_data", {}).get("report")
-        if report is None:
-            st.error("El archivo no produjo un reporte válido.")
-            return
-        cols = st.columns(3)
+        else:
+            response = action(
+                "etl_preview", {
+                    "action": "preview", "profile_id": profile_id,
+                    "date_format": date_format, "decimal_separator": decimal_separator,
+                    "sheet_name": sheet_name, "mapping": mapping,
+                },
+                files={"etl_file": SimpleUploadedFile(
+                    source_file.name, source_file.getvalue(),
+                )},
+            )
+            if response is not None:
+                report = getattr(response, "context_data", {}).get("report")
+                if report is None:
+                    st.error("El archivo no produjo un reporte válido.")
+                else:
+                    # Store only the inspection summary; never keep source bytes
+                    # between reruns, across users or for later approval.
+                    st.session_state["etl_review_report"] = {
+                        "actor_pk": user.pk, "report": report,
+                    }
+                    st.rerun()
+
+    saved = st.session_state.get("etl_review_report") or {}
+    if saved.get("actor_pk") != user.pk:
+        st.session_state.pop("etl_review_report", None)
+        saved = {}
+    report = saved.get("report")
+
+    if report:
+        st.subheader("Inspección actual")
+        cols = st.columns(4)
         cols[0].metric("Filas", report["row_count"])
         cols[1].metric("Válidas", report["valid_rows"])
-        cols[2].metric("Problemas", report["invalid_rows"])
-        st.caption("Período: " + str(report["date_min"] or "Sin fecha")
-                   + " — " + str(report["date_max"] or "Sin fecha"))
+        cols[2].metric("Con problemas", report["invalid_rows"])
+        cols[3].metric("Densidad observada", f"{report.get('coverage_density_percent', 0):.2f}%")
+        st.caption(
+            f"Archivo: {report['filename']} · Período: {report['date_min'] or 'Sin fecha'} "
+            f"— {report['date_max'] or 'Sin fecha'}"
+        )
+        st.caption(
+            "Densidad de fechas observadas por cliente/producto/unidad; los días sin "
+            "registros no son automáticamente ventas cero."
+        )
         if report["ready_to_review"]:
-            st.success("Prevalidación satisfactoria. No se modificó el histórico activo.")
+            st.success("Validación estructural correcta. Todavía no se ha activado el histórico.")
         else:
-            st.warning("La carga está bloqueada: revise el mapeo y los datos.")
-        st.subheader("Mapeo detectado")
-        table([{"Campo destino": key, "Columna de origen": value}
-               for key, value in report["mapping"].items()])
-        if report["issues"]:
-            st.subheader("Problemas de calidad")
-            for issue in report["issues"]:
-                st.error(issue)
+            st.warning("Hay problemas estructurales. No es posible activar esta inspección.")
+        with st.expander("Mapeo y muestra revisada"):
+            table([{"Campo destino": k, "Columna de origen": v}
+                   for k, v in report["mapping"].items()])
+            if report["samples"]:
+                st.caption("Muestra de hasta cinco registros transformados")
+                table(report["samples"])
+        for issue in report["issues"]:
+            st.error(issue)
         if report["notes"]:
-            with st.expander("Observaciones y cambios de esquema"):
+            with st.expander("Observaciones y advertencias"):
                 for note in report["notes"]:
                     st.write(note)
-        if report["samples"]:
-            st.subheader("Muestra transformada")
-            table(report["samples"])
         with st.expander("Trazabilidad"):
-            st.code("SHA-256 archivo: " + report["sha256"] + "\nSHA-256 esquema: "
-                    + report["schema_sha256"], language="text")
+            st.code(
+                "SHA-256 archivo: " + report["sha256"]
+                + "\nSHA-256 esquema: " + report["schema_sha256"],
+                language="text",
+            )
 
-
+        approved_run = next(
+            (entry for entry in c["loadable_inspections"]
+             if entry.pk == report.get("inspection_id")), None,
+        )
+        if report["ready_to_review"] and approved_run is not None:
+            st.subheader("Paso 2 · Aprobar la carga del histórico completo")
+            st.caption(
+                "Vuelve a adjuntar exactamente el archivo inspeccionado. No se permiten "
+                "lotes incrementales ni se convierte una unidad en otra."
+            )
+            unit_products = report.get("missing_unit_products", [])
+            if unit_products:
+                st.warning(
+                    f"{report.get('missing_unit_count', 0)} filas no traen unidad. "
+                    "Elige una presentación provisional por producto: kg, unidad o lb. "
+                    "No es una confirmación de Vitali; el histórico permanecerá sin verificar."
+                )
+            with st.form("etl_approved_load"):
+                st.caption(
+                    f"Inspección #{approved_run.pk} · {report['filename']} · "
+                    f"{report['row_count']} filas"
+                )
+                approved_file = st.file_uploader(
+                    "Mismo CSV o XLSX inspeccionado", type=["csv", "xlsx"],
+                    key=f"etl_approved_file:{approved_run.pk}",
+                )
+                unit_values = []
+                names = {"": "Seleccionar", "kg": "Kilogramos (kg)",
+                         "unidad": "Unidades (unidad)", "lb": "Libras (lb)"}
+                for number, product in enumerate(unit_products):
+                    unit_values.append(st.selectbox(
+                        f"Presentación provisional para {product}",
+                        ["", "kg", "unidad", "lb"],
+                        format_func=lambda value: names[value],
+                        key=f"etl_confirmed_unit:{approved_run.pk}:{number}",
+                    ))
+                provenance = st.selectbox(
+                    "Procedencia declarada", ["", "real", "simulated"],
+                    format_func=lambda value: {
+                        "": "Seleccionar", "real": "Real", "simulated": "Simulada",
+                    }[value],
+                )
+                semantics = st.selectbox(
+                    "Significado de la fecha", ["", "sale_order", "delivery"],
+                    format_func=lambda value: {
+                        "": "Seleccionar", "sale_order": "Fecha de venta o pedido",
+                        "delivery": "Fecha de entrega realizada",
+                    }[value],
+                )
+                origin = st.checkbox("Confirmo la procedencia declarada del archivo.")
+                full = st.checkbox(
+                    "Confirmo que el archivo reemplaza el histórico completo, "
+                    "y no es una carga incremental."
+                )
+                approved = st.checkbox(
+                    "Apruebo activar esta versión y conservar las fuentes anteriores."
+                )
+                load_clicked = st.form_submit_button(
+                    "Revalidar y activar histórico", type="primary",
+                )
+            if load_clicked:
+                if approved_file is None:
+                    st.error("Adjunta de nuevo el archivo inspeccionado.")
+                elif not provenance or not semantics or not all((origin, full, approved)):
+                    st.error("Completa la procedencia, la fecha y las tres confirmaciones.")
+                elif any(not unit for unit in unit_values):
+                    st.error("Selecciona una presentación provisional para cada producto.")
+                else:
+                    response = action(
+                        "etl_preview", {
+                            "action": "load", "inspection_id": approved_run.pk,
+                            "unit_product": unit_products, "unit_value": unit_values,
+                            "provenance": provenance, "date_semantics": semantics,
+                            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+                            "approved_load": "on",
+                        },
+                        files={"etl_load_file": SimpleUploadedFile(
+                            approved_file.name, approved_file.getvalue(),
+                        )},
+                    )
+                    if response is not None:
+                        st.session_state.pop("etl_review_report", None)
+                        st.rerun()
+        elif report["ready_to_review"]:
+            st.info(
+                "Para activar datos, inspecciona el archivo con un perfil de mapeo "
+                "versionado. Las inspecciones sin perfil son solo de lectura."
+            )
+    else:
+        st.info(
+            "Comienza con una inspección. Para aprobar después, selecciona un "
+            "perfil versionado; no se conserva el archivo original en esta pantalla."
+        )
 
     with st.expander("Guardar un perfil de mapeo versionado"):
         with st.form("etl_mapping_profile"):
             new_alias = st.text_input("Alias del origen", placeholder="ventas-vitali")
             new_name = st.text_input("Nombre del perfil", placeholder="CSV del ingeniero")
-            new_mapping = st.text_area("JSON de campos y columnas",
-                placeholder='{"Fecha":"Dia","Cliente":"Cuenta","Producto":"Articulo","Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"Tarifa"}')
-            new_dates = st.selectbox("Formato de fecha del perfil",
-                ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"])
+            new_mapping = st.text_area(
+                "JSON de campos y columnas",
+                placeholder='{"Fecha":"Dia","Cliente":"Cuenta","Producto":"Articulo","Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"Tarifa"}',
+            )
+            new_dates = st.selectbox(
+                "Formato de fecha del perfil",
+                ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
+            )
             new_decimal = st.selectbox("Separador decimal del perfil", [".", ","])
             new_sheet = st.text_input("Nombre de hoja (opcional)")
             if st.form_submit_button("Guardar versión"):
-                if action("etl_preview", {"action": "save_profile",
-                    "alias": new_alias, "name": new_name, "mapping": new_mapping,
-                    "date_format": new_dates, "decimal_separator": new_decimal,
-                    "sheet_name": new_sheet}) is not None:
+                if action("etl_preview", {
+                    "action": "save_profile", "alias": new_alias, "name": new_name,
+                    "mapping": new_mapping, "date_format": new_dates,
+                    "decimal_separator": new_decimal, "sheet_name": new_sheet,
+                }) is not None:
+                    st.session_state.pop("etl_review_report", None)
                     st.rerun()
     with st.expander("Últimas inspecciones"):
-        table([{"Fecha": row.created_at, "Origen": row.filename,
-            "Perfil": f"{row.profile.alias} v{row.profile.version}" if row.profile else "Sin perfil",
-            "Filas": row.row_count, "Problemas": row.issue_count,
-            "Cambio de esquema": row.schema_changed}
-            for row in c["inspection_history"]])
+        table([
+            {"Fecha": row.created_at, "Origen": row.filename,
+             "Perfil": f"{row.profile.alias} v{row.profile.version}" if row.profile else "Sin perfil",
+             "Filas": row.row_count, "Problemas": row.issue_count,
+             "Cambio de esquema": row.schema_changed}
+            for row in c["inspection_history"]
+        ])
 
 
 def database_connections_screen():
