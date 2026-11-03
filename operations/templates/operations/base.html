@@ -19,6 +19,7 @@
   <header class="app-header">
     <div class="container-fluid app-header-inner">
       <a class="brand" href="{% if request.user.is_staff %}{% url 'pilot_dashboard' %}{% else %}{% url 'dashboard' %}{% endif %}" aria-label="SmartOrder AI, ir al inicio">
+        <img class="brand-symbol" src="{% static 'operations/favicon.svg' %}" alt="" aria-hidden="true" width="34" height="34">
         <span class="brand-wordmark"><strong>VITALI</strong><small>ALIMENTOS</small></span>
         <span class="brand-product"><strong>SmartOrder AI</strong><small>Gestión comercial</small></span>
       </a>
@@ -41,7 +42,7 @@
     </aside>
     <div class="offcanvas offcanvas-start" tabindex="-1" id="mobileNavigation" aria-labelledby="mobileNavigationTitle">
       <div class="offcanvas-header">
-        <h2 class="offcanvas-title h5 mb-0" id="mobileNavigationTitle">SmartOrder AI <small class="d-block">Menú de trabajo</small></h2>
+        <h2 class="offcanvas-title h5 mb-0" id="mobileNavigationTitle"><img class="menu-brand-symbol" src="{% static 'operations/favicon.svg' %}" width="28" height="28" alt="" aria-hidden="true"> SmartOrder AI <small class="d-block">Menú de trabajo</small></h2>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar menú"></button>
       </div>
       <div class="offcanvas-body p-0">{% include 'operations/navigation.html' %}</div>
