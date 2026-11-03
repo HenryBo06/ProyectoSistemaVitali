@@ -709,6 +709,50 @@ class ExternalDatabaseConnection(models.Model):
                                    name="external_db_valid_port"),
         ]
 
+
+class EtlMappingProfile(models.Model):
+    """Immutable mapping version. Schema changes require explicit new approval."""
+
+    alias = models.SlugField(max_length=48)
+    version = models.PositiveIntegerField()
+    name = models.CharField(max_length=100)
+    mapping = models.JSONField(default=dict)
+    date_format = models.CharField(max_length=20, default="%Y-%m-%d")
+    decimal_separator = models.CharField(max_length=1, default=".")
+    sheet_name = models.CharField(max_length=80, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name="etl_mapping_profiles")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["alias", "-version"]
+        constraints = [models.UniqueConstraint(fields=["alias", "version"],
+                                               name="etl_profile_version_once")]
+
+
+class EtlInspectionRun(models.Model):
+    """Audit-only fingerprints and quality metrics; never store source rows."""
+
+    profile = models.ForeignKey(EtlMappingProfile, on_delete=models.PROTECT,
+                                related_name="inspections", null=True, blank=True)
+    filename = models.CharField(max_length=255)
+    source_sha256 = models.CharField(max_length=64)
+    schema_sha256 = models.CharField(max_length=64)
+    source_format = models.CharField(max_length=8)
+    row_count = models.PositiveIntegerField()
+    valid_rows = models.PositiveIntegerField()
+    invalid_rows = models.PositiveIntegerField()
+    issue_count = models.PositiveIntegerField()
+    schema_changed = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name="etl_inspections")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["profile", "-created_at"])]
+
+
 class SourceSync(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)

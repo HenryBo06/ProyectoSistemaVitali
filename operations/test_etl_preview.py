@@ -82,3 +82,35 @@ class EtlPreviewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Estructura preliminar válida")
         self.assertEqual(SalesDataset.objects.count(), 0)
+
+
+    def test_versioned_mapping_and_schema_drift_tracking(self):
+        import json
+        from .models import EtlMappingProfile, EtlInspectionRun
+        self.client.force_login(self.admin)
+        url = reverse("etl_preview")
+        mapping = {"Fecha": "Dia", "Cliente": "Cuenta",
+                   "Producto": "Articulo", "Cantidad_kg_unid": "Volumen",
+                   "Precio_Unitario_USD": "Tarifa"}
+        for i in range(2):
+            self.client.post(url, {
+                "action": "save_profile", "alias": "ventas-ingeniero",
+                "name": "Ventas externas", "mapping": json.dumps(mapping),
+                "date_format": "%Y-%m-%d", "decimal_separator": ".",
+            })
+        profiles = list(EtlMappingProfile.objects.filter(alias="ventas-ingeniero").order_by("version"))
+        self.assertEqual([p.version for p in profiles], [1, 2])
+        self.assertEqual(profiles[0].mapping, mapping)
+        raw1 = b"Dia,Cuenta,Articulo,Volumen,Tarifa\n2026-01-10,A,B,2,10\n"
+        raw2 = b"Dia,Cuenta,Articulo,Volumen,Tarifa,Extra\n2026-01-11,A,B,2,10,nuevo\n"
+        for payload in (raw1, raw2):
+            response = self.client.post(url, {
+                "action": "preview", "profile_id": profiles[0].pk,
+                "etl_file": SimpleUploadedFile("original.csv", payload),
+            })
+            self.assertEqual(response.status_code, 200)
+        self.assertEqual(EtlInspectionRun.objects.filter(profile=profiles[0]).count(), 2)
+        self.assertTrue(EtlInspectionRun.objects.filter(
+            profile=profiles[0], schema_changed=True).exists())
+        self.assertEqual(SalesDataset.objects.count(), 0)
+

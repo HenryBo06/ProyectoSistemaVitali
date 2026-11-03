@@ -18,6 +18,14 @@
 <div class="col-sm-6"><label class="form-label" for="etl-decimal">Separador decimal</label>
 <select id="etl-decimal" class="form-select" name="decimal_separator"><option value=".">Punto (10.5)</option><option value=",">Coma (10,5)</option></select></div>
 </div>
+<label class="form-label mt-3" for="etl-profile">Perfil versionado (opcional)</label>
+<select class="form-select" id="etl-profile" name="profile_id">
+  <option value="">Sin perfil: mapeo manual o alias conocidos</option>
+  {% for profile in profiles %}
+  <option value="{{ profile.pk }}">{{ profile.alias }} · v{{ profile.version }} · {{ profile.name }}</option>
+  {% endfor %}
+</select>
+<div class="form-text">Si eliges un perfil, se utilizarán su mapeo y sus formatos guardados.</div>
 <label class="form-label mt-3" for="etl-sheet">Hoja Excel (opcional)</label>
 <input class="form-control" id="etl-sheet" name="sheet_name" placeholder="Dejar vacío para primera hoja" maxlength="80">
 <details class="mt-3"><summary>Mapeo manual cuando cambian las columnas</summary>
@@ -26,7 +34,27 @@
 </details>
 <button class="btn btn-primary mt-3" type="submit">Inspeccionar sin cargar</button>
 </form>
-</div></section></div>
+</div></section>
+<section class="panel mt-3"><div class="panel-header"><h2 class="panel-title">Guardar perfil de mapeo</h2></div>
+<div class="panel-body"><p class="form-text">Los perfiles son inmutables: guardar el mismo alias crea una versión nueva. No se copian secretos ni registros de ventas.</p>
+<form method="post">{% csrf_token %}
+<input type="hidden" name="action" value="save_profile">
+<div class="row g-2"><div class="col-sm-5"><label class="form-label" for="etl-alias">Alias</label>
+<input class="form-control" id="etl-alias" name="alias" placeholder="ventas-vitali" required></div>
+<div class="col-sm-7"><label class="form-label" for="etl-profile-name">Nombre visible</label>
+<input class="form-control" id="etl-profile-name" name="name" placeholder="Archivo del ingeniero" required></div></div>
+<label class="form-label mt-2" for="etl-profile-mapping">Mapeo JSON (cinco campos obligatorios)</label>
+<textarea class="form-control" rows="4" id="etl-profile-mapping" name="mapping" required placeholder='{"Fecha":"Dia","Cliente":"Cuenta","Producto":"Articulo","Cantidad_kg_unid":"Unidades","Precio_Unitario_USD":"Precio"}'></textarea>
+<div class="row g-2 mt-2"><div class="col-sm-6"><label class="form-label" for="etl-profile-date">Fecha</label>
+<select class="form-select" id="etl-profile-date" name="date_format">
+<option value="%Y-%m-%d">AAAA-MM-DD</option><option value="%d/%m/%Y">DD/MM/AAAA</option><option value="%m/%d/%Y">MM/DD/AAAA</option></select></div>
+<div class="col-sm-6"><label class="form-label" for="etl-profile-separator">Decimal</label>
+<select class="form-select" id="etl-profile-separator" name="decimal_separator"><option value=".">Punto</option><option value=",">Coma</option></select></div></div>
+<label class="form-label mt-2" for="etl-profile-sheet">Hoja XLSX, si aplica</label>
+<input class="form-control" id="etl-profile-sheet" name="sheet_name" maxlength="80">
+<button class="btn btn-outline-primary mt-3" type="submit">Guardar nueva versión</button>
+</form></div></section>
+</div>
 <div class="col-xl-7"><section class="panel"><div class="panel-header"><h2 class="panel-title">Resultado de inspección</h2></div><div class="panel-body">
 {% if report %}
 <p><strong>{{ report.row_count }} filas</strong> · {{ report.valid_rows }} válidas · {{ report.invalid_rows }} con problemas</p>
@@ -47,5 +75,14 @@
 <details><summary>Identificadores de auditoría</summary><p>Huella SHA-256 del archivo: <code>{{ report.sha256 }}</code></p>
 <p>Huella del esquema: <code>{{ report.schema_sha256 }}</code></p><p>Versión: {{ report.version }}</p></details>
 {% else %}<p class="muted">Sube un archivo de prueba para detectar campos obligatorios, errores y cambios de estructura. No se guardará ni se activará.</p>{% endif %}
-</div></section></div></div>
+</div></section>
+<section class="panel mt-3"><div class="panel-header"><h2 class="panel-title">Historial de inspecciones</h2></div>
+<div class="panel-body"><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Perfil</th><th>Origen</th><th>Filas</th><th>Problemas</th></tr></thead><tbody>
+{% for item in inspection_history %}<tr><td>{{ item.created_at|date:"d/m/Y H:i" }}</td>
+<td>{% if item.profile %}{{ item.profile.alias }} · v{{ item.profile.version }}{% else %}Sin perfil{% endif %}</td>
+<td>{{ item.filename }}{% if item.schema_changed %}<span class="badge-status status-pending">Cambio de esquema</span>{% endif %}</td>
+<td>{{ item.row_count }}</td><td>{{ item.issue_count }}</td></tr>{% empty %}
+<tr><td colspan="5">Todavía no existen inspecciones registradas.</td></tr>{% endfor %}
+</tbody></table></div></div></section>
+</div></div>
 {% endblock %}

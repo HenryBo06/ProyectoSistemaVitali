@@ -7,3 +7,6 @@ Implementado: extracción e inspección sin mutaciones de CSV UTF-8 y XLSX, sele
 El gestor de conexiones PostgreSQL existente se mantiene separado: conexión autorizada no implica autorización para extraer tablas arbitrarias ni modificar la fuente. Conectar el extractor SQL requiere consultas predefinidas, permisos SELECT y aprobación del origen; no se ejecutan consultas SQL proporcionadas en la UI.
 
 Futuras etapas: perfiles persistentes y versionados por fuente, staging transaccional, conciliación, auditoría de ejecución, cargas idempotentes con llave de negocio, cuarentena de filas fallidas, rollback mediante versionado y observabilidad de deriva.
+
+## Perfiles inmutables y auditoría
+Se pueden registrar perfiles de mapeo por alias y versión, con fecha/decimal/hoja. Cada inspección deja únicamente metadata (huellas SHA-256, volumen, fallos y actor); nunca contenido del CSV ni valores de clientes. Cuando un mismo perfil ve un esquema de columnas distinto al anterior, bloquea la preparación hasta que administración revise y genere otra versión del mapeo. El módulo de vista previa sigue sin activar fuentes ni modificar datos de inferencia.

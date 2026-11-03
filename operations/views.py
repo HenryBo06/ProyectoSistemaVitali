@@ -1979,36 +1979,111 @@ def pilot_dashboard(request):
 
 
 
+
 @admin_required
 @require_http_methods(["GET", "POST"])
 def etl_preview(request):
-    """Source-agnostic ETL inspection without mutations to inference or inventory."""
+    """Schema-aware ETL inspection with immutable mapping profiles and audit."""
     from smartorder.etl import preview_sales
+    from smartorder.data import CORE_HEADERS, HEADERS
+    from .models import EtlMappingProfile, EtlInspectionRun
     import json as json_module
+    import re as re_module
     report = None
+
     if request.method == "POST":
         try:
-            upload = request.FILES.get("etl_file")
-            if upload is None:
+            mode = request.POST.get("action", "preview")
+            if mode == "save_profile":
+                alias = request.POST.get("alias", "").strip()
+                name = request.POST.get("name", "").strip()
+                if not re_module.fullmatch(r"[a-z][a-z0-9_-]{2,47}", alias):
+                    raise ValueError("El alias del perfil requiere 3 a 48 caracteres.")
+                if not name or len(name) > 100:
+                    raise ValueError("Indique un nombre para el perfil de mapeo.")
+                raw_mapping = request.POST.get("mapping", "").strip()
+                mapping = json_module.loads(raw_mapping) if raw_mapping else {}
+                if not isinstance(mapping, dict):
+                    raise ValueError("El mapeo necesita un objeto JSON.")
+                if set(mapping) - set(HEADERS) or set(CORE_HEADERS) - set(mapping):
+                    raise ValueError("El perfil debe mapear los cinco campos obligatorios y usar destinos conocidos.")
+                if not all(isinstance(value, str) and 0 < len(value) <= 160 for value in mapping.values()):
+                    raise ValueError("Cada columna de origen necesita un nombre válido.")
+                if len(set(mapping.values())) != len(mapping):
+                    raise ValueError("Una columna no puede asignarse a varios destinos.")
+                date_format = request.POST.get("date_format", "%Y-%m-%d")
+                decimal_separator = request.POST.get("decimal_separator", ".")
+                sheet_name = request.POST.get("sheet_name", "").strip()
+                if date_format not in {"%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"} or decimal_separator not in {".", ","}:
+                    raise ValueError("Los formatos de fecha o decimales no están permitidos.")
+                if len(sheet_name) > 80:
+                    raise ValueError("El nombre de hoja es demasiado largo.")
+                with transaction.atomic():
+                    last = EtlMappingProfile.objects.select_for_update().filter(alias=alias).order_by("-version").first()
+                    version = (last.version + 1) if last else 1
+                    EtlMappingProfile.objects.create(
+                        alias=alias, name=name, version=version,
+                        mapping=mapping, date_format=date_format,
+                        decimal_separator=decimal_separator, sheet_name=sheet_name,
+                        created_by=request.user)
+                AccessEvent.objects.create(actor=request.user, action="etl_mapping_version",
+                                           target=alias, details={"version": version})
+                messages.success(request, f"Perfil {alias} versión {version} guardado sin alterar versiones anteriores.")
+                return redirect("etl_preview")
+            if mode != "preview":
+                raise ValueError("Operación ETL no permitida.")
+            uploaded = request.FILES.get("etl_file")
+            if uploaded is None:
                 raise ValueError("Seleccione un CSV o Excel para inspeccionar.")
-            if upload.size > 20 * 1024 * 1024:
+            if uploaded.size > 20 * 1024 * 1024:
                 raise ValueError("El archivo supera el límite de 20 MB.")
-            mapping_raw = request.POST.get("mapping", "").strip()
-            mapping = json_module.loads(mapping_raw) if mapping_raw else {}
+            profile_id = request.POST.get("profile_id", "").strip()
+            profile = get_object_or_404(EtlMappingProfile, pk=profile_id) if profile_id else None
+            if profile:
+                mapping = profile.mapping
+                date_format = profile.date_format
+                decimal_separator = profile.decimal_separator
+                sheet_name = profile.sheet_name
+            else:
+                raw_mapping = request.POST.get("mapping", "").strip()
+                mapping = json_module.loads(raw_mapping) if raw_mapping else {}
+                date_format = request.POST.get("date_format", "%Y-%m-%d")
+                decimal_separator = request.POST.get("decimal_separator", ".")
+                sheet_name = request.POST.get("sheet_name", "").strip()
             report = preview_sales(
-                upload.read(), upload.name, manual=mapping,
-                date_format=request.POST.get("date_format", "%Y-%m-%d"),
-                decimal_separator=request.POST.get("decimal_separator", "."),
-                sheet_name=request.POST.get("sheet_name", "").strip(),
-            )
+                uploaded.read(), uploaded.name, manual=mapping,
+                date_format=date_format, decimal_separator=decimal_separator,
+                sheet_name=sheet_name)
+            schema_changed = False
+            if profile:
+                prior = EtlInspectionRun.objects.filter(profile=profile).order_by("-created_at").first()
+                schema_changed = bool(prior and prior.schema_sha256 != report["schema_sha256"])
+            report["schema_changed"] = schema_changed
+            if schema_changed:
+                report["ready_to_review"] = False
+                report["issues"].append(
+                    "Cambio de estructura respecto a la última inspección con este perfil. "
+                    "Revise y cree una nueva versión del mapeo antes de aprobar la carga.")
+            EtlInspectionRun.objects.create(
+                profile=profile, filename=report["filename"],
+                source_sha256=report["sha256"], schema_sha256=report["schema_sha256"],
+                source_format=report["format"], row_count=report["row_count"],
+                valid_rows=report["valid_rows"], invalid_rows=report["invalid_rows"],
+                issue_count=len(report["issues"]), schema_changed=schema_changed,
+                created_by=request.user)
             if report["ready_to_review"]:
                 messages.success(request, "Extracción y validación preliminar completadas. Ningún dato se activó.")
             else:
-                messages.warning(request, "El origen necesita ajustes antes de poder cargarse.")
-        except (ValueError, json_module.JSONDecodeError) as exc:
-            messages.error(request, "No se pudo inspeccionar el archivo: " + str(exc))
+                messages.warning(request, "El origen necesita revisión antes de cualquier carga.")
+        except (ValueError, IntegrityError) as exc:
+            messages.error(request, "No se pudo ejecutar ETL: " + (
+                "El perfil ya fue actualizado; reintente." if isinstance(exc, IntegrityError)
+                else str(exc)))
+    profiles = list(EtlMappingProfile.objects.order_by("alias", "-version")[:100])
+    history = list(EtlInspectionRun.objects.select_related("profile").order_by("-created_at")[:12])
     return TemplateResponse(request, "operations/etl_preview.html",
-                            _base(request, report=report))
+                            _base(request, report=report, profiles=profiles,
+                                  inspection_history=history))
 
 
 @admin_required
