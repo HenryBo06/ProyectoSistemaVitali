@@ -319,8 +319,8 @@ class EtlPreviewTests(TestCase):
             "etl_file": SimpleUploadedFile("demo.xlsx", raw),
         })
         self.assertEqual(inspection_response.status_code, 200)
-        self.assertContains(inspection_response, "Unidad para Alitas LAB")
-        self.assertContains(inspection_response, "Unidad para Huevos LAB")
+        self.assertContains(inspection_response, "Presentación provisional para Alitas LAB")
+        self.assertContains(inspection_response, "Presentación provisional para Huevos LAB")
         inspection = EtlInspectionRun.objects.get(profile=profile)
         common = {
             "action": "load", "inspection_id": inspection.pk,
