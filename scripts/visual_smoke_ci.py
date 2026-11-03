@@ -204,9 +204,9 @@ def django_etl_smoke(browser) -> None:
     ).encode("utf-8")
     page.locator('input[name="etl_file"]').set_input_files({
         "name": "fuente-lab-cambiada.csv", "mimeType": "text/csv", "buffer": csv_data})
-    page.locator('select[name="date_format"]').select_option("%d/%m/%Y")
-    page.locator('select[name="decimal_separator"]').select_option(",")
-    page.locator('textarea[name="mapping"]').fill(
+    page.locator('#etl-date').select_option("%d/%m/%Y")
+    page.locator('#etl-decimal').select_option(",")
+    page.locator('textarea[name="mapping"]').first.fill(
         '{"Fecha":"DiaFactura","Cliente":"Cuenta","Producto":"Articulo",'
         '"Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"PrecioNeto","Unidad":"TipoUnidad"}')
     page.get_by_role("button", name="Inspeccionar sin cargar").click()
