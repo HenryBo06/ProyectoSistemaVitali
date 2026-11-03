@@ -1,6 +1,7 @@
+{% load static %}
 <nav class="side-nav" aria-label="Secciones">
   <div class="nav-intro">
-    <span class="nav-intro-mark" aria-hidden="true">V</span>
+    <img class="nav-intro-mark" src="{% static 'operations/favicon.svg' %}" width="38" height="38" alt="" aria-hidden="true">
     <span><strong>Panel de trabajo</strong><small>{% if request.user.is_staff %}Control administrativo{% else %}Gestión de mi cartera{% endif %}</small></span>
   </div>
   <p class="nav-caption">Inicio</p>
