@@ -135,6 +135,7 @@ def _seller_cards(cards):
     fields = (
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
         "commercial_forecast", "target_date",
+        "historical_sale_days", "historical_rank", "historical_total",
         "discount_percent", "tariff_available", "available", "stock_unit", "stock_date",
         "inventory_warning", "client_stock",
         "client_stock_location", "client_stock_target", "client_stock_projected",
@@ -157,6 +158,13 @@ def _seller_cards(cards):
             text = f"Oportunidad para revisar: la entrega coincide con {event}."
         else:
             text = "Se revisaron las ventas registradas de este cliente para este producto y fecha."
+        if card.get("historical_rank"):
+            text += (
+                f" Prioridad histórica {card['historical_rank']} de "
+                f"{card['historical_total']}, con "
+                f"{card['historical_sale_days']} días con ventas registradas. "
+                "Es actividad histórica, no una predicción de compra futura."
+            )
         commercial_forecast = card.get("commercial_forecast")
         if commercial_forecast is not None:
             unit_text = f" {unit}" if unit else ""
@@ -177,7 +185,7 @@ def _seller_cards(cards):
     return [{**{key: card.get(key) for key in fields},
              "state": "suggested" if card["suggested"] is not None else "manual",
              "explanation": seller_explanation(card)}
-            for card in sorted(cards, key=lambda card: card["product"].casefold())]
+            for card in cards]
 
 
 def _seller_order(order):

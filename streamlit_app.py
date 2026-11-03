@@ -310,6 +310,11 @@ def products():
     if not user.is_staff:
         st.caption(f"Entrega solicitada: {delivery:%d/%m/%Y} · la cantidad del pedido la decides tú.")
     st.subheader("Productos disponibles" if user.is_staff else "Productos para ofrecer")
+    if mode != "client_restock":
+        st.caption(
+            "Ordenados por recurrencia del historial de compras del cliente. "
+            "La prioridad histórica no predice una compra futura ni indica una cantidad para entregar."
+        )
     cards = c["recommendations"]
     if not cards:
         if not c.get("catalog_available"):
@@ -331,6 +336,11 @@ def products():
         with st.container(key="seller-desktop-catalog"):
             table([{
                 "Producto": card["product"],
+                "Prioridad histórica": (
+                    f"{card['historical_rank']} de {card['historical_total']} · "
+                    f"{card['historical_sale_days']} días con venta"
+                    if card.get("historical_rank") and mode == "sale" else "No aplica"
+                ),
                 "Oportunidad comercial · no es cantidad de entrega": (
                     f"{format_number(card['commercial_forecast'])} {card['unit']}"
                     + (f" · fecha consultada {card['target_date']:%d/%m/%Y}"
@@ -360,6 +370,12 @@ def products():
                 )
                 with st.container(key=f"seller-mobile-catalog-row-{line_number}", border=True):
                     st.markdown(f"**{escape(str(card['product']))}**")
+                    if mode == "sale" and card.get("historical_rank"):
+                        st.caption(
+                            f"Prioridad histórica {card['historical_rank']} de "
+                            f"{card['historical_total']} · "
+                            f"{card['historical_sale_days']} días con ventas"
+                        )
                     st.caption(f"Oportunidad · no es cantidad solicitada: {opportunity}")
                     st.caption(f"Disponibilidad: {availability} · Tarifa autorizada: USD {tariff}")
         valid_products = [card["product"] for card in cards]

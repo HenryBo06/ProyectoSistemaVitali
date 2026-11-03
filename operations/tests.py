@@ -391,6 +391,45 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertEqual(order.lines.count(), 2)
         self.assertTrue(all(line.suggested_qty is not None for line in order.lines.all()))
 
+    def test_historical_product_priority_is_visible_with_stale_unverified_sales(self):
+        from datetime import timedelta
+        first = timezone.localdate() - timedelta(days=400)
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(("Fecha", "Cliente", "Producto", "Cantidad_kg_unid",
+                      "Precio_Unitario_USD", "Monto_Venta_USD", "Unidad"))
+        for day, product, quantity in [
+            (0, "Alitas", 2), (1, "Alitas", 3), (2, "Alitas", 1),
+            (1, "Chorizo", 800),
+        ]:
+            sheet.append((first + timedelta(days=day), "Cliente A", product,
+                          quantity, 10, quantity * 10, "kg" if product == "Alitas" else "lb"))
+        output = BytesIO()
+        workbook.save(output)
+        self._upload_sales(output.getvalue())
+        self._assign_seller()
+        self.client.force_login(self.seller)
+        response = self.client.get(reverse("recommendations"), {
+            "client": "Cliente A", "required_date": timezone.localdate().isoformat(),
+        })
+        self.assertEqual(response.status_code, 200)
+        cards = response.context["recommendations"]
+        self.assertEqual([item["product"] for item in cards], ["Alitas", "Chorizo"])
+        self.assertEqual([item["historical_rank"] for item in cards], [1, 2])
+        self.assertEqual([item["historical_sale_days"] for item in cards], [3, 1])
+        self.assertTrue(all(item["suggested"] is None for item in cards))
+        self.assertContains(response, "Prioridad histórica 1 de 2")
+        self.assertContains(response, "3 días con ventas registradas")
+        self.assertContains(response, "No es una predicción")
+        self.assertNotIn("sales_usd_display", cards[0])
+        from .services import recommendation_cards
+        backend = recommendation_cards(
+            SalesDataset.objects.get(active=True), timezone.localdate(),
+            "Cliente A", mode="sale")
+        self.assertEqual(backend[0]["historical_rank"], 1)
+        self.assertGreater(backend[1]["sales_usd_display"], "$0.00")
+        self.assertEqual(backend[1]["historical_sale_days"], 1)
+
     def test_unconfirmed_inventory_units_do_not_change_customer_sale_quantity(self):
         today = timezone.localdate()
         dataset = self._upload_sales(

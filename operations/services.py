@@ -890,6 +890,12 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             revenue=Sum("amount"), days_with_sale=Count("date", distinct=True)
         )
     }
+    historical_order = sorted(commercial, key=lambda product: (
+        -int(commercial[product].get("days_with_sale") or 0),
+        -commercial[product].get("revenue", Decimal("0")),
+        product.casefold(),
+    ))
+    historical_rank = {product: index + 1 for index, product in enumerate(historical_order)}
     tariffs = {
         row.product: row for row in PriceTariff.objects.filter(client=client)
     }
@@ -965,6 +971,9 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             "category": categories.get(row["Producto"], ""),
             "sales_usd_display": f"${metrics.get('revenue', Decimal('0')):,.2f}",
             "days_with_sale": metrics.get("days_with_sale", 0),
+            "historical_sale_days": int(metrics.get("days_with_sale") or 0),
+            "historical_rank": historical_rank.get(row["Producto"]),
+            "historical_total": len(historical_rank),
             "reference_period": reference_period,
             "unit_confirmed": units_confirmed,
             "stock_unit": item.unit if item and item.unit else "",
@@ -1016,10 +1025,11 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
                 if not stock_unit_confirmed else ""
             ),
         })
+    # Quantities in kg, lb and units are NOT comparable ranking scores.
+    # Use observed purchase frequency; tie-break with comparable USD revenue.
     return sorted(cards, key=lambda card: (
         card["suggested"] is None,
-        -(card["suggested"] or Decimal("0")),
-        -commercial.get(card["product"], {}).get("revenue", Decimal("0")),
+        card["historical_rank"] or (len(historical_rank) + 1),
         card["product"].casefold(),
     ))
 

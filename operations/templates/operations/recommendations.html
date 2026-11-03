@@ -29,10 +29,16 @@
   {% if role == 'vendedor' %}<input type="hidden" name="mode" value="{{ suggestion_mode }}">{% endif %}
   <button class="btn btn-outline-primary" type="submit">Consultar</button>
 </form>
+{% if recommendations and suggestion_mode != 'client_restock' %}
+<p class="form-text" role="note">Prioridad por recurrencia de ventas observadas del cliente. No supone nuevas compras ni valida cantidades; las sugerencias de entrega mantienen sus controles independientes.</p>
+{% endif %}
 <div class="product-grid {% if role == 'vendedor' %}seller-recommendations{% endif %}">
 {% for item in recommendations %}
 <article class="panel product-summary decision-{{ item.state }}{% if role == 'vendedor' %} seller-product-summary{% endif %}">
   <div class="product-summary-heading"><div><p class="page-eyebrow">{{ item.category|default:'Producto' }}</p><h2>{{ item.product }}</h2></div><span class="badge-status {% if suggestion_mode == 'client_restock' and item.suggested == None or suggestion_mode != 'client_restock' and item.commercial_forecast == None and item.suggested == None %}status-manual{% else %}status-approved{% endif %}">{% if role == 'vendedor' and suggestion_mode == 'client_restock' %}{% if item.suggested != None %}Reposición sugerida{% else %}Reposición manual{% endif %}{% elif role == 'vendedor' and item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif role == 'vendedor' and item.commercial_forecast != None %}Oportunidad{% elif role == 'vendedor' and item.suggested != None %}Cantidad sugerida{% elif role == 'vendedor' %}Sin estimación{% elif item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif item.suggested == None %}Cantidad manual{% else %}Con sugerencia{% endif %}</span></div>
+  {% if item.historical_rank and suggestion_mode != 'client_restock' %}
+  <p class="form-text">Prioridad histórica {{ item.historical_rank }} de {{ item.historical_total }} · {{ item.historical_sale_days }} días con ventas registradas. No es una predicción.</p>
+  {% endif %}
   <dl class="product-summary-facts">
     <div><dt>Disponibilidad</dt><dd>{% if item.available != None %}{{ item.available|floatformat:"-3" }} <small>{{ item.stock_unit|default:'unidad por confirmar' }}</small>{% else %}Por confirmar{% endif %}</dd></div>
     {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}
@@ -47,7 +53,7 @@
   {% if maintenance_ui and item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
   {% if item.inventory_warning %}<div class="alert alert-warning" role="status">{{ item.inventory_warning }}</div>{% endif %}
   {% if role == 'vendedor' %}
-  {% if item.explanation and item.suggested != None or item.explanation and item.commercial_forecast != None %}<details class="seller-explanation"><summary>Ver explicación</summary><p>{{ item.explanation }}</p></details>{% endif %}
+  {% if item.explanation %}<details class="seller-explanation"><summary>Ver explicación</summary><p>{{ item.explanation }}</p></details>{% endif %}
   {% else %}<p class="muted">{{ item.explanation }}</p>{% endif %}
   {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}
   <section class="seller-restock-summary" aria-label="Existencias del cliente y objetivo de reposición">
