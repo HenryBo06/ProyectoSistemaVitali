@@ -1,6 +1,7 @@
 """Vitali's native Streamlit interface, sharing Django accounts and workflow."""
 
 import os
+from base64 import b64encode
 from datetime import date, timedelta
 from decimal import Decimal
 from html import escape
@@ -37,6 +38,14 @@ from operations.streamlit_bridge import call_screen, request_for, screen_context
 
 
 st.set_page_config(page_title="SmartOrder AI · Vitali", page_icon="V", layout="wide")
+# Reuse the existing project-owned six-color SVG rather than a new brand asset.
+VITALI_MARK_URI = "data:image/svg+xml;base64," + b64encode(
+    (Path(__file__).resolve().parent / "operations/static/operations/favicon.svg").read_bytes()
+).decode("ascii")
+VITALI_IDENTITY_HTML = (
+    f'<div class="vitali-identity"><img class="vitali-symbol" src="{VITALI_MARK_URI}" alt="" aria-hidden="true">'
+    '<div class="vitali-identity-copy"><strong>VITALI</strong><span>ALIMENTOS</span></div></div>'
+)
 st.html(f"<style>{(Path(__file__).resolve().parent / 'operations/static/operations/css/streamlit.css').read_text(encoding='utf-8')}</style>")
 
 
@@ -1615,7 +1624,7 @@ if user.is_authenticated and (notice_user, notice_admin) == (user.pk, user.is_st
     for level, message in saved_notices:
         getattr(st, level if level in {"warning", "success", "info"} else "info")(message)
 if not user.is_authenticated:
-    st.html('<div class="vitali-identity"><strong>VITALI</strong><span>ALIMENTOS</span></div>')
+    st.html(VITALI_IDENTITY_HTML)
     st.title("SmartOrder AI")
     st.caption("Vitali Alimentos · Ventas, pedidos y producción")
     initial = not get_user_model().objects.exists()
@@ -1646,7 +1655,7 @@ if not user.is_authenticated:
     st.stop()
 
 with st.sidebar:
-    st.html('<div class="vitali-identity"><strong>VITALI</strong><span>ALIMENTOS</span></div>')
+    st.html(VITALI_IDENTITY_HTML)
     st.title("SmartOrder AI")
     st.write(f"**{user.username}**")
     st.caption("Administración" if user.is_staff else "Vendedor · cartera asignada")
@@ -1676,7 +1685,7 @@ with st.sidebar:
         st.rerun()
     st.caption("El vendedor confirma ventas. Administración autoriza producción.")
 
-st.html('<div class="vitali-ticket"><span>SMARTORDER AI</span><em>Pedidos internos</em></div>')
+st.html(f'<div class="vitali-ticket"><img class="vitali-symbol" src="{VITALI_MARK_URI}" alt="" aria-hidden="true"><span class="vitali-ticket-name">SMARTORDER AI</span><em>Pedidos internos</em></div>')
 try:
     screens[page]()
 except (PermissionDenied, Http404) as exc:
