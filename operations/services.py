@@ -537,15 +537,15 @@ def _sale_event(dataset: SalesDataset, client: str, delivery: date,
                 if row.territory.strip().casefold() in national
                 or row.territory.strip().casefold() in zone_names]
     if event_id:
+        # Explicit but unauthorized/inactive events must never silently become
+        # a different national celebration.
         event = next((row for row in eligible if str(row.pk) == str(event_id)), None)
         if event is None:
             return None
     else:
-        event = None
-    if event is None:
         event = next((row for row in eligible if row.territory.strip().casefold() in national), None)
-    if event is None:
-        event = next((row for row in eligible if row.territory.strip().casefold() in zone_names), None)
+        if event is None:
+            event = next((row for row in eligible if row.territory.strip().casefold() in zone_names), None)
     if event is None:
         return None
     offset = (delivery - event.start_date).days
