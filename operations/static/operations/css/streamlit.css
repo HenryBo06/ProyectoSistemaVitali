@@ -773,3 +773,21 @@ main:has(.seller-density-marker) [data-testid="stMetricValue"] { font-size: 1.12
   main:has(.seller-density-marker) .vitali-ticket .vitali-symbol { width: 26px; height: 26px; flex-basis: 26px; }
   main:has(.seller-density-marker) .vitali-ticket .vitali-ticket-name { font-size: .78rem; letter-spacing: .04em; }
 }
+
+/* The legacy narrow-screen rule stacked the logo above the wordmark.
+   Keep the existing Vitali V and text on the same compact horizontal row. */
+@media (max-width: 640px) {
+  main:has(.seller-density-marker) .vitali-ticket {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
+    gap: .45rem !important;
+    white-space: nowrap;
+  }
+  main:has(.seller-density-marker) .vitali-ticket .vitali-ticket-name {
+    margin-right: 0;
+    min-width: 0;
+  }
+}
