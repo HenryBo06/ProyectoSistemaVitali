@@ -758,3 +758,18 @@ main:has(.seller-density-marker) [data-testid="stMetricValue"] { font-size: 1.12
   main:has(.seller-density-marker) h1 { font-size: 1.16rem !important; }
   main:has(.seller-density-marker) h2 { font-size: 1rem !important; margin-top: .55rem !important; }
 }
+
+/* Restore the existing six-color Vitali V in the native Streamlit identity. */
+.vitali-identity { display: flex; align-items: center; gap: .6rem; }
+.vitali-identity .vitali-symbol { width: 35px; height: 35px; flex: 0 0 35px; border-radius: 5px; object-fit: contain; }
+.vitali-identity-copy { min-width: 0; }
+.vitali-ticket .vitali-symbol { width: 27px; height: 27px; flex: 0 0 27px; border-radius: 4px; object-fit: contain; }
+.vitali-ticket .vitali-ticket-name { margin-right: auto; font-size: .86rem; font-weight: 700; letter-spacing: .09em; }
+.vitali-ticket { gap: .48rem; align-items: center; border-bottom: 3px solid transparent;
+  border-image: linear-gradient(90deg, #5ba744, #f6cd28, #ee9233, #dd3a42, #42b7d3, #1479a5) 1; }
+[data-testid="stAppViewContainer"]:has(input[aria-label="Usuario"]) .vitali-identity { justify-content: center; text-align: left; }
+@media (max-width: 640px) {
+  main:has(.seller-density-marker) .vitali-ticket { padding-left: 3.1rem; gap: .4rem; }
+  main:has(.seller-density-marker) .vitali-ticket .vitali-symbol { width: 26px; height: 26px; flex-basis: 26px; }
+  main:has(.seller-density-marker) .vitali-ticket .vitali-ticket-name { font-size: .78rem; letter-spacing: .04em; }
+}
