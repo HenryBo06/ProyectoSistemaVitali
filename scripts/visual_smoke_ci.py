@@ -118,6 +118,23 @@ def django_smoke(browser) -> None:
     page.wait_for_timeout(200)
     page.screenshot(path=str(OUT / "django-restock-mobile.png"), full_page=True)
 
+    # Narrow mobile reflow: the Vitali wordmark, menu, tabs and form must still
+    # fit without clipping at 320 CSS pixels (not only at the 390px screenshot).
+    page.set_viewport_size({"width": 320, "height": 720})
+    page.wait_for_timeout(200)
+    if page.locator("body").evaluate("(e) => e.scrollWidth > innerWidth + 2"):
+        raise AssertionError("Django has horizontal document overflow at 320px.")
+    brand_overlap = page.evaluate("""() => {
+      const a = document.querySelector('.app-header .brand');
+      const b = document.querySelector('.app-header button[aria-label="Abrir menú"]');
+      if (!a || !b) return true;
+      const x = a.getBoundingClientRect(), y = b.getBoundingClientRect();
+      return x.right > y.left + 2;
+    }""")
+    if brand_overlap:
+        raise AssertionError("Django Vitali brand and mobile menu overlap at 320px.")
+    page.screenshot(path=str(OUT / "django-restock-320.png"), full_page=True)
+
     page.set_viewport_size({"width": 1440, "height": 900})
     page.evaluate("window.scrollTo(0, 0)")
     page.wait_for_timeout(200)
@@ -198,6 +215,21 @@ def streamlit_smoke(browser) -> None:
     if abs(logo_center - title_center) > 7 or title["x"] < symbol["x"] + symbol["width"] - 1:
         raise AssertionError("The Vitali logo and wordmark must share an unobstructed mobile row.")
     page.screenshot(path=str(OUT / "streamlit-catalog-mobile.png"), full_page=False)
+
+    page.set_viewport_size({"width": 320, "height": 720})
+    page.wait_for_timeout(300)
+    if page.locator("body").evaluate("(e) => e.scrollWidth > innerWidth + 2"):
+        raise AssertionError("Streamlit has horizontal document overflow at 320px.")
+    small_brand_overlap = page.evaluate("""() => {
+      const text = document.querySelector('.vitali-ticket .vitali-ticket-name');
+      const toggle = document.querySelector('[data-testid="stHeader"] button[aria-label="Expand sidebar"]');
+      if (!text || !toggle) return false;
+      const a = text.getBoundingClientRect(), b = toggle.getBoundingClientRect();
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }""")
+    if small_brand_overlap:
+        raise AssertionError("Streamlit Vitali brand and sidebar button overlap at 320px.")
+    page.screenshot(path=str(OUT / "streamlit-catalog-320.png"), full_page=False)
     context.close()
 
 
