@@ -467,6 +467,57 @@ class PlanningInboxTests(LocalCase, TestCase):
         self.assertEqual(conflict["need"], Decimal("40.000"))
         self.assertIsNone(conflict["suggested"])
 
+    def test_reviewed_event_notifies_any_day_within_week_without_daily_spam(self):
+        today = timezone.localdate()
+        event = CommercialEvent.objects.create(
+            key="feria-test", title="Feria LAB (simulada)",
+            kind=CommercialEvent.Kind.COMMERCIAL,
+            start_date=today + timedelta(days=5),
+            end_date=today + timedelta(days=5),
+            territory="Nacional", reviewed=True, active=True, created_by=self.admin,
+        )
+        self.client.force_login(self.seller)
+        with patch("operations.views.timezone.localdate", return_value=today):
+            self.client.get(reverse("notification_inbox"))
+            self.client.get(reverse("notification_inbox"))
+        notices = list(UserNotification.objects.filter(
+            recipient=self.seller, kind=UserNotification.Kind.EVENT,
+        ))
+        self.assertEqual(len(notices), 1)
+        self.assertIn("dentro de 5 días", notices[0].body)
+        with patch("operations.views.timezone.localdate", return_value=today + timedelta(days=1)):
+            self.client.get(reverse("notification_inbox"))
+        self.assertEqual(UserNotification.objects.filter(
+            recipient=self.seller, kind=UserNotification.Kind.EVENT,
+        ).count(), 1)
+        with patch("operations.views.timezone.localdate", return_value=event.start_date):
+            self.client.get(reverse("notification_inbox"))
+            self.client.get(reverse("notification_inbox"))
+        self.assertEqual(UserNotification.objects.filter(
+            recipient=self.seller, kind=UserNotification.Kind.EVENT,
+        ).count(), 2)
+
+    def test_invalid_explicit_event_never_falls_back_to_another_event(self):
+        from .services import _sale_event
+        day = timezone.localdate() + timedelta(days=2)
+        national = CommercialEvent.objects.create(
+            key="test-national", title="Evento nacional",
+            kind=CommercialEvent.Kind.COMMERCIAL,
+            start_date=day, end_date=day, territory="Nacional",
+            active=True, reviewed=True, created_by=self.admin,
+        )
+        restricted = CommercialEvent.objects.create(
+            key="test-restricted", title="Evento de otra zona",
+            kind=CommercialEvent.Kind.LOCAL,
+            start_date=day, end_date=day, territory="Zona no asignada",
+            active=True, reviewed=True, created_by=self.admin,
+        )
+        self.assertIsNone(_sale_event(self.dataset, "Cliente A", day, restricted.pk))
+        self.assertIsNone(_sale_event(self.dataset, "Cliente A", day, "99999999"))
+        self.assertEqual(
+            _sale_event(self.dataset, "Cliente A", day, national.pk)["id"], national.pk,
+        )
+
     def test_event_calendar_seeds_reviewable_2026_dates_and_inbox_deduplicates(self):
         today = timezone.localdate()
         self.client.force_login(self.admin)
