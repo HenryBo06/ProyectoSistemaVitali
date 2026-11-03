@@ -281,3 +281,93 @@ class EtlPreviewTests(TestCase):
         self.assertTrue(report["ready_to_review"])
         book = load_sales(canonical)
         self.assertEqual(book.rows.iloc[0]["Cliente"], "=1+1")
+
+
+    def test_demo_2025_shape_xlsx_with_missing_units_requires_product_confirmation(self):
+        import json
+        from datetime import date
+        from .models import EtlMappingProfile, EtlInspectionRun, SalesLine, SalesCoverage
+        self.client.force_login(self.admin)
+        url = reverse("etl_preview")
+        mapping = {name: name for name in [
+            "Fecha", "Cliente", "Producto", "Cantidad_kg_unid",
+            "Precio_Unitario_USD", "Monto_Venta_USD",
+        ]}
+        self.client.post(url, {
+            "action": "save_profile", "alias": "demo-ventas-2025",
+            "name": "Demo avícola 2025", "mapping": json.dumps(mapping),
+            "sheet_name": "Ventas2025",
+        })
+        profile = EtlMappingProfile.objects.get(alias="demo-ventas-2025")
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "Ventas2025"
+        sheet.append([
+            "Fecha", "Cliente", "Zona_Geografica", "Canal_Distribucion",
+            "Canal_Venta", "Producto", "Categoria", "Cantidad_kg_unid",
+            "Precio_Unitario_USD", "Monto_Venta_USD",
+        ])
+        sheet.append([date(2025, 1, 1), "Cliente LAB", "Central",
+                      "Distribuidores", "Retail", "Alitas LAB", "Cortes", 2, 5, 10])
+        sheet.append([date(2025, 12, 31), "Cliente LAB", "Central",
+                      "Distribuidores", "Retail", "Huevos LAB", "Huevos", 3, 4, 12])
+        buffer = BytesIO()
+        book.save(buffer)
+        raw = buffer.getvalue()
+        inspection_response = self.client.post(url, {
+            "profile_id": profile.pk,
+            "etl_file": SimpleUploadedFile("demo.xlsx", raw),
+        })
+        self.assertEqual(inspection_response.status_code, 200)
+        self.assertContains(inspection_response, "Unidad para Alitas LAB")
+        self.assertContains(inspection_response, "Unidad para Huevos LAB")
+        inspection = EtlInspectionRun.objects.get(profile=profile)
+        common = {
+            "action": "load", "inspection_id": inspection.pk,
+            "provenance": "simulated", "date_semantics": "sale_order",
+            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+            "approved_load": "on",
+        }
+        without_units = self.client.post(url, {
+            **common, "etl_load_file": SimpleUploadedFile("demo.xlsx", raw),
+        })
+        self.assertEqual(without_units.status_code, 200)
+        self.assertEqual(SalesDataset.objects.count(), 0)
+        loaded = self.client.post(url, {
+            **common, "etl_load_file": SimpleUploadedFile("demo.xlsx", raw),
+            "unit_product": ["Alitas LAB", "Huevos LAB"],
+            "unit_value": ["kg", "docena"],
+        })
+        self.assertEqual(loaded.status_code, 302)
+        dataset = SalesDataset.objects.get(active=True)
+        self.assertEqual(dataset.row_count, 2)
+        self.assertFalse(dataset.verified)
+        self.assertEqual(dataset.provenance, "simulated")
+        self.assertEqual(set(SalesLine.objects.filter(dataset=dataset).values_list("unit", flat=True)),
+                         {"kg", "docena"})
+        self.assertFalse(SalesCoverage.objects.filter(
+            dataset=dataset, status=SalesCoverage.Status.COMPLETE).exists())
+
+    def test_sparse_sales_density_does_not_assume_zero_sales(self):
+        raw = (
+            b"Fecha,Cliente,Producto,Cantidad,Precio,Unidad\n"
+            b"2025-01-01,A,B,2,10,kg\n"
+            b"2025-12-31,A,B,3,10,kg\n"
+        )
+        report = preview_sales(raw, "demo.csv")
+        self.assertTrue(report["ready_to_review"])
+        self.assertEqual(report["observed_pair_days"], 2)
+        self.assertLess(report["coverage_density_percent"], 1)
+        self.assertIn("sin ventas como cero", " ".join(report["notes"]))
+
+    def test_confirmed_units_must_match_products_and_not_be_excel_formulas(self):
+        from smartorder.etl import canonical_sales_xlsx
+        raw = b"Fecha,Cliente,Producto,Cantidad,Precio\n2025-01-01,A,B,2,10\n"
+        with self.assertRaisesRegex(ValueError, "Faltan unidades"):
+            canonical_sales_xlsx(raw, "demo.csv", units_by_product={"C": "kg"})
+        with self.assertRaisesRegex(ValueError, "unidad comercial válida"):
+            canonical_sales_xlsx(raw, "demo.csv", units_by_product={"B": "=1+1"})
+        canonical, report = canonical_sales_xlsx(
+            raw, "demo.csv", units_by_product={"B": "kg"})
+        self.assertTrue(canonical.startswith(b"PK"))
+        self.assertEqual(report["confirmed_unit_products"], 1)

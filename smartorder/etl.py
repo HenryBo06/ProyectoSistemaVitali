@@ -171,6 +171,8 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
         dates = []
         pairs = set()
         unit_missing = 0
+        missing_unit_products = set()
+        observed_pair_days = set()
         duplicate_refs = set()
         duplicate_count = 0
         max_issues = 25
@@ -224,6 +226,11 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
                         duplicate_refs.add(key)
                     if not record.get("Unidad"):
                         unit_missing += 1
+                        missing_unit_products.add(record["Producto"])
+                    observed_pair_days.add((
+                        record["Cliente"], record["Producto"],
+                        record.get("Unidad", ""), record["Fecha"],
+                    ))
                     clients.add(record["Cliente"])
                     products.add(record["Producto"])
                     pairs.add((record["Cliente"], record["Producto"], record.get("Unidad", "")))
@@ -257,7 +264,19 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
         if unused:
             notes.append(f"{len(unused)} columna(s) sin mapear: " + ", ".join(unused[:12]))
         if unit_missing:
-            notes.append(f"{unit_missing} fila(s) sin unidad confirmada; no habilitar cantidades predictivas.")
+            notes.append(
+                f"{unit_missing} fila(s) sin unidad comercial; "
+                "requieren confirmación explícita por producto antes de la carga."
+            )
+        if len(missing_unit_products) > 100:
+            issues.append("Hay más de 100 productos sin unidad; añada la columna Unidad al origen.")
+        observed_density = round(100 * len(observed_pair_days) / daily_cells, 2) if daily_cells else 0
+        if daily_cells and observed_density < 20:
+            notes.append(
+                f"Solo {observed_density:.2f}% de las combinaciones cliente-producto-unidad-fecha "
+                "tienen registros observados. No trate días sin ventas como cero sin "
+                "confirmar primero la cobertura del origen."
+            )
         if not mapping.get("Referencia_linea"):
             notes.append("No existe identificador de línea; futuras cargas incrementales necesitan claves estables.")
         schema_digest = sha256(json.dumps(header, ensure_ascii=False).encode("utf-8")).hexdigest()
@@ -269,6 +288,10 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
             "date_min": min(dates) if dates else None, "date_max": max(dates) if dates else None,
             "client_count": len(clients), "product_count": len(products),
             "duplicate_references": duplicate_count,
+            "missing_unit_count": unit_missing,
+            "missing_unit_products": sorted(missing_unit_products)[:100],
+            "observed_pair_days": len(observed_pair_days),
+            "coverage_density_percent": observed_density,
             "estimated_daily_cells": daily_cells, "unmapped": unused,
             "notes": notes, "issues": issues, "samples": samples,
             "ready_to_review": count > 0 and valid == count and not issues,
@@ -280,7 +303,8 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
 
 def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = None,
                          date_format: str = "%Y-%m-%d", decimal_separator: str = ".",
-                         sheet_name: str = "") -> tuple[bytes, dict]:
+                         sheet_name: str = "",
+                         units_by_product: dict[str, str] | None = None) -> tuple[bytes, dict]:
     """Revalidate and normalize one approved CSV/XLSX source for the existing importer.
 
     Preview and Load share extraction, mapping and row rules. The returned XLSX
@@ -294,7 +318,24 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
                            decimal_separator=decimal_separator, sheet_name=sheet_name)
     if not report["ready_to_review"]:
         raise ValueError("La fuente presenta problemas ETL; inspeccione y corrija antes de cargar.")
-
+    if units_by_product is not None and not isinstance(units_by_product, dict):
+        raise ValueError("Las unidades comerciales necesitan una correspondencia por producto.")
+    unit_map = {}
+    for product, unit in (units_by_product or {}).items():
+        if not isinstance(product, str) or not isinstance(unit, str):
+            raise ValueError("Los productos y sus unidades deben ser textos válidos.")
+        product, unit = product.strip(), unit.strip()
+        if not product or len(product) > 255 or not re.fullmatch(r"[\w ./%-]{1,50}", unit, re.UNICODE):
+            raise ValueError("Indique una unidad comercial válida de hasta 50 caracteres por producto.")
+        if product in unit_map:
+            raise ValueError("No repita un producto en la confirmación de unidades.")
+        unit_map[product] = unit
+    missing = set(report["missing_unit_products"])
+    if missing - set(unit_map):
+        raise ValueError(
+            "Faltan unidades comerciales confirmadas para: " +
+            ", ".join(sorted(missing - set(unit_map))[:8])
+        )
     headers, rows, kind, _, book = _extract(raw, filename, sheet_name)
     target = Workbook(write_only=True)
     sheet = target.create_sheet("Ventas")
@@ -310,6 +351,7 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
 
     positions = {header: index for index, header in enumerate(headers)}
     processed = 0
+    used_unit_map = set()
     try:
         for row in rows:
             if not any(value is not None and str(value).strip() for value in row):
@@ -327,10 +369,24 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
                                          if value is not None and str(value).strip() else None)
                 else:
                     result[canonical] = str(value if value is not None else "").strip()
+            product = result.get("Producto", "")
+            original_unit = result.get("Unidad", "")
+            if not original_unit:
+                result["Unidad"] = unit_map.get(product, "")
+                if not result["Unidad"]:
+                    raise ValueError("Falta unidad comercial confirmada para " + product)
+                used_unit_map.add(product)
+            elif product in unit_map:
+                if original_unit.casefold() != unit_map[product].casefold():
+                    raise ValueError("La unidad confirmada contradice la unidad de origen para " + product)
+                used_unit_map.add(product)
             sheet.append([literal_cell(result.get(name)) for name in HEADERS])
             processed += 1
         if processed != report["valid_rows"]:
             raise ValueError("El total de registros cambió durante la normalización.")
+        if set(unit_map) - used_unit_map:
+            raise ValueError("La confirmación contiene productos ajenos al archivo.")
+        report["confirmed_unit_products"] = len(used_unit_map)
         output = BytesIO()
         target.save(output)
         normalized = output.getvalue()

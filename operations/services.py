@@ -1249,7 +1249,8 @@ def top_products_for(dataset: SalesDataset, clients: list[str] | None = None,
 
 
 def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
-                          provenance: str, date_semantics: str) -> SalesDataset:
+                          provenance: str, date_semantics: str,
+                          units_by_product: dict[str, str] | None = None) -> SalesDataset:
     """Activate only a previously approved, identical, fully validated ETL source.
 
     Incremental merges are deliberately excluded until business keys are agreed.
@@ -1275,15 +1276,14 @@ def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
     profile = inspection.profile
     normalized, report = canonical_sales_xlsx(
         raw, filename, manual=profile.mapping, date_format=profile.date_format,
-        decimal_separator=profile.decimal_separator, sheet_name=profile.sheet_name)
+        decimal_separator=profile.decimal_separator, sheet_name=profile.sheet_name,
+        units_by_product=units_by_product)
     if (report["schema_sha256"] != inspection.schema_sha256
             or report["row_count"] != inspection.row_count
             or report["format"] != inspection.source_format):
         raise ValueError("El esquema o el volumen difiere de la inspección aprobada.")
-    if ("Unidad" not in report["mapping"]
-            or any("sin unidad confirmada" in note for note in report["notes"])):
-        raise ValueError("Todas las filas necesitan unidad comercial antes de activar inferencia.")
-
+    # Missing units are resolved explicitly by product, never inferred from
+    # product names or invented from inventory; coverage remains UNKNOWN.
     dataset = None
     try:
         with transaction.atomic():
@@ -1291,7 +1291,8 @@ def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
                 raise ValueError("Este archivo ya fue cargado mediante ETL.")
             dataset = import_sales(
                 normalized, f"etl-{inspection.source_sha256[:20]}.xlsx",
-                user, verified=True, full_snapshot_confirmed=True,
+                user, verified=(provenance == SalesDataset.Provenance.REAL),
+                full_snapshot_confirmed=True,
                 provenance=provenance, date_semantics=date_semantics)
             EtlLoadRun.objects.create(
                 inspection=inspection, dataset=dataset, profile=profile,
@@ -1303,6 +1304,7 @@ def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
                     "profile_version": profile.version, "source_sha256": inspection.source_sha256,
                     "rows": report["row_count"], "date_semantics": date_semantics,
                     "provenance": provenance,
+                    "confirmed_unit_products": report["confirmed_unit_products"],
                 })
         return dataset
     except Exception:

@@ -25,3 +25,12 @@ La etapa de carga de snapshots completos pasa ahora por \`/administracion/etl/\`
 La carga clásica XLSX sigue disponible temporalmente para no romper integraciones y pruebas previas. La retirada definitiva requiere actualizar el recorrido de aceptación y migrar todos los consumidores; hasta entonces es una ruta heredada que debe usarse solo por compatibilidad.
 
 Los datos reales todavía necesitan las decisiones comerciales COR-03 y de cobertura. Esta etapa **no** implementa mezcla incremental de snapshots, extracción SQL ni conexión con Odoo real, ni acredita aceptación empresarial. La unidad comercial debe estar presente en todas las filas antes de activar el histórico mediante ETL.
+
+
+## Compatibilidad con el Excel de demostración 2025
+
+El archivo de demostración proporcionado fuera del repositorio contiene una hoja \`Ventas2025\` de 10 columnas y 1.294 registros entre el 1 de enero y el 31 de diciembre de 2025. Contiene 10 clientes y 8 productos, pero no incluye \`Unidad\`, \`Referencia_pedido\` ni \`Referencia_linea\`. **El archivo original no se publica ni se modifica en GitHub.** Esta descripción no prueba que el origen sea empresarial real.
+
+Para cargarlo por el nuevo ETL, administración debe crear un perfil de mapeo, inspeccionar el archivo, confirmar manualmente la unidad comercial de cada producto (no inferirla por el nombre) y volver a subir el mismo archivo. La aprobación queda asociada a la huella del archivo y su perfil. Cuando la procedencia sea simulada, la carga permanece marcada como simulada y no queda verificada como fuente real.
+
+El inspector expone la proporción de combinaciones cliente-producto-unidad-fecha observadas. Los huecos del histórico de demostración no equivalen necesariamente a ventas cero: ninguna cobertura comercial pasa a COMPLETA sin revisión humana. La ausencia de referencias de línea sigue impidiendo concatenar cargas incrementales de forma segura. El dato de 2025 es histórico, no una garantía de pronóstico preciso en fechas futuras ni prueba de la fecha comercial COR-03.

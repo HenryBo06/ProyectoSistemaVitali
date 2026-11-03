@@ -2042,10 +2042,20 @@ def etl_preview(request):
                 uploaded = request.FILES.get("etl_load_file")
                 if uploaded is None or uploaded.size > 20 * 1024 * 1024:
                     raise ValueError("Adjunte nuevamente el archivo inspeccionado de hasta 20 MB.")
+                unit_products = request.POST.getlist("unit_product")
+                unit_values = request.POST.getlist("unit_value")
+                if len(unit_products) != len(unit_values) or len(unit_products) > 100:
+                    raise ValueError("La confirmación de unidades comerciales está incompleta.")
+                units_by_product = {}
+                for product, unit in zip(unit_products, unit_values):
+                    if product in units_by_product:
+                        raise ValueError("Existe un producto repetido en las unidades comerciales.")
+                    units_by_product[product] = unit
                 dataset = import_reviewed_sales(
                     uploaded.read(), uploaded.name, inspection, request.user,
                     provenance=request.POST.get("provenance", ""),
-                    date_semantics=request.POST.get("date_semantics", ""))
+                    date_semantics=request.POST.get("date_semantics", ""),
+                    units_by_product=units_by_product)
                 messages.success(
                     request, f"ETL aprobado: {dataset.row_count:,} líneas activadas "
                     "con historial anterior conservado.")
@@ -2084,13 +2094,14 @@ def etl_preview(request):
                 report["issues"].append(
                     "Cambio de estructura respecto a la última inspección con este perfil. "
                     "Revise y cree una nueva versión del mapeo antes de aprobar la carga.")
-            EtlInspectionRun.objects.create(
+            inspection = EtlInspectionRun.objects.create(
                 profile=profile, filename=report["filename"],
                 source_sha256=report["sha256"], schema_sha256=report["schema_sha256"],
                 source_format=report["format"], row_count=report["row_count"],
                 valid_rows=report["valid_rows"], invalid_rows=report["invalid_rows"],
                 issue_count=len(report["issues"]), schema_changed=schema_changed,
                 created_by=request.user)
+            report["inspection_id"] = inspection.pk
             if report["ready_to_review"]:
                 messages.success(request, "Extracción y validación preliminar completadas. Ningún dato se activó.")
             else:
