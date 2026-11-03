@@ -729,3 +729,15 @@ body.order-reviewing #sale-configuration { display: none; }
   .local-app .brand-wordmark small { font-size: .53rem; }
   .local-app .brand-product { padding-left: .55rem; }
 }
+
+/* 320px phones: preserve the V mark and wordmark without letting the optional
+   product caption wrap under the menu toggle. The link keeps its accessible name. */
+@media (max-width: 359.98px) {
+  .local-app .app-header-inner { padding-inline: .65rem; }
+  .local-app .app-header .brand { gap: .35rem; flex: 0 1 auto; }
+  .local-app .app-header .brand-symbol { width: 28px; height: 28px; }
+  .local-app .app-header .brand-wordmark strong { font-size: .86rem; letter-spacing: .14em; }
+  .local-app .app-header .brand-wordmark small { font-size: .5rem; }
+  .local-app .app-header .brand-product { display: none; }
+  .local-app .app-header .header-actions { gap: .3rem; }
+}

@@ -133,6 +133,8 @@ def django_smoke(browser) -> None:
     }""")
     if brand_overlap:
         raise AssertionError("Django Vitali brand and mobile menu overlap at 320px.")
+    if page.locator(".app-header .brand-product").is_visible():
+        raise AssertionError("Secondary SmartOrder header text must not wrap under the menu at 320px.")
     page.screenshot(path=str(OUT / "django-restock-320.png"), full_page=True)
 
     page.set_viewport_size({"width": 1440, "height": 900})
