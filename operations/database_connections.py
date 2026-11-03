@@ -42,7 +42,7 @@ def validate_connection_fields(values):
     if not username or len(username) > 128 or any(c.isspace() for c in username):
         raise ValueError("Indique un usuario de solo lectura, sin espacios.")
     if not SECRET_RE.fullmatch(password_env) or len(password_env) > 100:
-        raise ValueError("La contraseña debe referenciar SMARTORDER_SOURCE_<NOMBRE>_PASSWORD.")
+        raise ValueError("La variable privada de contraseña debe referenciar SMARTORDER_SOURCE_<NOMBRE>_PASSWORD.")
     if purpose not in ExternalDatabaseConnection.Purpose.values:
         raise ValueError("Seleccione un propósito válido.")
     if sslmode not in {"prefer", "require", "verify-full"}:

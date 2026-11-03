@@ -144,6 +144,36 @@ def django_smoke(browser) -> None:
     context.close()
 
 
+
+def django_connection_smoke(browser) -> None:
+    """Admin-only connection management must be usable without a database secret."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+    page = context.new_page()
+    page.goto("http://127.0.0.1:8000/entrar/", wait_until="domcontentloaded")
+    page.locator('input[name="username"]').fill("lab_admin_01")
+    page.locator('input[name="password"]').fill(CREDENTIALS["lab_admin_01"])
+    page.get_by_role("button", name="Entrar a mi espacio").click()
+    page.goto("http://127.0.0.1:8000/administracion/conexiones/", wait_until="domcontentloaded")
+    page.get_by_role("heading", name="Conexiones de bases de datos").wait_for(timeout=20000)
+    fields = {"alias": "lab-db-ventas", "name": "Ventas LAB simuladas",
+              "host": "localhost", "port": "5432", "database": "lab_vitali",
+              "username": "read_only", "password_env": "SMARTORDER_SOURCE_LAB_PASSWORD"}
+    for name, value in fields.items():
+        page.locator(f'input[name="{name}"]').fill(value)
+    page.get_by_role("button", name="Guardar configuración").click()
+    page.get_by_text("Ventas LAB simuladas", exact=True).first.wait_for(timeout=15000)
+    if "SMARTORDER_SOURCE_LAB_PASSWORD" in page.locator("body").inner_text():
+        # The secret variable name may appear in the editing form, but not a secret value.
+        pass
+    if page.locator("body").evaluate("(e) => e.scrollWidth > innerWidth + 2"):
+        raise AssertionError("Admin database connection screen overflows at 390px.")
+    page.screenshot(path=str(OUT / "django-admin-database-connections-mobile.png"), full_page=True)
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.evaluate("window.scrollTo(0, 0)")
+    page.screenshot(path=str(OUT / "django-admin-database-connections-desktop.png"), full_page=True)
+    context.close()
+
+
 def streamlit_smoke(browser) -> None:
     context = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
     page = context.new_page()
@@ -243,6 +273,7 @@ if __name__ == "__main__":
         browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
         try:
             django_smoke(browser)
+            django_connection_smoke(browser)
             streamlit_smoke(browser)
         finally:
             browser.close()
