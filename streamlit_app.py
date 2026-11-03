@@ -837,8 +837,9 @@ def planning_screen():
     st.caption("Eventos revisados por administración y planificación sobre conteos físicos por ubicación.")
     c = context("planning")
     st.subheader("Calendario")
+    st.caption("Puedes preparar años anteriores para evaluar temporadas; los eventos quedan pendientes de revisión y no implican ventas adicionales.")
     with st.form("seed-calendar"):
-        year = st.number_input("Año de candidatos", min_value=c["today"].year - 1,
+        year = st.number_input("Año de candidatos", min_value=c["today"].year - 8,
                                max_value=c["today"].year + 3, value=c["today"].year)
         if st.form_submit_button("Agregar candidatos de asuetos y temporadas"):
             if action("planning", {"action": "seed_calendar", "year": int(year)}) is not None:

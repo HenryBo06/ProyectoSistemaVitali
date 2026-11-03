@@ -483,8 +483,8 @@ def planning(request):
         try:
             if action == "seed_calendar":
                 year = int(request.POST.get("year", today.year))
-                if not today.year - 1 <= year <= today.year + 3:
-                    raise ValueError("El año debe estar entre el anterior y los próximos tres años.")
+                if not today.year - 8 <= year <= today.year + 3:
+                    raise ValueError("El año debe estar entre los ocho anteriores y los próximos tres años.")
                 created = 0
                 for key, title, kind, start, end, territory, source_url in commercial.salvadoran_event_candidates(year):
                     event, was_created = CommercialEvent.objects.get_or_create(

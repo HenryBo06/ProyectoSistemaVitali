@@ -518,6 +518,23 @@ class PlanningInboxTests(LocalCase, TestCase):
             _sale_event(self.dataset, "Cliente A", day, national.pk)["id"], national.pk,
         )
 
+    def test_historical_calendar_candidates_are_available_but_not_automatically_active(self):
+        year = timezone.localdate().year - 4
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("planning"), {
+            "action": "seed_calendar", "year": year,
+        })
+        self.assertEqual(response.status_code, 302)
+        historical = CommercialEvent.objects.get(
+            key="semana-santa", start_date__year=year, territory="Nacional",
+        )
+        self.assertFalse(historical.reviewed)
+        self.assertFalse(historical.active)
+        self.client.force_login(self.seller)
+        self.assertEqual(self.client.post(reverse("planning"), {
+            "action": "seed_calendar", "year": year - 1,
+        }).status_code, 403)
+
     def test_event_calendar_seeds_reviewable_2026_dates_and_inbox_deduplicates(self):
         today = timezone.localdate()
         self.client.force_login(self.admin)
