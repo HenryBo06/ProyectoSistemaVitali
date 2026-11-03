@@ -1452,6 +1452,68 @@ def pilot_dashboard_screen():
 
 
 
+
+def etl_preview_screen():
+    st.title("Preparación ETL de datos")
+    st.caption("Extraer, transformar y validar sin activar ni reemplazar históricos.")
+    st.info("Las fuentes externas, CSV y Excel requieren contrato de columnas y controles de calidad antes de alimentar la inferencia.")
+    with st.form("etl_data_preflight"):
+        source_file = st.file_uploader("Archivo CSV UTF-8 o Excel", type=["csv", "xlsx"])
+        d1, d2 = st.columns(2)
+        date_format = d1.selectbox("Formato de fecha", ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
+                                   format_func=lambda value: {"%Y-%m-%d": "AAAA-MM-DD",
+                                       "%d/%m/%Y": "DD/MM/AAAA", "%m/%d/%Y": "MM/DD/AAAA"}[value])
+        decimal_separator = d2.selectbox("Separador decimal", [".", ","],
+                                          format_func=lambda value: "Punto" if value == "." else "Coma")
+        sheet_name = st.text_input("Hoja de Excel (opcional)")
+        with st.expander("Columnas diferentes: mapeo manual"):
+            mapping = st.text_area("JSON de campos canónicos y encabezados reales",
+                help='Ejemplo: {"Fecha":"Día de venta","Cliente":"Cuenta","Producto":"Artículo","Cantidad_kg_unid":"Cantidad","Precio_Unitario_USD":"Precio"}')
+        submitted = st.form_submit_button("Inspeccionar sin cargar", type="primary")
+    if submitted:
+        if source_file is None:
+            st.warning("Seleccione un archivo para inspeccionar.")
+            return
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        response = action("etl_preview", {"date_format": date_format,
+            "decimal_separator": decimal_separator, "sheet_name": sheet_name,
+            "mapping": mapping}, files={"etl_file": SimpleUploadedFile(
+                source_file.name, source_file.getvalue())})
+        if response is None:
+            return
+        report = getattr(response, "context_data", {}).get("report")
+        if report is None:
+            st.error("El archivo no produjo un reporte válido.")
+            return
+        cols = st.columns(3)
+        cols[0].metric("Filas", report["row_count"])
+        cols[1].metric("Válidas", report["valid_rows"])
+        cols[2].metric("Problemas", report["invalid_rows"])
+        st.caption("Período: " + str(report["date_min"] or "Sin fecha")
+                   + " — " + str(report["date_max"] or "Sin fecha"))
+        if report["ready_to_review"]:
+            st.success("Prevalidación satisfactoria. No se modificó el histórico activo.")
+        else:
+            st.warning("La carga está bloqueada: revise el mapeo y los datos.")
+        st.subheader("Mapeo detectado")
+        table([{"Campo destino": key, "Columna de origen": value}
+               for key, value in report["mapping"].items()])
+        if report["issues"]:
+            st.subheader("Problemas de calidad")
+            for issue in report["issues"]:
+                st.error(issue)
+        if report["notes"]:
+            with st.expander("Observaciones y cambios de esquema"):
+                for note in report["notes"]:
+                    st.write(note)
+        if report["samples"]:
+            st.subheader("Muestra transformada")
+            table(report["samples"])
+        with st.expander("Trazabilidad"):
+            st.code("SHA-256 archivo: " + report["sha256"] + "\nSHA-256 esquema: "
+                    + report["schema_sha256"], language="text")
+
+
 def database_connections_screen():
     st.title("Conexiones de bases de datos")
     st.caption("PostgreSQL externo · solo lectura. Credenciales fuera de la aplicación.")
@@ -1716,7 +1778,7 @@ with st.sidebar:
                "Productos y pedidos": products, notification_label: notification_inbox_screen,
                "Pedidos y producción": orders, "Correcciones de inventario": corrections}
     if user.is_staff:
-        screens.update({"Clientes y tarifas": tariffs_screen, "Conexiones de bases de datos": database_connections_screen, "Usuarios y cartera": accounts,
+        screens.update({"Clientes y tarifas": tariffs_screen, "Conexiones de bases de datos": database_connections_screen, "Preparación ETL de datos": etl_preview_screen, "Usuarios y cartera": accounts,
                         "Calendario y reposición": planning_screen,
                         "Resultados operativos": operational_reports_screen})
         if settings.SMARTORDER_MAINTENANCE_UI:
