@@ -296,7 +296,7 @@ def _ensure_event_notifications(user, today=None):
             zones.setdefault(client, set()).add(zone.casefold())
     national = {"nacional", "national", "el salvador", ""}
     for event in CommercialEvent.objects.filter(
-        active=True, reviewed=True, start_date__in=(today, today + timedelta(days=7))
+        active=True, reviewed=True, start_date__range=(today, today + timedelta(days=7))
     ):
         territory = event.territory.strip().casefold()
         for client in clients:
@@ -312,8 +312,12 @@ def _ensure_event_notifications(user, today=None):
                 "client": client, "product": product,
                 "required_date": event.start_date.isoformat(), "event_id": event.pk,
             })
-            day_label = "hoy" if event.start_date == today else "dentro de 7 días"
-            notice_day = today.isoformat()
+            days_to_event = (event.start_date - today).days
+            day_label = "hoy" if days_to_event == 0 else (
+                "mañana" if days_to_event == 1 else f"dentro de {days_to_event} días"
+            )
+            # One advance notification per event and client, and a new notice on event day.
+            notice_day = "today" if days_to_event == 0 else "advance"
             _create_user_notification(
                 user, f"event:{event.pk}:{client}:{product}:{event.start_date.isoformat()}:{notice_day}",
                 f"Revisa una venta para {event.title}",
