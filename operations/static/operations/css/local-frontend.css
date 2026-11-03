@@ -686,3 +686,46 @@ body.order-reviewing #sale-configuration { display: none; }
   }
   .local-app .seller-page-heading .btn { margin-top: .4rem; }
 }
+
+/* Vitali project identity: the repository's existing six-color V and palette. */
+.local-app {
+  --v-bottle: #0c6f7c;
+  --v-bottle-dark: #085863;
+  --v-leaf: #5ba744;
+  --v-leaf-dark: #418a33;
+  --v-mango: #e07c2a;
+  --v-spectrum: linear-gradient(90deg, #5ba744 0% 16.66%, #f6cd28 16.66% 33.33%,
+    #ee9233 33.33% 50%, #dd3a42 50% 66.66%, #42b7d3 66.66% 83.33%, #1479a5 83.33% 100%);
+}
+.local-app .app-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--v-spectrum);
+  pointer-events: none;
+}
+.local-app .brand { gap: .6rem; }
+.local-app .brand-symbol, .local-app .menu-brand-symbol, .local-app .auth-brand-symbol {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 5px;
+}
+.local-app .brand-symbol { width: 34px; height: 34px; }
+.local-app .brand-product { padding-left: .75rem; }
+.local-app .brand-wordmark strong, .local-app .auth-wordmark strong { color: var(--v-bottle-dark); }
+.local-app .menu-brand-symbol { display: inline-block; vertical-align: middle; margin-right: .4rem; }
+.local-app .auth-brand-symbol { width: 42px; height: 42px; }
+.local-app .nav-intro-mark { display: block; width: 38px; height: 38px; padding: 0; object-fit: contain; background: transparent; }
+.local-app .nav-intro { border-color: #cae4dd; }
+.local-app .side-link.active { color: var(--v-bottle-dark); box-shadow: inset 3px 0 var(--v-bottle); }
+.local-app .side-link.active::before { background: var(--v-leaf); border-color: var(--v-bottle); }
+.local-app .seller-mode-tab.is-active { background: var(--v-bottle); border-color: var(--v-bottle); }
+@media (max-width: 420px) {
+  .local-app .brand { gap: .45rem; }
+  .local-app .brand-symbol { width: 30px; height: 30px; }
+  .local-app .brand-wordmark strong { font-size: .92rem; letter-spacing: .23em; }
+  .local-app .brand-wordmark small { font-size: .53rem; }
+  .local-app .brand-product { padding-left: .55rem; }
+}
