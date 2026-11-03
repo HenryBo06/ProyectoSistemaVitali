@@ -175,7 +175,7 @@ class EtlPreviewTests(TestCase):
         self.assertEqual(inspection.issue_count, 0)
         form = {
             "action": "load", "inspection_id": inspection.pk,
-            "etl_file": SimpleUploadedFile("ventas.csv", original),
+            "etl_load_file": SimpleUploadedFile("ventas.csv", original),
             "provenance": "simulated", "date_semantics": "sale_order",
             "confirmed_origin": "on", "confirmed_full_snapshot": "on",
             "approved_load": "on",
@@ -192,7 +192,7 @@ class EtlPreviewTests(TestCase):
                          inspection.source_sha256)
         self.assertEqual(SalesDataset.objects.count(), 1)
         retry = self.client.post(url, {
-            **form, "etl_file": SimpleUploadedFile("ventas.csv", original),
+            **form, "etl_load_file": SimpleUploadedFile("ventas.csv", original),
         })
         self.assertEqual(retry.status_code, 200)
         self.assertEqual(SalesDataset.objects.count(), 1)
@@ -223,13 +223,13 @@ class EtlPreviewTests(TestCase):
             "approved_load": "on",
         }
         mismatch = self.client.post(url, {
-            **common, "etl_file": SimpleUploadedFile(
+            **common, "etl_load_file": SimpleUploadedFile(
                 "ventas.csv", b"Fecha,Cliente,Producto,Cantidad,Precio\n2026-01-10,A,B,3,10\n"),
         })
         self.assertEqual(mismatch.status_code, 200)
         self.assertEqual(SalesDataset.objects.count(), 0)
         no_unit = self.client.post(url, {
-            **common, "etl_file": SimpleUploadedFile("ventas.csv", original),
+            **common, "etl_load_file": SimpleUploadedFile("ventas.csv", original),
         })
         self.assertEqual(no_unit.status_code, 200)
         self.assertEqual(SalesDataset.objects.count(), 0)
@@ -239,7 +239,7 @@ class EtlPreviewTests(TestCase):
         self.client.force_login(self.seller)
         response = self.client.post(reverse("etl_preview"), {
             "action": "load", "inspection_id": "1",
-            "etl_file": SimpleUploadedFile("ventas.csv", b"irrelevant"),
+            "etl_load_file": SimpleUploadedFile("ventas.csv", b"irrelevant"),
             "confirmed_origin": "on", "confirmed_full_snapshot": "on",
             "approved_load": "on",
         })

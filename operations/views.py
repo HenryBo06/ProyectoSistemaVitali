@@ -2039,7 +2039,7 @@ def etl_preview(request):
                 inspection = get_object_or_404(
                     EtlInspectionRun.objects.select_related("profile"),
                     pk=request.POST.get("inspection_id"))
-                uploaded = request.FILES.get("etl_file")
+                uploaded = request.FILES.get("etl_load_file")
                 if uploaded is None or uploaded.size > 20 * 1024 * 1024:
                     raise ValueError("Adjunte nuevamente el archivo inspeccionado de hasta 20 MB.")
                 dataset = import_reviewed_sales(
