@@ -145,3 +145,103 @@ class EtlPreviewTests(TestCase):
         self.assertTrue(EtlInspectionRun.objects.filter(
             profile=profiles[0], schema_changed=True).count() >= 2)
         self.assertEqual(SalesDataset.objects.count(), 0)
+
+
+    def test_reviewed_etl_loads_csv_into_existing_sales_models(self):
+        import json
+        from .models import EtlMappingProfile, EtlInspectionRun, EtlLoadRun, SalesLine
+        self.client.force_login(self.admin)
+        url = reverse("etl_preview")
+        mapping = {
+            "Fecha": "DiaFactura", "Cliente": "Cuenta", "Producto": "Articulo",
+            "Cantidad_kg_unid": "Volumen", "Precio_Unitario_USD": "Tarifa",
+            "Unidad": "TipoUnidad", "Referencia_pedido": "Pedido",
+            "Referencia_linea": "Linea",
+        }
+        self.client.post(url, {
+            "action": "save_profile", "alias": "ventas-etl",
+            "name": "Prueba ETL", "mapping": json.dumps(mapping),
+        })
+        profile = EtlMappingProfile.objects.get(alias="ventas-etl")
+        original = (
+            b"DiaFactura,Cuenta,Articulo,Volumen,Tarifa,TipoUnidad,Pedido,Linea\n"
+            b"2026-01-10,C1,Alitas,2,5,kg,P1,L1\n"
+        )
+        response = self.client.post(url, {
+            "profile_id": profile.pk, "etl_file": SimpleUploadedFile("ventas.csv", original),
+        })
+        self.assertEqual(response.status_code, 200)
+        inspection = EtlInspectionRun.objects.get(profile=profile)
+        self.assertEqual(inspection.issue_count, 0)
+        form = {
+            "action": "load", "inspection_id": inspection.pk,
+            "etl_file": SimpleUploadedFile("ventas.csv", original),
+            "provenance": "simulated", "date_semantics": "sale_order",
+            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+            "approved_load": "on",
+        }
+        loaded = self.client.post(url, form)
+        self.assertEqual(loaded.status_code, 302)
+        dataset = SalesDataset.objects.get(active=True)
+        self.assertEqual(dataset.row_count, 1)
+        line = SalesLine.objects.get(dataset=dataset)
+        self.assertEqual(line.client, "C1")
+        self.assertEqual(str(line.quantity), "2.000")
+        self.assertEqual(line.source_order_ref, "P1")
+        self.assertEqual(EtlLoadRun.objects.get(dataset=dataset).source_sha256,
+                         inspection.source_sha256)
+        self.assertEqual(SalesDataset.objects.count(), 1)
+        retry = self.client.post(url, {
+            **form, "etl_file": SimpleUploadedFile("ventas.csv", original),
+        })
+        self.assertEqual(retry.status_code, 200)
+        self.assertEqual(SalesDataset.objects.count(), 1)
+
+    def test_etl_load_rejects_changed_file_and_missing_unit(self):
+        import json
+        from .models import EtlMappingProfile, EtlInspectionRun
+        self.client.force_login(self.admin)
+        url = reverse("etl_preview")
+        self.client.post(url, {
+            "action": "save_profile", "alias": "ventas-carga",
+            "name": "Carga controlada",
+            "mapping": json.dumps({
+                "Fecha": "Fecha", "Cliente": "Cliente", "Producto": "Producto",
+                "Cantidad_kg_unid": "Cantidad", "Precio_Unitario_USD": "Precio",
+            }),
+        })
+        profile = EtlMappingProfile.objects.get(alias="ventas-carga")
+        original = b"Fecha,Cliente,Producto,Cantidad,Precio\n2026-01-10,A,B,2,10\n"
+        self.client.post(url, {
+            "profile_id": profile.pk, "etl_file": SimpleUploadedFile("ventas.csv", original),
+        })
+        inspection = EtlInspectionRun.objects.get(profile=profile)
+        common = {
+            "action": "load", "inspection_id": inspection.pk,
+            "provenance": "real", "date_semantics": "sale_order",
+            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+            "approved_load": "on",
+        }
+        mismatch = self.client.post(url, {
+            **common, "etl_file": SimpleUploadedFile(
+                "ventas.csv", b"Fecha,Cliente,Producto,Cantidad,Precio\n2026-01-10,A,B,3,10\n"),
+        })
+        self.assertEqual(mismatch.status_code, 200)
+        self.assertEqual(SalesDataset.objects.count(), 0)
+        no_unit = self.client.post(url, {
+            **common, "etl_file": SimpleUploadedFile("ventas.csv", original),
+        })
+        self.assertEqual(no_unit.status_code, 200)
+        self.assertEqual(SalesDataset.objects.count(), 0)
+
+    def test_etl_load_is_admin_only_even_with_valid_inspection(self):
+        from .models import EtlInspectionRun
+        self.client.force_login(self.seller)
+        response = self.client.post(reverse("etl_preview"), {
+            "action": "load", "inspection_id": "1",
+            "etl_file": SimpleUploadedFile("ventas.csv", b"irrelevant"),
+            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+            "approved_load": "on",
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(EtlInspectionRun.objects.count(), 0)

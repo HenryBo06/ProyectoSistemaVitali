@@ -2030,6 +2030,26 @@ def etl_preview(request):
                                            target=alias, details={"version": version})
                 messages.success(request, f"Perfil {alias} versión {version} guardado sin alterar versiones anteriores.")
                 return redirect("etl_preview")
+            if mode == "load":
+                from .services import import_reviewed_sales
+                if not all(request.POST.get(name) == "on" for name in (
+                        "confirmed_origin", "confirmed_full_snapshot", "approved_load")):
+                    raise ValueError(
+                        "Confirme procedencia, histórico completo y aprobación explícita de la carga.")
+                inspection = get_object_or_404(
+                    EtlInspectionRun.objects.select_related("profile"),
+                    pk=request.POST.get("inspection_id"))
+                uploaded = request.FILES.get("etl_file")
+                if uploaded is None or uploaded.size > 20 * 1024 * 1024:
+                    raise ValueError("Adjunte nuevamente el archivo inspeccionado de hasta 20 MB.")
+                dataset = import_reviewed_sales(
+                    uploaded.read(), uploaded.name, inspection, request.user,
+                    provenance=request.POST.get("provenance", ""),
+                    date_semantics=request.POST.get("date_semantics", ""))
+                messages.success(
+                    request, f"ETL aprobado: {dataset.row_count:,} líneas activadas "
+                    "con historial anterior conservado.")
+                return redirect("sales_upload")
             if mode != "preview":
                 raise ValueError("Operación ETL no permitida.")
             uploaded = request.FILES.get("etl_file")
@@ -2081,9 +2101,13 @@ def etl_preview(request):
                 else str(exc)))
     profiles = list(EtlMappingProfile.objects.order_by("alias", "-version")[:100])
     history = list(EtlInspectionRun.objects.select_related("profile").order_by("-created_at")[:12])
+    loadable = list(EtlInspectionRun.objects.select_related("profile").filter(
+        profile__isnull=False, issue_count=0, invalid_rows=0,
+        row_count__gt=0, schema_changed=False,
+    ).order_by("-created_at")[:15])
     return TemplateResponse(request, "operations/etl_preview.html",
                             _base(request, report=report, profiles=profiles,
-                                  inspection_history=history))
+                                  inspection_history=history, loadable_inspections=loadable))
 
 
 @admin_required

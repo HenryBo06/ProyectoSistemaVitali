@@ -276,3 +276,59 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
     finally:
         if book is not None:
             book.close()
+
+
+def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = None,
+                         date_format: str = "%Y-%m-%d", decimal_separator: str = ".",
+                         sheet_name: str = "") -> tuple[bytes, dict]:
+    """Revalidate and normalize one approved CSV/XLSX source for the existing importer.
+
+    Preview and Load share extraction, mapping and row rules. The returned XLSX
+    is an internal canonical artifact, not a new independent history parser.
+    The original bytes are neither logged nor stored by the preview.
+    """
+    from openpyxl import Workbook
+
+    report = preview_sales(raw, filename, manual=manual, date_format=date_format,
+                           decimal_separator=decimal_separator, sheet_name=sheet_name)
+    if not report["ready_to_review"]:
+        raise ValueError("La fuente presenta problemas ETL; inspeccione y corrija antes de cargar.")
+
+    headers, rows, kind, _, book = _extract(raw, filename, sheet_name)
+    target = Workbook(write_only=True)
+    sheet = target.create_sheet("Ventas")
+    sheet.append(list(HEADERS))
+    positions = {header: index for index, header in enumerate(headers)}
+    processed = 0
+    try:
+        for row in rows:
+            if not any(value is not None and str(value).strip() for value in row):
+                continue
+            if len(row) != len(headers):
+                raise ValueError("La estructura cambió durante la normalización.")
+            result = {}
+            for canonical, source in report["mapping"].items():
+                value = row[positions[source]]
+                if canonical in DATE_FIELDS:
+                    result[canonical] = (_date(value, date_format)
+                                         if value is not None and str(value).strip() else None)
+                elif canonical in NUMBER_FIELDS:
+                    result[canonical] = (float(_decimal(value, decimal_separator))
+                                         if value is not None and str(value).strip() else None)
+                else:
+                    result[canonical] = str(value if value is not None else "").strip()
+            sheet.append([result.get(name) for name in HEADERS])
+            processed += 1
+        if processed != report["valid_rows"]:
+            raise ValueError("El total de registros cambió durante la normalización.")
+        output = BytesIO()
+        target.save(output)
+        normalized = output.getvalue()
+        if len(normalized) > MAX_BYTES:
+            raise ValueError("El Excel normalizado supera los 20 MB; divida el lote.")
+        return normalized, report
+    except csv.Error as exc:
+        raise ValueError("La fuente contiene una estructura CSV inválida.") from exc
+    finally:
+        if book is not None:
+            book.close()

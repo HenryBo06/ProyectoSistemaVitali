@@ -765,3 +765,21 @@ class SourceSync(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["status"], condition=Q(status="running"), name="one_running_source_sync")]
+
+
+class EtlLoadRun(models.Model):
+    """Immutable provenance for an approved full-snapshot ETL activation."""
+
+    inspection = models.OneToOneField(
+        EtlInspectionRun, on_delete=models.PROTECT, related_name="approved_load")
+    dataset = models.OneToOneField(
+        SalesDataset, on_delete=models.PROTECT, related_name="etl_load")
+    source_sha256 = models.CharField(max_length=64, unique=True)
+    profile = models.ForeignKey(
+        EtlMappingProfile, on_delete=models.PROTECT, related_name="approved_loads")
+    loaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="etl_loads")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

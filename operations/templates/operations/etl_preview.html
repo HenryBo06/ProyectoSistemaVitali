@@ -35,6 +35,40 @@
 <button class="btn btn-primary mt-3" type="submit">Inspeccionar sin cargar</button>
 </form>
 </div></section>
+
+<section class="panel mt-3"><div class="panel-header"><h2 class="panel-title">Aprobar carga ETL de histórico completo</h2></div>
+<div class="panel-body">
+<p class="form-text">Segundo paso obligatorio: selecciona una inspección válida con perfil versionado y vuelve a adjuntar exactamente el mismo archivo. El sistema compara su huella SHA-256, revalida sus filas y conserva el histórico anterior. No admite cargas incrementales ni activa una fuente solo por inspeccionarla.</p>
+<form method="post" enctype="multipart/form-data">{% csrf_token %}
+<input type="hidden" name="action" value="load">
+<label class="form-label" for="etl-load-inspection">Inspección aprobada</label>
+<select class="form-select mb-2" name="inspection_id" id="etl-load-inspection" required>
+<option value="">Seleccionar inspección válida</option>
+{% for inspection in loadable_inspections %}
+<option value="{{ inspection.pk }}">{{ inspection.created_at|date:"d/m/Y H:i" }} · {{ inspection.filename }} · {{ inspection.profile.alias }} v{{ inspection.profile.version }} · {{ inspection.row_count }} filas</option>
+{% endfor %}
+</select>
+<label class="form-label" for="etl-load-file">Mismo archivo CSV/XLSX inspeccionado</label>
+<input class="form-control mb-2" type="file" name="etl_file" id="etl-load-file" accept=".csv,.xlsx" required>
+<div class="row g-2">
+<div class="col-sm-6"><label class="form-label" for="etl-load-provenance">Procedencia de datos</label>
+<select class="form-select" name="provenance" id="etl-load-provenance" required>
+<option value="">Seleccionar</option><option value="real">Real</option><option value="simulated">Simulada</option>
+</select></div>
+<div class="col-sm-6"><label class="form-label" for="etl-load-semantics">Significado de Fecha</label>
+<select class="form-select" name="date_semantics" id="etl-load-semantics" required>
+<option value="">Seleccionar</option><option value="sale_order">Fecha de venta/pedido</option><option value="delivery">Fecha de entrega realizada</option>
+</select></div></div>
+<div class="form-check mt-3"><input class="form-check-input" type="checkbox" value="on" name="confirmed_origin" id="etl-load-origin" required>
+<label class="form-check-label" for="etl-load-origin">Confirmo la procedencia declarada del archivo.</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" value="on" name="confirmed_full_snapshot" id="etl-load-snapshot" required>
+<label class="form-check-label" for="etl-load-snapshot">Confirmo que es un histórico completo que reemplaza la fuente activa, no un lote incremental.</label></div>
+<div class="form-check"><input class="form-check-input" type="checkbox" value="on" name="approved_load" id="etl-load-approve" required>
+<label class="form-check-label" for="etl-load-approve">Apruebo activar esta versión para los servicios existentes de SmartOrder.</label></div>
+<button class="btn btn-primary mt-3" type="submit">Revalidar y activar histórico</button>
+</form>
+</div></section>
+
 <section class="panel mt-3"><div class="panel-header"><h2 class="panel-title">Guardar perfil de mapeo</h2></div>
 <div class="panel-body"><p class="form-text">Los perfiles son inmutables: guardar el mismo alias crea una versión nueva. No se copian secretos ni registros de ventas.</p>
 <form method="post">{% csrf_token %}

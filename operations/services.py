@@ -1246,3 +1246,68 @@ def top_products_for(dataset: SalesDataset, clients: list[str] | None = None,
         lines = lines.filter(client__in=clients)
     rows = lines.values("product").annotate(revenue=Sum("amount")).order_by("-revenue")[:limit]
     return [{"product": row["product"], "revenue": row["revenue"]} for row in rows]
+
+
+def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
+                          provenance: str, date_semantics: str) -> SalesDataset:
+    """Activate only a previously approved, identical, fully validated ETL source.
+
+    Incremental merges are deliberately excluded until business keys are agreed.
+    The legacy persistence path still owns SalesDataset/SalesLine/coverage writes.
+    """
+    from smartorder.etl import canonical_sales_xlsx
+    from .models import AccessEvent, EtlLoadRun
+
+    if not user.is_staff:
+        raise ValueError("Solo administración puede aprobar cargas ETL.")
+    if inspection.profile_id is None:
+        raise ValueError("La carga necesita una inspección con perfil versionado.")
+    if (inspection.schema_changed or inspection.issue_count or inspection.invalid_rows
+            or not inspection.row_count or inspection.valid_rows != inspection.row_count):
+        raise ValueError("La inspección elegida no está aprobada para carga.")
+    if provenance not in {SalesDataset.Provenance.REAL, SalesDataset.Provenance.SIMULATED}:
+        raise ValueError("Confirme explícitamente si la fuente es real o simulada.")
+    if date_semantics not in SalesDataset.DateSemantics.values:
+        raise ValueError("Confirme el significado comercial de la fecha.")
+    if sha256(raw).hexdigest() != inspection.source_sha256:
+        raise ValueError("El archivo no coincide con la huella SHA-256 inspeccionada.")
+
+    profile = inspection.profile
+    normalized, report = canonical_sales_xlsx(
+        raw, filename, manual=profile.mapping, date_format=profile.date_format,
+        decimal_separator=profile.decimal_separator, sheet_name=profile.sheet_name)
+    if (report["schema_sha256"] != inspection.schema_sha256
+            or report["row_count"] != inspection.row_count
+            or report["format"] != inspection.source_format):
+        raise ValueError("El esquema o el volumen difiere de la inspección aprobada.")
+    if ("Unidad" not in report["mapping"]
+            or any("sin unidad confirmada" in note for note in report["notes"])):
+        raise ValueError("Todas las filas necesitan unidad comercial antes de activar inferencia.")
+
+    dataset = None
+    try:
+        with transaction.atomic():
+            if EtlLoadRun.objects.filter(source_sha256=inspection.source_sha256).exists():
+                raise ValueError("Este archivo ya fue cargado mediante ETL.")
+            dataset = import_sales(
+                normalized, f"etl-{inspection.source_sha256[:20]}.xlsx",
+                user, verified=True, full_snapshot_confirmed=True,
+                provenance=provenance, date_semantics=date_semantics)
+            EtlLoadRun.objects.create(
+                inspection=inspection, dataset=dataset, profile=profile,
+                source_sha256=inspection.source_sha256, loaded_by=user)
+            AccessEvent.objects.create(
+                actor=user, action="etl_snapshot_activated", target=str(dataset.pk),
+                details={
+                    "inspection_id": inspection.pk, "profile_alias": profile.alias,
+                    "profile_version": profile.version, "source_sha256": inspection.source_sha256,
+                    "rows": report["row_count"], "date_semantics": date_semantics,
+                    "provenance": provenance,
+                })
+        return dataset
+    except Exception:
+        # File storage is not transactional; remove an orphan if the outer
+        # transaction fails after import_sales has written the file.
+        if dataset is not None and dataset.file:
+            dataset.file.storage.delete(dataset.file.name)
+        raise
