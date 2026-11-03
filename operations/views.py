@@ -131,7 +131,7 @@ def _invalidate_sessions(user):
             session.delete()
 
 
-def _seller_cards(cards):
+def _seller_cards(cards, *, preserve_priority: bool = False):
     fields = (
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
         "commercial_forecast", "target_date",
@@ -185,7 +185,8 @@ def _seller_cards(cards):
     return [{**{key: card.get(key) for key in fields},
              "state": "suggested" if card["suggested"] is not None else "manual",
              "explanation": seller_explanation(card)}
-            for card in cards]
+            for card in (cards if preserve_priority else sorted(
+                cards, key=lambda item: item["product"].casefold()))]
 
 
 def _seller_order(order):
@@ -1137,7 +1138,8 @@ def recommendations(request):
     event_id = request.GET.get("event_id")
     cards = recommendation_cards(dataset, delivery, client, today=today, mode=mode,
                                  event_id=event_id) if dataset and client else []
-    safe_cards = _seller_cards(commercial.decorate_cards(cards, client))
+    safe_cards = _seller_cards(commercial.decorate_cards(cards, client),
+                               preserve_priority=True)
     return TemplateResponse(request, "operations/recommendations.html", _base(
         request, clients=clients, selected_client=client, client=client,
         suggestion_mode=mode,

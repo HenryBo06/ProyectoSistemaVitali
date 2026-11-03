@@ -467,3 +467,83 @@ class EtlPreviewTests(TestCase):
         self.assertEqual(line.unit, "lb")
         self.assertFalse(line.dataset.verified)
         self.assertEqual(EtlLoadRun.objects.count(), 1)
+
+
+    def test_2025_demo_size_1294_rows_passes_etl_with_unverified_product_suggestions(self):
+        import json
+        from datetime import date, timedelta
+        from django.utils import timezone
+        from .models import EtlMappingProfile, EtlInspectionRun, SalesLine, SalesCoverage, Assignment
+        self.client.force_login(self.admin)
+        clients = [f"Cliente Demo {i}" for i in range(10)]
+        products = [f"Producto Demo {i}" for i in range(8)]
+        profile = EtlMappingProfile.objects.create(
+            alias="vitali-demo-scale", name="Simulación equivalente 2025", version=1,
+            mapping={key: key for key in [
+                "Fecha", "Cliente", "Producto",
+                "Cantidad_kg_unid", "Precio_Unitario_USD",
+            ]},
+            sheet_name="Ventas2025", created_by=self.admin,
+        )
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "Ventas2025"
+        sheet.append([
+            "Fecha", "Cliente", "Zona_Geografica", "Canal_Distribucion",
+            "Canal_Venta", "Producto", "Categoria", "Cantidad_kg_unid",
+            "Precio_Unitario_USD", "Monto_Venta_USD",
+        ])
+        for index in range(1294):
+            day = date(2025, 1, 1) + timedelta(days=index % 365)
+            client = clients[index % 10]
+            product = products[(index // 10) % 8]
+            qty = (index % 30) + 1
+            sheet.append([
+                day, client, "Central", "Distribuidores", "Retail", product,
+                "Cortes", qty, 5, qty * 5,
+            ])
+        output = BytesIO()
+        book.save(output)
+        raw = output.getvalue()
+        url = reverse("etl_preview")
+        inspected = self.client.post(url, {
+            "profile_id": profile.pk, "etl_file": SimpleUploadedFile("demo.xlsx", raw),
+        })
+        self.assertEqual(inspected.status_code, 200)
+        report = inspected.context["report"]
+        self.assertTrue(report["ready_to_review"])
+        self.assertEqual(report["row_count"], 1294)
+        self.assertEqual(report["client_count"], 10)
+        self.assertEqual(report["product_count"], 8)
+        self.assertEqual(len(report["missing_unit_products"]), 8)
+        self.assertEqual(report["estimated_daily_cells"], 80 * 365)
+        inspection = EtlInspectionRun.objects.get(profile=profile)
+        loaded = self.client.post(url, {
+            "action": "load", "inspection_id": inspection.pk,
+            "etl_load_file": SimpleUploadedFile("demo.xlsx", raw),
+            "unit_product": products,
+            "unit_value": ["kg", "lb", "unidad", "kg", "lb", "unidad", "kg", "lb"],
+            "provenance": "simulated", "date_semantics": "sale_order",
+            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+            "approved_load": "on",
+        })
+        self.assertEqual(loaded.status_code, 302)
+        dataset = SalesDataset.objects.get(active=True)
+        self.assertFalse(dataset.verified)
+        self.assertEqual(dataset.row_count, 1294)
+        self.assertEqual(SalesLine.objects.filter(dataset=dataset).count(), 1294)
+        self.assertEqual(dataset.coverage.count(), 80)
+        self.assertFalse(dataset.coverage.filter(status=SalesCoverage.Status.COMPLETE).exists())
+        self.assertEqual(set(dataset.lines.values_list("unit", flat=True)), {"kg", "lb", "unidad"})
+
+        Assignment.objects.create(user=self.seller, client=clients[0])
+        self.client.force_login(self.seller)
+        suggestion = self.client.get(reverse("recommendations"), {
+            "client": clients[0], "required_date": timezone.localdate().isoformat(),
+        })
+        self.assertEqual(suggestion.status_code, 200)
+        cards = suggestion.context["recommendations"]
+        self.assertEqual(len(cards), 8)
+        self.assertTrue(all(card["suggested"] is None for card in cards))
+        self.assertEqual(sorted(card["historical_rank"] for card in cards), list(range(1, 9)))
+        self.assertContains(suggestion, "Prioridad histórica")
