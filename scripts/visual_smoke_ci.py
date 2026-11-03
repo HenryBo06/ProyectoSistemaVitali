@@ -189,6 +189,14 @@ def streamlit_smoke(browser) -> None:
     }""")
     if overlap:
         raise AssertionError("Streamlit mobile navigation button overlaps the application identity.")
+    symbol = page.locator(".vitali-ticket img.vitali-symbol").first.bounding_box()
+    title = page.locator(".vitali-ticket .vitali-ticket-name").first.bounding_box()
+    if symbol is None or title is None:
+        raise AssertionError("Streamlit Vitali mobile brand elements are missing.")
+    logo_center = symbol["y"] + symbol["height"] / 2
+    title_center = title["y"] + title["height"] / 2
+    if abs(logo_center - title_center) > 7 or title["x"] < symbol["x"] + symbol["width"] - 1:
+        raise AssertionError("The Vitali logo and wordmark must share an unobstructed mobile row.")
     page.screenshot(path=str(OUT / "streamlit-catalog-mobile.png"), full_page=False)
     context.close()
 
