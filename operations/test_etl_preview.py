@@ -68,6 +68,29 @@ class EtlPreviewTests(TestCase):
         book.save(buff)
         self.assertTrue(preview_sales(buff.getvalue(), "ventas.xlsx")["ready_to_review"])
 
+    def test_unknown_xlsx_sheet_is_rejected_not_silently_replaced(self):
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "Ventas reales"
+        sheet.append(["Fecha", "Cliente", "Producto", "Cantidad", "Precio"])
+        sheet.append(["2026-01-10", "A", "B", 2, 10])
+        buffer = BytesIO()
+        book.save(buffer)
+        with self.assertRaisesRegex(ValueError, "no existe"):
+            preview_sales(buffer.getvalue(), "ventas.xlsx", sheet_name="Otra hoja")
+
+    def test_sparse_extreme_dates_reject_forecast_grid_expansion(self):
+        raw = (
+            "Fecha,Cliente,Producto,Cantidad,Precio\\n"
+            "2026-01-01,A,B,2,10\\n"
+            "3026-01-01,A,B,2,10\\n"
+        ).replace("\\\\n", "\\n").encode("utf-8")
+        result = preview_sales(raw, "ventas.csv")
+        self.assertFalse(result["ready_to_review"])
+        self.assertEqual(result["row_count"], 2)
+        self.assertGreater(result["estimated_daily_cells"], 250_000)
+        self.assertIn("límite", " ".join(result["issues"]))
+
     def test_admin_web_review_and_seller_forbidden(self):
         raw = b"fecha,cliente,producto,cantidad,precio\n2026-01-10,A,B,2,10\n"
         url = reverse("etl_preview")

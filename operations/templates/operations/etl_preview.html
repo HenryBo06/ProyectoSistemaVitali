@@ -59,7 +59,7 @@
 {% if report %}
 <p><strong>{{ report.row_count }} filas</strong> · {{ report.valid_rows }} válidas · {{ report.invalid_rows }} con problemas</p>
 <p class="muted">{{ report.filename }} · {{ report.format }} · {{ report.client_count }} clientes · {{ report.product_count }} productos</p>
-<p class="muted">Cobertura: {{ report.date_min|default:"Sin fechas válidas" }} — {{ report.date_max|default:"Sin fechas válidas" }}</p>
+<p class="muted">Cobertura: {{ report.date_min|default:"Sin fechas válidas" }} — {{ report.date_max|default:"Sin fechas válidas" }} · Celdas diarias estimadas para inferencia: {{ report.estimated_daily_cells }}</p>
 {% if report.ready_to_review %}<div class="alert alert-success">Estructura preliminar válida. Aún requiere verificación empresarial antes de activarse.</div>
 {% else %}<div class="alert alert-warning">Bloqueada para carga: hay columnas o registros por corregir.</div>{% endif %}
 <h3 class="h6">Mapeo detectado</h3>

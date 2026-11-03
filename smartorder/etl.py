@@ -16,7 +16,7 @@ import re
 
 from openpyxl import load_workbook
 
-from .data import COLUMN_ALIASES, CORE_HEADERS, HEADERS, MAX_BYTES, MAX_ROWS, _slug
+from .data import COLUMN_ALIASES, CORE_HEADERS, HEADERS, MAX_BYTES, MAX_ROWS, MAX_DAILY_CELLS, _slug
 
 VERSION = "sales-etl-preview-v1"
 NUMBER_FIELDS = {"Cantidad_kg_unid", "Precio_Unitario_USD", "Monto_Venta_USD"}
@@ -72,7 +72,12 @@ def _extract(raw: bytes, filename: str, sheet_name: str = ""):
             book = load_workbook(BytesIO(raw), read_only=True, data_only=True)
         except Exception as exc:
             raise ValueError("No se pudo leer el libro XLSX.") from exc
-        selected = book[sheet_name] if sheet_name and sheet_name in book.sheetnames else book.worksheets[0]
+        if sheet_name and sheet_name not in book.sheetnames:
+            book.close()
+            raise ValueError(
+                "La hoja de Excel solicitada no existe. Revise el nombre y seleccione la hoja correcta."
+            )
+        selected = book[sheet_name] if sheet_name else book.worksheets[0]
         reader = selected.iter_rows(values_only=True)
         header = _headers(next(reader, []))
         return header, reader, "xlsx", "", book
@@ -164,6 +169,7 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
         clients = set()
         products = set()
         dates = []
+        pairs = set()
         unit_missing = 0
         duplicate_refs = set()
         duplicate_count = 0
@@ -220,6 +226,7 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
                         unit_missing += 1
                     clients.add(record["Cliente"])
                     products.add(record["Producto"])
+                    pairs.add((record["Cliente"], record["Producto"]))
                     dates.append(record["Fecha"])
                     valid += 1
                     if len(samples) < 5:
@@ -233,6 +240,18 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
             issues.append("La fuente no contiene registros.")
         if duplicate_count:
             issues.append(f"{duplicate_count} referencias de línea repetidas; revise duplicados.")
+        daily_cells = 0
+        if dates:
+            start = date.fromisoformat(min(dates))
+            end = date.fromisoformat(max(dates))
+            daily_cells = len(pairs) * ((end - start).days + 1)
+            if daily_cells > MAX_DAILY_CELLS:
+                issues.append(
+                    f"El rango temporal y {len(pairs)} combinaciones cliente-producto generarían "
+                    f"{daily_cells:,} celdas diarias, por encima del límite de "
+                    f"{MAX_DAILY_CELLS:,} del motor de inferencia. Revise fechas extremas o "
+                    "segmente el análisis antes de activar datos."
+                )
         unused = [x for x in header if x not in mapping.values()]
         notes = []
         if unused:
@@ -249,7 +268,8 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
             "row_count": count, "valid_rows": valid, "invalid_rows": count - valid,
             "date_min": min(dates) if dates else None, "date_max": max(dates) if dates else None,
             "client_count": len(clients), "product_count": len(products),
-            "duplicate_references": duplicate_count, "unmapped": unused,
+            "duplicate_references": duplicate_count,
+            "estimated_daily_cells": daily_cells, "unmapped": unused,
             "notes": notes, "issues": issues, "samples": samples,
             "ready_to_review": count > 0 and valid == count and not issues,
         }
