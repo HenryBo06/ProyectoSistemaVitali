@@ -11,6 +11,7 @@ urlpatterns = [
     path("tarifas/", views.tariffs, name="tariffs"),
     path("fuentes/", views.source_center, name="source_center"),
     path("administracion/conexiones/", views.database_connections, name="database_connections"),
+    path("administracion/etl/", views.etl_preview, name="etl_preview"),
     path("pedidos/<int:order_id>/excepcion/", views.commercial_review, name="commercial_review"),
     path("pedidos/<int:order_id>/compromiso/", views.order_commitment, name="order_commitment"),
     path("", views.dashboard, name="dashboard"),

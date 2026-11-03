@@ -1978,6 +1978,39 @@ def pilot_dashboard(request):
 
 
 
+
+@admin_required
+@require_http_methods(["GET", "POST"])
+def etl_preview(request):
+    """Source-agnostic ETL inspection without mutations to inference or inventory."""
+    from smartorder.etl import preview_sales
+    import json as json_module
+    report = None
+    if request.method == "POST":
+        try:
+            upload = request.FILES.get("etl_file")
+            if upload is None:
+                raise ValueError("Seleccione un CSV o Excel para inspeccionar.")
+            if upload.size > 20 * 1024 * 1024:
+                raise ValueError("El archivo supera el límite de 20 MB.")
+            mapping_raw = request.POST.get("mapping", "").strip()
+            mapping = json_module.loads(mapping_raw) if mapping_raw else {}
+            report = preview_sales(
+                upload.read(), upload.name, manual=mapping,
+                date_format=request.POST.get("date_format", "%Y-%m-%d"),
+                decimal_separator=request.POST.get("decimal_separator", "."),
+                sheet_name=request.POST.get("sheet_name", "").strip(),
+            )
+            if report["ready_to_review"]:
+                messages.success(request, "Extracción y validación preliminar completadas. Ningún dato se activó.")
+            else:
+                messages.warning(request, "El origen necesita ajustes antes de poder cargarse.")
+        except (ValueError, json_module.JSONDecodeError) as exc:
+            messages.error(request, "No se pudo inspeccionar el archivo: " + str(exc))
+    return TemplateResponse(request, "operations/etl_preview.html",
+                            _base(request, report=report))
+
+
 @admin_required
 @require_http_methods(["GET", "POST"])
 def database_connections(request):

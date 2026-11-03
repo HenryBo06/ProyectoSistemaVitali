@@ -67,6 +67,7 @@
        {% if nav == 'tariffs' %}aria-current="page"{% endif %}>Clientes y tarifas</a>
     <a class="side-link {% if nav == 'database_connections' %}active{% endif %}"
        href="{% url 'database_connections' %}" {% if nav == 'database_connections' %}aria-current="page"{% endif %}>Conexiones de bases de datos</a>
+    <a class="side-link {% if nav == 'etl_preview' %}active{% endif %}" href="{% url 'etl_preview' %}" {% if nav == 'etl_preview' %}aria-current="page"{% endif %}>Preparación ETL de datos</a>
     {% if maintenance_ui %}
     <a class="side-link {% if nav == 'sales_upload' %}active{% endif %}"
        href="{% url 'sales_upload' %}"

@@ -1,0 +1,51 @@
+{% extends "operations/base.html" %}
+{% block title %}ETL · Preparar fuentes{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="page-eyebrow">Administración · Datos</p>
+<h1>Preparación ETL de históricos</h1><p>Extrae, transforma y valida archivos sin alterar el histórico activo ni la inferencia.</p></div></div>
+<div class="alert alert-info">La revisión ETL no activa una fuente. Primero hay que confirmar columnas, unidad comercial, fechas, calidad y cobertura. La integración PostgreSQL y Odoo se gestionan aparte.</div>
+<div class="row g-3"><div class="col-xl-5">
+<section class="panel"><div class="panel-header"><h2 class="panel-title">Inspeccionar origen</h2></div>
+<div class="panel-body">
+<form method="post" enctype="multipart/form-data">{% csrf_token %}
+<label class="form-label" for="etl-file">CSV UTF-8 o Excel XLSX</label>
+<input class="form-control mb-3" type="file" id="etl-file" name="etl_file" accept=".csv,.xlsx" required>
+<div class="row g-2">
+<div class="col-sm-6"><label class="form-label" for="etl-date">Formato de fecha</label>
+<select id="etl-date" class="form-select" name="date_format">
+<option value="%Y-%m-%d">AAAA-MM-DD</option><option value="%d/%m/%Y">DD/MM/AAAA</option><option value="%m/%d/%Y">MM/DD/AAAA</option>
+</select></div>
+<div class="col-sm-6"><label class="form-label" for="etl-decimal">Separador decimal</label>
+<select id="etl-decimal" class="form-select" name="decimal_separator"><option value=".">Punto (10.5)</option><option value=",">Coma (10,5)</option></select></div>
+</div>
+<label class="form-label mt-3" for="etl-sheet">Hoja Excel (opcional)</label>
+<input class="form-control" id="etl-sheet" name="sheet_name" placeholder="Dejar vacío para primera hoja" maxlength="80">
+<details class="mt-3"><summary>Mapeo manual cuando cambian las columnas</summary>
+<p class="form-text">Diccionario JSON con campo canónico y encabezado original. Por ejemplo: {"Fecha":"Día factura","Cliente":"Cuenta","Producto":"Artículo","Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"Precio neto"}. El sistema propone coincidencias para los nombres habituales.</p>
+<textarea class="form-control" name="mapping" rows="4" placeholder='{"Fecha":"DiaFactura","Cliente":"NombreCuenta"}'></textarea>
+</details>
+<button class="btn btn-primary mt-3" type="submit">Inspeccionar sin cargar</button>
+</form>
+</div></section></div>
+<div class="col-xl-7"><section class="panel"><div class="panel-header"><h2 class="panel-title">Resultado de inspección</h2></div><div class="panel-body">
+{% if report %}
+<p><strong>{{ report.row_count }} filas</strong> · {{ report.valid_rows }} válidas · {{ report.invalid_rows }} con problemas</p>
+<p class="muted">{{ report.filename }} · {{ report.format }} · {{ report.client_count }} clientes · {{ report.product_count }} productos</p>
+<p class="muted">Cobertura: {{ report.date_min|default:"Sin fechas válidas" }} — {{ report.date_max|default:"Sin fechas válidas" }}</p>
+{% if report.ready_to_review %}<div class="alert alert-success">Estructura preliminar válida. Aún requiere verificación empresarial antes de activarse.</div>
+{% else %}<div class="alert alert-warning">Bloqueada para carga: hay columnas o registros por corregir.</div>{% endif %}
+<h3 class="h6">Mapeo detectado</h3>
+<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Campo de SmartOrder</th><th>Columna origen</th></tr></thead><tbody>
+{% for target, source in report.mapping.items %}<tr><td>{{ target }}</td><td>{{ source }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% if report.issues %}<h3 class="h6">Problemas</h3><ul>{% for err in report.issues %}<li>{{ err }}</li>{% endfor %}</ul>{% endif %}
+{% if report.notes %}<h3 class="h6">Observaciones</h3><ul>{% for note in report.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+{% if report.samples %}<h3 class="h6">Muestra transformada (hasta cinco filas)</h3>
+<div class="table-responsive"><table class="table table-sm"><thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th>Cantidad</th><th>Unidad</th></tr></thead><tbody>
+{% for row in report.samples %}<tr><td>{{ row.Fecha }}</td><td>{{ row.Cliente }}</td><td>{{ row.Producto }}</td><td>{{ row.Cantidad_kg_unid }}</td><td>{{ row.Unidad }}</td></tr>{% endfor %}
+</tbody></table></div>{% endif %}
+<details><summary>Identificadores de auditoría</summary><p>Huella SHA-256 del archivo: <code>{{ report.sha256 }}</code></p>
+<p>Huella del esquema: <code>{{ report.schema_sha256 }}</code></p><p>Versión: {{ report.version }}</p></details>
+{% else %}<p class="muted">Sube un archivo de prueba para detectar campos obligatorios, errores y cambios de estructura. No se guardará ni se activará.</p>{% endif %}
+</div></section></div></div>
+{% endblock %}
