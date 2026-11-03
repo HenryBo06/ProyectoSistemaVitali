@@ -174,6 +174,46 @@ def django_connection_smoke(browser) -> None:
     context.close()
 
 
+
+def django_etl_smoke(browser) -> None:
+    """ETL preflight must handle changed CSV headers without activating history."""
+    from operations.models import SalesDataset
+    from django.db import close_old_connections
+    old_count = SalesDataset.objects.count()
+    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+    page = context.new_page()
+    page.goto("http://127.0.0.1:8000/entrar/", wait_until="domcontentloaded")
+    page.locator('input[name="username"]').fill("lab_admin_01")
+    page.locator('input[name="password"]').fill(CREDENTIALS["lab_admin_01"])
+    page.get_by_role("button", name="Entrar a mi espacio").click()
+    page.goto("http://127.0.0.1:8000/administracion/etl/", wait_until="domcontentloaded")
+    page.get_by_role("heading", name="Preparación ETL de históricos").wait_for(timeout=20000)
+    csv_data = (
+        "DiaFactura;Cuenta;Articulo;Volumen;PrecioNeto;TipoUnidad\n"
+        "10/01/2026;Cliente LAB;Alitas LAB;2,5;10,00;kg\n"
+    ).encode("utf-8")
+    page.locator('input[name="etl_file"]').set_input_files({
+        "name": "fuente-lab-cambiada.csv", "mimeType": "text/csv", "buffer": csv_data})
+    page.locator('select[name="date_format"]').select_option("%d/%m/%Y")
+    page.locator('select[name="decimal_separator"]').select_option(",")
+    page.locator('textarea[name="mapping"]').fill(
+        '{"Fecha":"DiaFactura","Cliente":"Cuenta","Producto":"Articulo",'
+        '"Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"PrecioNeto","Unidad":"TipoUnidad"}')
+    page.get_by_role("button", name="Inspeccionar sin cargar").click()
+    page.get_by_text("Estructura preliminar válida").wait_for(timeout=20000)
+    page.get_by_text("2.5", exact=True).first.wait_for(timeout=20000)
+    if page.locator("body").evaluate("(e) => e.scrollWidth > window.innerWidth + 2"):
+        raise AssertionError("ETL admin screen overflows at 390px.")
+    page.screenshot(path=str(OUT / "django-admin-etl-mobile.png"), full_page=True)
+    page.set_viewport_size({"width": 1440, "height": 900})
+    page.evaluate("window.scrollTo(0, 0)")
+    page.screenshot(path=str(OUT / "django-admin-etl-desktop.png"), full_page=True)
+    context.close()
+    close_old_connections()
+    if SalesDataset.objects.count() != old_count:
+        raise AssertionError("ETL preflight unexpectedly mutated historical sales.")
+
+
 def streamlit_smoke(browser) -> None:
     context = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
     page = context.new_page()
@@ -274,6 +314,7 @@ if __name__ == "__main__":
         try:
             django_smoke(browser)
             django_connection_smoke(browser)
+            django_etl_smoke(browser)
             streamlit_smoke(browser)
         finally:
             browser.close()
