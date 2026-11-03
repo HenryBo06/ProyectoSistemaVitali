@@ -1451,6 +1451,54 @@ def pilot_dashboard_screen():
         st.warning("Disponibilidad pendiente de validar. Los pedidos pueden registrarse bajo pedido.")
 
 
+
+def database_connections_screen():
+    st.title("Conexiones de bases de datos")
+    st.caption("PostgreSQL externo · solo lectura. Credenciales fuera de la aplicación.")
+    c = context("database_connections")
+    st.info("Registrar una conexión no importa ventas ni actualiza Odoo. La prueba ejecuta únicamente SELECT 1.")
+    with st.expander("Agregar conexión PostgreSQL", expanded=not bool(c["connections"])):
+        with st.form("external_database_registration"):
+            alias = st.text_input("Alias", placeholder="ventas-vitali")
+            name = st.text_input("Nombre", placeholder="Histórico comercial")
+            purpose = st.selectbox("Propósito", ["sales", "reporting", "reference"],
+                format_func=lambda x: {"sales": "Histórico de ventas", "reporting": "Consulta y reportes",
+                                       "reference": "Catálogos de referencia"}[x])
+            col1, col2 = st.columns([3, 1])
+            host = col1.text_input("Servidor", placeholder="db.empresa.local")
+            port = col2.number_input("Puerto", min_value=1, max_value=65535, value=5432)
+            database = st.text_input("Nombre de base")
+            username = st.text_input("Usuario de solo lectura")
+            secret = st.text_input("Variable privada con contraseña",
+                                   placeholder="SMARTORDER_SOURCE_VENTAS_PASSWORD")
+            sslmode = st.selectbox("TLS", ["require", "verify-full", "prefer"],
+                format_func=lambda x: {"require": "TLS requerido", "verify-full": "Verificar servidor",
+                                       "prefer": "Solo localhost"}[x])
+            if st.form_submit_button("Guardar conexión"):
+                if action("database_connections", {"action": "save", "alias": alias, "name": name,
+                    "purpose": purpose, "host": host, "port": port, "database": database,
+                    "username": username, "password_env": secret, "sslmode": sslmode}) is not None:
+                    st.rerun()
+    for item in c["connections"]:
+        with st.container(border=True):
+            st.write(f"**{item.name}** · {item.alias}")
+            st.caption(f"PostgreSQL · {item.get_purpose_display()} · {item.host}:{item.port}/{item.database}")
+            st.write(f"Estado: {'Habilitada' if item.enabled else 'Deshabilitada'} · "
+                     f"Última prueba: {'Correcta' if item.last_test_ok else 'Fallida' if item.last_test_ok is False else 'Sin probar'}")
+            test_btn, switch_btn = st.columns(2)
+            if test_btn.button("Probar acceso", key=f"db_test_{item.pk}"):
+                if action("database_connections", {"action": "test", "connection_id": item.pk}) is not None:
+                    st.rerun()
+            if switch_btn.button("Deshabilitar" if item.enabled else "Habilitar",
+                                 key=f"db_toggle_{item.pk}"):
+                if action("database_connections", {"action": "toggle", "connection_id": item.pk,
+                    "enabled": "no" if item.enabled else "yes"}) is not None:
+                    st.rerun()
+    st.caption("Para editar servidor, usuario o TLS utiliza el panel Django de administración. "
+               "La contraseña y la lista de servidores permitidos se provisionan como secretos externos.")
+    st.caption("La integración de Odoo conserva su administración independiente.")
+
+
 def odoo_settings_screen():
     st.title("Conexión y catálogos de Odoo")
     st.caption("Relaciona clientes, productos y unidades antes de transferir una venta.")
@@ -1668,7 +1716,7 @@ with st.sidebar:
                "Productos y pedidos": products, notification_label: notification_inbox_screen,
                "Pedidos y producción": orders, "Correcciones de inventario": corrections}
     if user.is_staff:
-        screens.update({"Clientes y tarifas": tariffs_screen, "Usuarios y cartera": accounts,
+        screens.update({"Clientes y tarifas": tariffs_screen, "Conexiones de bases de datos": database_connections_screen, "Usuarios y cartera": accounts,
                         "Calendario y reposición": planning_screen,
                         "Resultados operativos": operational_reports_screen})
         if settings.SMARTORDER_MAINTENANCE_UI:

@@ -65,6 +65,8 @@
     <p class="nav-caption mt-4">Administración</p>
     <a class="side-link {% if nav == 'tariffs' %}active{% endif %}" href="{% url 'tariffs' %}"
        {% if nav == 'tariffs' %}aria-current="page"{% endif %}>Clientes y tarifas</a>
+    <a class="side-link {% if nav == 'database_connections' %}active{% endif %}"
+       href="{% url 'database_connections' %}" {% if nav == 'database_connections' %}aria-current="page"{% endif %}>Conexiones de bases de datos</a>
     {% if maintenance_ui %}
     <a class="side-link {% if nav == 'sales_upload' %}active{% endif %}"
        href="{% url 'sales_upload' %}"

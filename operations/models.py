@@ -675,6 +675,40 @@ class PriceTariff(models.Model):
         ]
 
 
+
+class ExternalDatabaseConnection(models.Model):
+    """External PostgreSQL metadata; credentials never live in the application DB."""
+
+    class Purpose(models.TextChoices):
+        SALES = "sales", "Histórico de ventas"
+        REPORTING = "reporting", "Consulta y reportes"
+        REFERENCE = "reference", "Catálogos de referencia"
+
+    alias = models.SlugField(max_length=48, unique=True)
+    name = models.CharField(max_length=100)
+    engine = models.CharField(max_length=20, default="postgresql")
+    purpose = models.CharField(max_length=20, choices=Purpose.choices, default=Purpose.SALES)
+    host = models.CharField(max_length=253)
+    port = models.PositiveIntegerField(default=5432)
+    database = models.CharField(max_length=128)
+    username = models.CharField(max_length=128)
+    password_env = models.CharField(max_length=100)
+    sslmode = models.CharField(max_length=20, default="require")
+    enabled = models.BooleanField(default=False)
+    last_test_ok = models.BooleanField(null=True, blank=True, default=None)
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="external_database_connections")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "alias"]
+        constraints = [
+            models.CheckConstraint(condition=Q(port__gte=1) & Q(port__lte=65535),
+                                   name="external_db_valid_port"),
+        ]
+
 class SourceSync(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)

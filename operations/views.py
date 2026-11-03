@@ -1977,6 +1977,79 @@ def pilot_dashboard(request):
     return TemplateResponse(request, "operations/pilot_dashboard.html", _base(request, **commercial.pilot_dashboard(start, end)))
 
 
+
+@admin_required
+@require_http_methods(["GET", "POST"])
+def database_connections(request):
+    """Metadata, health checks, and enable/disable. Never store passwords or run import SQL."""
+    from .database_connections import (
+        validate_connection_fields, test_postgres_readonly, mark_connection_test,
+    )
+    from .models import ExternalDatabaseConnection
+
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action", "")
+            if action == "save":
+                connection_id = request.POST.get("connection_id", "")
+                entry = (get_object_or_404(ExternalDatabaseConnection, pk=connection_id)
+                         if connection_id else None)
+                fields = validate_connection_fields(request.POST)
+                if entry is None:
+                    entry = ExternalDatabaseConnection(created_by=request.user, **fields)
+                else:
+                    for key, value in fields.items():
+                        setattr(entry, key, value)
+                    entry.enabled = False  # Updating connection requires another test and opt-in.
+                    entry.last_test_ok = None
+                    entry.last_tested_at = None
+                entry.full_clean()
+                entry.save()
+                AccessEvent.objects.create(actor=request.user, action="external_db_saved",
+                                           target=entry.alias, details={"purpose": entry.purpose})
+                messages.success(request, "Conexión guardada sin almacenar credenciales. Compruebe el acceso.")
+            elif action in {"test", "toggle"}:
+                entry = get_object_or_404(ExternalDatabaseConnection,
+                                          pk=request.POST.get("connection_id"))
+                if action == "test":
+                    try:
+                        test_postgres_readonly(entry)
+                    except ValueError as exc:
+                        mark_connection_test(entry, False)
+                        messages.error(request, str(exc))
+                    else:
+                        mark_connection_test(entry, True)
+                        messages.success(request, "Conexión PostgreSQL de solo lectura comprobada.")
+                    AccessEvent.objects.create(actor=request.user, action="external_db_test",
+                                               target=entry.alias,
+                                               details={"success": entry.last_test_ok})
+                else:
+                    enable = request.POST.get("enabled") == "yes"
+                    if enable and not entry.last_test_ok:
+                        raise ValueError("Compruebe la conexión antes de habilitarla.")
+                    entry.enabled = enable
+                    entry.save(update_fields=["enabled", "updated_at"])
+                    AccessEvent.objects.create(actor=request.user, action="external_db_toggle",
+                                               target=entry.alias, details={"enabled": enable})
+                    messages.success(request, "Estado de conexión actualizado.")
+            else:
+                raise ValueError("Acción de conexión no permitida.")
+        except (ValueError, ValidationError, IntegrityError) as exc:
+            # Django validation errors may reveal fields, never include raw passwords.
+            messages.error(request, "No se pudo guardar: revise campos, alias y permisos."
+                           if isinstance(exc, (ValidationError, IntegrityError)) else str(exc))
+        return redirect("database_connections")
+
+    edit = (ExternalDatabaseConnection.objects.filter(pk=request.GET.get("edit")).first()
+            if request.GET.get("edit", "").isdigit() else None)
+    connections = list(ExternalDatabaseConnection.objects.order_by("name", "alias"))
+    return TemplateResponse(request, "operations/database_connections.html", _base(request,
+        connections=connections, edit_connection=edit,
+        allowed_hosts=os.environ.get("SMARTORDER_SOURCE_DB_ALLOWED_HOSTS",
+                                     "localhost,127.0.0.1,::1"),
+    ))
+
+
 @admin_required
 @require_http_methods(["GET", "POST"])
 def source_center(request):
