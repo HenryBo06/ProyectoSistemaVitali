@@ -56,7 +56,7 @@ class LocalFrontendViewTests(TestCase):
     def assertModernDjangoShell(self, response):
         self.assertContains(
             response,
-            'href="/static/operations/css/local-frontend.css?v=seller-density-20261102g"',
+            'href="/static/operations/css/local-frontend.css?v=seller-brand-20261103a"',
         )
 
     def test_login_has_branded_access_form(self):
