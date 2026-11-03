@@ -51,15 +51,19 @@
 <label class="form-label" for="etl-load-file">Mismo archivo CSV/XLSX inspeccionado</label>
 <input class="form-control mb-2" type="file" name="etl_load_file" id="etl-load-file" accept=".csv,.xlsx" required>
 {% if report.missing_unit_products %}
-<div class="alert alert-warning mt-3"><strong>Unidades comerciales sin especificar.</strong> Este origen tiene {{ report.missing_unit_count }} filas sin unidad. Confirma la unidad con el responsable del catálogo antes de activar la carga; las sugerencias no son asignaciones automáticas.</div>
+<div class="alert alert-warning mt-3"><strong>Unidades comerciales sin especificar.</strong> Este origen tiene {{ report.missing_unit_count }} filas sin unidad. Solo trabajaremos provisionalmente con kilogramos, unidades y libras. La empresa aún no ha validado la presentación de cada producto: la selección no verifica el histórico para recomendaciones automáticas y no convierte cantidades entre unidades.</div>
 <div class="row g-2">
 {% for product in report.missing_unit_products %}
-<div class="col-sm-7"><label class="form-label" for="etl-unit-{{ forloop.counter }}">Unidad para {{ product }}</label>
+<div class="col-sm-7"><label class="form-label" for="etl-unit-{{ forloop.counter }}">Presentación provisional para {{ product }}</label>
 <input type="hidden" name="unit_product" value="{{ product }}"></div>
-<div class="col-sm-5"><input class="form-control" type="text" id="etl-unit-{{ forloop.counter }}" name="unit_value" maxlength="50" list="etl-unit-examples" placeholder="Confirmar unidad" autocomplete="off" required></div>
+<div class="col-sm-5"><select class="form-select" id="etl-unit-{{ forloop.counter }}" name="unit_value" required>
+<option value="">Seleccionar</option>
+<option value="kg">Kilogramos (kg)</option>
+<option value="unidad">Unidades (unidad)</option>
+<option value="lb">Libras (lb)</option>
+</select></div>
 {% endfor %}
 </div>
-<datalist id="etl-unit-examples"><option value="kg"><option value="unidad"><option value="docena"><option value="caja"></datalist>
 {% else %}
 <p class="form-text">Si la inspección indica unidades ausentes, repite la inspección antes de aprobar para completar aquí la unidad de cada producto.</p>
 {% endif %}

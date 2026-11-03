@@ -336,7 +336,7 @@ class EtlPreviewTests(TestCase):
         loaded = self.client.post(url, {
             **common, "etl_load_file": SimpleUploadedFile("demo.xlsx", raw),
             "unit_product": ["Alitas LAB", "Huevos LAB"],
-            "unit_value": ["kg", "docena"],
+            "unit_value": ["kg", "unidad"],
         })
         self.assertEqual(loaded.status_code, 302)
         dataset = SalesDataset.objects.get(active=True)
@@ -344,7 +344,7 @@ class EtlPreviewTests(TestCase):
         self.assertFalse(dataset.verified)
         self.assertEqual(dataset.provenance, "simulated")
         self.assertEqual(set(SalesLine.objects.filter(dataset=dataset).values_list("unit", flat=True)),
-                         {"kg", "docena"})
+                         {"kg", "unidad"})
         self.assertFalse(SalesCoverage.objects.filter(
             dataset=dataset, status=SalesCoverage.Status.COMPLETE).exists())
 
@@ -371,3 +371,57 @@ class EtlPreviewTests(TestCase):
             raw, "demo.csv", units_by_product={"B": "kg"})
         self.assertTrue(canonical.startswith(b"PK"))
         self.assertEqual(report["confirmed_unit_products"], 1)
+        self.assertEqual(report["unit_assumption_status"], "provisional")
+
+
+    def test_provisional_units_accept_only_kg_unidad_and_lb(self):
+        from smartorder.etl import canonical_sales_xlsx
+        from smartorder.data import load_sales
+        raw = b"Fecha,Cliente,Producto,Cantidad,Precio\n2025-01-01,A,B,2,10\n"
+        for unit in ("kg", "unidad", "lb"):
+            with self.subTest(unit=unit):
+                normalized, report = canonical_sales_xlsx(
+                    raw, "demo.csv", units_by_product={"B": unit})
+                self.assertEqual(load_sales(normalized).rows.iloc[0]["Unidad"], unit)
+                self.assertEqual(report["unit_assumption_status"], "provisional")
+        for forbidden in ("docena", "caja", "libras", "tonelada"):
+            with self.subTest(forbidden=forbidden):
+                with self.assertRaisesRegex(ValueError, "kg, unidad o lb"):
+                    canonical_sales_xlsx(raw, "demo.csv", units_by_product={"B": forbidden})
+
+    def test_provisional_units_keep_real_source_unverified_until_business_confirmation(self):
+        import json
+        from .models import EtlMappingProfile, EtlInspectionRun, AccessEvent
+        self.client.force_login(self.admin)
+        url = reverse("etl_preview")
+        self.client.post(url, {
+            "action": "save_profile", "alias": "vitali-unidad-provisional",
+            "name": "Ensayo sin unidad",
+            "mapping": json.dumps({
+                "Fecha": "Fecha", "Cliente": "Cliente", "Producto": "Producto",
+                "Cantidad_kg_unid": "Cantidad", "Precio_Unitario_USD": "Precio",
+            }),
+        })
+        profile = EtlMappingProfile.objects.get(alias="vitali-unidad-provisional")
+        raw = b"Fecha,Cliente,Producto,Cantidad,Precio\n2025-01-01,A,B,2,10\n"
+        response = self.client.post(url, {
+            "profile_id": profile.pk,
+            "etl_file": SimpleUploadedFile("real.xlsx.csv", raw),
+        })
+        self.assertEqual(response.status_code, 200)
+        inspection = EtlInspectionRun.objects.get(profile=profile)
+        response = self.client.post(url, {
+            "action": "load", "inspection_id": inspection.pk,
+            "etl_load_file": SimpleUploadedFile("real.xlsx.csv", raw),
+            "provenance": "real", "date_semantics": "sale_order",
+            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+            "approved_load": "on",
+            "unit_product": ["B"], "unit_value": ["lb"],
+        })
+        self.assertEqual(response.status_code, 302)
+        dataset = SalesDataset.objects.get(active=True)
+        self.assertEqual(dataset.lines.get().unit, "lb")
+        self.assertFalse(dataset.verified)
+        event = AccessEvent.objects.get(action="etl_snapshot_activated")
+        self.assertEqual(event.details["unit_assumption_status"], "provisional")
+        self.assertTrue(event.details["units_pending_company_confirmation"])

@@ -19,6 +19,9 @@ from openpyxl import load_workbook
 from .data import COLUMN_ALIASES, CORE_HEADERS, HEADERS, MAX_BYTES, MAX_ROWS, MAX_DAILY_CELLS, _slug
 
 VERSION = "sales-etl-preview-v1"
+# Provisional catalog for manual assignments when an imported file has no unit.
+# Never infer physical quantities, apply lb/kg conversions, or assert Vitali's approval.
+PROVISIONAL_UNITS = frozenset({"kg", "unidad", "lb"})
 NUMBER_FIELDS = {"Cantidad_kg_unid", "Precio_Unitario_USD", "Monto_Venta_USD"}
 DATE_FIELDS = {"Fecha", "Fecha_entrega_solicitada", "Fecha_entrega_comprometida"}
 REQUIRED = set(CORE_HEADERS)
@@ -324,9 +327,9 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
     for product, unit in (units_by_product or {}).items():
         if not isinstance(product, str) or not isinstance(unit, str):
             raise ValueError("Los productos y sus unidades deben ser textos válidos.")
-        product, unit = product.strip(), unit.strip()
-        if not product or len(product) > 255 or not re.fullmatch(r"[\w ./%-]{1,50}", unit, re.UNICODE):
-            raise ValueError("Indique una unidad comercial válida de hasta 50 caracteres por producto.")
+        product, unit = product.strip(), unit.strip().casefold()
+        if not product or len(product) > 255 or unit not in PROVISIONAL_UNITS:
+            raise ValueError("Seleccione una unidad comercial válida: kg, unidad o lb.")
         if product in unit_map:
             raise ValueError("No repita un producto en la confirmación de unidades.")
         unit_map[product] = unit
@@ -387,6 +390,9 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
         if set(unit_map) - used_unit_map:
             raise ValueError("La confirmación contiene productos ajenos al archivo.")
         report["confirmed_unit_products"] = len(used_unit_map)
+        report["unit_assumption_status"] = (
+            "provisional" if report["missing_unit_count"] else "source_provided"
+        )
         output = BytesIO()
         target.save(output)
         normalized = output.getvalue()

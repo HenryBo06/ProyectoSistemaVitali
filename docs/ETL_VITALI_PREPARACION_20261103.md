@@ -34,3 +34,14 @@ El archivo de demostración proporcionado fuera del repositorio contiene una hoj
 Para cargarlo por el nuevo ETL, administración debe crear un perfil de mapeo, inspeccionar el archivo, confirmar manualmente la unidad comercial de cada producto (no inferirla por el nombre) y volver a subir el mismo archivo. La aprobación queda asociada a la huella del archivo y su perfil. Cuando la procedencia sea simulada, la carga permanece marcada como simulada y no queda verificada como fuente real.
 
 El inspector expone la proporción de combinaciones cliente-producto-unidad-fecha observadas. Los huecos del histórico de demostración no equivalen necesariamente a ventas cero: ninguna cobertura comercial pasa a COMPLETA sin revisión humana. La ausencia de referencias de línea sigue impidiendo concatenar cargas incrementales de forma segura. El dato de 2025 es histórico, no una garantía de pronóstico preciso en fechas futuras ni prueba de la fecha comercial COR-03.
+
+
+## Presentaciones provisionales para la exposición
+
+Mientras Vitali no proporcione su catálogo oficial, la interfaz de asignación de unidades faltantes ofrece exclusivamente **kilogramos (\`kg\`)**, **unidades (\`unidad\`)** y **libras (\`lb\`)**, sin seleccionar automáticamente ninguna presentación por producto. Las opciones son hipótesis de trabajo aportadas por el equipo, **no una confirmación empresarial**.
+
+- El ETL rechaza asignaciones manuales distintas de esas tres opciones (incluidas cajas o docenas).
+- No convierte libras a kilogramos ni agrega ventas de unidades incompatibles. La cantidad original se conserva con la unidad seleccionada.
+- Cuando alguna fila requiere una unidad asignada provisionalmente, el histórico nuevo permanece **sin verificar**, aun si el archivo fue declarado de procedencia real. Los controles de cobertura e inferencia automática se mantienen.
+- Un archivo que ya trae \`Unidad\` no se reescribe ni convierte silenciosamente. Las unidades explícitas ajenas al catálogo provisional requieren revisión comercial antes de estandarizarse; este cambio no modifica históricos previos.
+- El registro de auditoría documenta \`unit_assumption_status=provisional\` y \`units_pending_company_confirmation=true\` sin guardar datos comerciales del archivo.

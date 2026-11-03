@@ -1291,7 +1291,10 @@ def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
                 raise ValueError("Este archivo ya fue cargado mediante ETL.")
             dataset = import_sales(
                 normalized, f"etl-{inspection.source_sha256[:20]}.xlsx",
-                user, verified=(provenance == SalesDataset.Provenance.REAL),
+                user, verified=(
+                    provenance == SalesDataset.Provenance.REAL
+                    and report["unit_assumption_status"] == "source_provided"
+                ),
                 full_snapshot_confirmed=True,
                 provenance=provenance, date_semantics=date_semantics)
             EtlLoadRun.objects.create(
@@ -1305,6 +1308,10 @@ def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
                     "rows": report["row_count"], "date_semantics": date_semantics,
                     "provenance": provenance,
                     "confirmed_unit_products": report["confirmed_unit_products"],
+                    "unit_assumption_status": report["unit_assumption_status"],
+                    "units_pending_company_confirmation": bool(
+                        report["missing_unit_count"]
+                    ),
                 })
         return dataset
     except Exception:
