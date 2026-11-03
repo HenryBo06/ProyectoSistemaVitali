@@ -54,6 +54,14 @@ def seed_synthetic_restock() -> None:
         scope=RestockTarget.Scope.CLIENT, owner_key=f"client:{CLIENT}",
         product=product, unit="kg", target_quantity=Decimal("7"), updated_by=admin,
     )
+    from django.utils import timezone
+    from operations.models import CommercialEvent
+    day = timezone.localdate() + timedelta(days=5)
+    CommercialEvent.objects.create(
+        key="feria-lab-simulada", title="Feria LAB (simulada)",
+        kind=CommercialEvent.Kind.COMMERCIAL, start_date=day, end_date=day,
+        territory="Nacional", reviewed=True, active=True, created_by=admin,
+    )
 
 
 def django_smoke(browser) -> None:
@@ -64,6 +72,13 @@ def django_smoke(browser) -> None:
     page.locator('input[name="password"]').fill(CREDENTIALS["lab_vendedor_01"])
     page.get_by_role("button", name="Entrar a mi espacio").click()
     page.get_by_role("heading", name="Mi trabajo").wait_for(timeout=20000)
+    page.get_by_text("Feria LAB (simulada)").first.wait_for(timeout=20000)
+    vitali_logo = page.locator(".app-header .brand-symbol").first
+    if not vitali_logo.is_visible() or not vitali_logo.evaluate("(e) => e.complete && e.naturalWidth > 0"):
+        raise AssertionError("Django Vitali mark must load as the existing SVG.")
+    page.screenshot(path=str(OUT / "django-event-dashboard-mobile.png"), full_page=True)
+    page.goto("http://127.0.0.1:8000/notificaciones/", wait_until="domcontentloaded")
+    page.get_by_text("dentro de 5 días").first.wait_for(timeout=20000)
 
     query = urlencode({
         "mode": "client_restock", "client": CLIENT,
@@ -119,6 +134,11 @@ def streamlit_smoke(browser) -> None:
     page.get_by_label("Contraseña", exact=True).fill(CREDENTIALS["lab_vendedor_01"])
     page.get_by_role("button", name="Entrar", exact=True).click()
     page.get_by_text("Mi trabajo", exact=True).first.wait_for(timeout=60000)
+    page.get_by_text("Feria LAB (simulada)").first.wait_for(timeout=60000)
+    logo = page.locator(".vitali-identity img.vitali-symbol").first
+    if not logo.is_visible():
+        raise AssertionError("Streamlit must show the Vitali V in its sidebar.")
+    page.screenshot(path=str(OUT / "streamlit-event-dashboard-desktop.png"), full_page=True)
     page.get_by_text("Productos y pedidos", exact=True).click()
     page.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=60000)
     page.get_by_role("heading", name="Productos para ofrecer").wait_for(timeout=60000)
