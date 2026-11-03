@@ -122,4 +122,3 @@ class EtlPreviewTests(TestCase):
         self.assertTrue(EtlInspectionRun.objects.filter(
             profile=profiles[0], schema_changed=True).count() >= 2)
         self.assertEqual(SalesDataset.objects.count(), 0)
-
