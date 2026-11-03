@@ -245,3 +245,39 @@ class EtlPreviewTests(TestCase):
         })
         self.assertEqual(response.status_code, 403)
         self.assertEqual(EtlInspectionRun.objects.count(), 0)
+
+
+    def test_multiple_units_count_toward_daily_grid_limit(self):
+        from smartorder.data import load_sales
+        csv_data = (
+            "Fecha,Cliente,Producto,Cantidad,Precio,Unidad\n"
+            "2026-01-01,A,B,1,2,kg\n"
+            "2026-01-01,A,B,1,2,caja\n"
+            "2026-01-01,A,B,1,2,unidad\n"
+            "2220-01-01,A,B,1,2,bolsa\n"
+        ).encode()
+        report = preview_sales(csv_data, "multi.csv")
+        self.assertFalse(report["ready_to_review"])
+        self.assertGreater(report["estimated_daily_cells"], 250_000)
+        book = Workbook()
+        sheet = book.active
+        sheet.append(["Fecha", "Cliente", "Producto", "Cantidad", "Precio", "Unidad"])
+        for unit, day in [("kg", "2026-01-01"), ("caja", "2026-01-01"),
+                          ("unidad", "2026-01-01"), ("bolsa", "2220-01-01")]:
+            sheet.append([day, "A", "B", 1, 2, unit])
+        output = BytesIO()
+        book.save(output)
+        with self.assertRaisesRegex(ValueError, "250,000"):
+            load_sales(output.getvalue())
+
+    def test_canonical_xlsx_preserves_untrusted_text_as_literals(self):
+        from smartorder.etl import canonical_sales_xlsx
+        from smartorder.data import load_sales
+        raw = (
+            b"Fecha,Cliente,Producto,Cantidad,Precio,Unidad\n"
+            b"2026-01-10,=1+1,B,2,5,kg\n"
+        )
+        canonical, report = canonical_sales_xlsx(raw, "ventas.csv")
+        self.assertTrue(report["ready_to_review"])
+        book = load_sales(canonical)
+        self.assertEqual(book.rows.iloc[0]["Cliente"], "=1+1")

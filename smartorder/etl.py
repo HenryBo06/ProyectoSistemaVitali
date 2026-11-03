@@ -226,7 +226,7 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
                         unit_missing += 1
                     clients.add(record["Cliente"])
                     products.add(record["Producto"])
-                    pairs.add((record["Cliente"], record["Producto"]))
+                    pairs.add((record["Cliente"], record["Producto"], record.get("Unidad", "")))
                     dates.append(record["Fecha"])
                     valid += 1
                     if len(samples) < 5:
@@ -247,7 +247,7 @@ def preview_sales(raw: bytes, filename: str, *, manual: dict | None = None,
             daily_cells = len(pairs) * ((end - start).days + 1)
             if daily_cells > MAX_DAILY_CELLS:
                 issues.append(
-                    f"El rango temporal y {len(pairs)} combinaciones cliente-producto generarían "
+                    f"El rango temporal y {len(pairs)} combinaciones cliente-producto-unidad generarían "
                     f"{daily_cells:,} celdas diarias, por encima del límite de "
                     f"{MAX_DAILY_CELLS:,} del motor de inferencia. Revise fechas extremas o "
                     "segmente el análisis antes de activar datos."
@@ -288,6 +288,7 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
     The original bytes are neither logged nor stored by the preview.
     """
     from openpyxl import Workbook
+    from openpyxl.cell import WriteOnlyCell
 
     report = preview_sales(raw, filename, manual=manual, date_format=date_format,
                            decimal_separator=decimal_separator, sheet_name=sheet_name)
@@ -298,6 +299,15 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
     target = Workbook(write_only=True)
     sheet = target.create_sheet("Ventas")
     sheet.append(list(HEADERS))
+
+    def literal_cell(value):
+        # Never allow user-supplied text (e.g. '=1+1') to become an Excel formula.
+        if isinstance(value, str):
+            cell = WriteOnlyCell(sheet, value=value)
+            cell.data_type = "s"
+            return cell
+        return value
+
     positions = {header: index for index, header in enumerate(headers)}
     processed = 0
     try:
@@ -317,7 +327,7 @@ def canonical_sales_xlsx(raw: bytes, filename: str, *, manual: dict | None = Non
                                          if value is not None and str(value).strip() else None)
                 else:
                     result[canonical] = str(value if value is not None else "").strip()
-            sheet.append([result.get(name) for name in HEADERS])
+            sheet.append([literal_cell(result.get(name)) for name in HEADERS])
             processed += 1
         if processed != report["valid_rows"]:
             raise ValueError("El total de registros cambió durante la normalización.")

@@ -261,12 +261,12 @@ def load_sales(source: bytes | str | Path, *, date_semantics: str = "sale_order"
         raise ValueError("El Excel no contiene ventas.")
     frame = pd.DataFrame.from_records(records, columns=HEADERS)
     frame["Fecha"] = pd.to_datetime(frame["Fecha"])
-    pairs = frame[["Cliente", "Producto"]].drop_duplicates().shape[0]
+    pairs = frame[["Cliente", "Producto", "Unidad"]].fillna("").drop_duplicates().shape[0]
     days = (frame["Fecha"].max() - frame["Fecha"].min()).days + 1
     if pairs * days > MAX_DAILY_CELLS:
         raise ValueError(
             "El histórico supera el límite de 250,000 combinaciones diarias "
-            "cliente–producto; revise fechas extremas o divida el análisis."
+            "cliente–producto–unidad; revise fechas extremas o divida el análisis."
         )
     return SalesData(
         frame, sha256(raw).hexdigest(), tuple(used_sheets), recalculated,
