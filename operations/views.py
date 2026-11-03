@@ -2056,7 +2056,7 @@ def etl_preview(request):
                 sheet_name=sheet_name)
             schema_changed = False
             if profile:
-                prior = EtlInspectionRun.objects.filter(profile=profile).order_by("-created_at").first()
+                prior = EtlInspectionRun.objects.filter(profile=profile, issue_count=0).order_by("created_at", "pk").first()
                 schema_changed = bool(prior and prior.schema_sha256 != report["schema_sha256"])
             report["schema_changed"] = schema_changed
             if schema_changed:

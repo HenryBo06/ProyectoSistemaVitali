@@ -112,5 +112,14 @@ class EtlPreviewTests(TestCase):
         self.assertEqual(EtlInspectionRun.objects.filter(profile=profiles[0]).count(), 2)
         self.assertTrue(EtlInspectionRun.objects.filter(
             profile=profiles[0], schema_changed=True).exists())
+        # Repeating the changed schema must remain blocked for this immutable
+        # profile version, not become the baseline automatically.
+        third = self.client.post(url, {
+            "action": "preview", "profile_id": profiles[0].pk,
+            "etl_file": SimpleUploadedFile("original.csv", raw2),
+        })
+        self.assertContains(third, "Cambio de estructura respecto")
+        self.assertTrue(EtlInspectionRun.objects.filter(
+            profile=profiles[0], schema_changed=True).count() >= 2)
         self.assertEqual(SalesDataset.objects.count(), 0)
 

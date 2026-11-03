@@ -179,7 +179,17 @@ def django_etl_smoke(browser) -> None:
     """ETL preflight must handle changed CSV headers without activating history."""
     from operations.models import SalesDataset
     from django.db import close_old_connections
-    old_count = SalesDataset.objects.count()
+    from concurrent.futures import ThreadPoolExecutor
+    from django.db import close_old_connections
+
+    def count_sales():
+        try:
+            return SalesDataset.objects.count()
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        old_count = executor.submit(count_sales).result()
     context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
     page = context.new_page()
     page.goto("http://127.0.0.1:8000/entrar/", wait_until="domcontentloaded")
@@ -209,8 +219,9 @@ def django_etl_smoke(browser) -> None:
     page.evaluate("window.scrollTo(0, 0)")
     page.screenshot(path=str(OUT / "django-admin-etl-desktop.png"), full_page=True)
     context.close()
-    close_old_connections()
-    if SalesDataset.objects.count() != old_count:
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        new_count = executor.submit(count_sales).result()
+    if new_count != old_count:
         raise AssertionError("ETL preflight unexpectedly mutated historical sales.")
 
 

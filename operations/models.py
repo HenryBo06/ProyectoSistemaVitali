@@ -750,7 +750,7 @@ class EtlInspectionRun(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["profile", "-created_at"])]
+        indexes = [models.Index(fields=["profile", "-created_at"], name="etl_profile_created_idx")]
 
 
 class SourceSync(models.Model):

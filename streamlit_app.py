@@ -1457,8 +1457,14 @@ def etl_preview_screen():
     st.title("Preparación ETL de datos")
     st.caption("Extraer, transformar y validar sin activar ni reemplazar históricos.")
     st.info("Las fuentes externas, CSV y Excel requieren contrato de columnas y controles de calidad antes de alimentar la inferencia.")
+    c = context("etl_preview")
+    profiles = c["profiles"]
     with st.form("etl_data_preflight"):
         source_file = st.file_uploader("Archivo CSV UTF-8 o Excel", type=["csv", "xlsx"])
+        profile_options = [""] + [str(item.pk) for item in profiles]
+        profile_names = {str(item.pk): f"{item.alias} · v{item.version} · {item.name}" for item in profiles}
+        profile_id = st.selectbox("Perfil versionado (opcional)", profile_options,
+            format_func=lambda x: profile_names.get(x, "Mapeo manual o alias conocidos"))
         d1, d2 = st.columns(2)
         date_format = d1.selectbox("Formato de fecha", ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
                                    format_func=lambda value: {"%Y-%m-%d": "AAAA-MM-DD",
@@ -1475,9 +1481,10 @@ def etl_preview_screen():
             st.warning("Seleccione un archivo para inspeccionar.")
             return
         from django.core.files.uploadedfile import SimpleUploadedFile
-        response = action("etl_preview", {"date_format": date_format,
-            "decimal_separator": decimal_separator, "sheet_name": sheet_name,
-            "mapping": mapping}, files={"etl_file": SimpleUploadedFile(
+        response = action("etl_preview", {"action": "preview", "profile_id": profile_id,
+            "date_format": date_format, "decimal_separator": decimal_separator,
+            "sheet_name": sheet_name, "mapping": mapping},
+            files={"etl_file": SimpleUploadedFile(
                 source_file.name, source_file.getvalue())})
         if response is None:
             return
@@ -1512,6 +1519,31 @@ def etl_preview_screen():
         with st.expander("Trazabilidad"):
             st.code("SHA-256 archivo: " + report["sha256"] + "\nSHA-256 esquema: "
                     + report["schema_sha256"], language="text")
+
+
+
+    with st.expander("Guardar un perfil de mapeo versionado"):
+        with st.form("etl_mapping_profile"):
+            new_alias = st.text_input("Alias del origen", placeholder="ventas-vitali")
+            new_name = st.text_input("Nombre del perfil", placeholder="CSV del ingeniero")
+            new_mapping = st.text_area("JSON de campos y columnas",
+                placeholder='{"Fecha":"Dia","Cliente":"Cuenta","Producto":"Articulo","Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"Tarifa"}')
+            new_dates = st.selectbox("Formato de fecha del perfil",
+                ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"])
+            new_decimal = st.selectbox("Separador decimal del perfil", [".", ","])
+            new_sheet = st.text_input("Nombre de hoja (opcional)")
+            if st.form_submit_button("Guardar versión"):
+                if action("etl_preview", {"action": "save_profile",
+                    "alias": new_alias, "name": new_name, "mapping": new_mapping,
+                    "date_format": new_dates, "decimal_separator": new_decimal,
+                    "sheet_name": new_sheet}) is not None:
+                    st.rerun()
+    with st.expander("Últimas inspecciones"):
+        table([{"Fecha": row.created_at, "Origen": row.filename,
+            "Perfil": f"{row.profile.alias} v{row.profile.version}" if row.profile else "Sin perfil",
+            "Filas": row.row_count, "Problemas": row.issue_count,
+            "Cambio de esquema": row.schema_changed}
+            for row in c["inspection_history"]])
 
 
 def database_connections_screen():
