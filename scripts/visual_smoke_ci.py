@@ -206,6 +206,7 @@ def django_etl_smoke(browser) -> None:
         "name": "fuente-lab-cambiada.csv", "mimeType": "text/csv", "buffer": csv_data})
     page.locator('#etl-date').select_option("%d/%m/%Y")
     page.locator('#etl-decimal').select_option(",")
+    page.get_by_text("Mapeo manual cuando cambian las columnas").click()
     page.locator('textarea[name="mapping"]').first.fill(
         '{"Fecha":"DiaFactura","Cliente":"Cuenta","Producto":"Articulo",'
         '"Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"PrecioNeto","Unidad":"TipoUnidad"}')
