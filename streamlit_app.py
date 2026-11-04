@@ -343,6 +343,13 @@ def products():
                        if card.get("historical_seasonal_days") else "")
                     if card.get("historical_rank") and mode == "sale" else "No aplica"
                 ),
+                "Prioridad evaluada": (
+                    f"{card['priority_rank']} de {card['historical_total']} · "
+                    f"{card['priority_method_label']} (auditada en {card['priority_audit_cases']} períodos)"
+                    if mode == "sale" and card.get("priority_method") != "historical"
+                    else "Se conserva la prioridad histórica"
+                    if mode == "sale" else "No aplica"
+                ),
                 "Oportunidad comercial · no es cantidad de entrega": (
                     f"{format_number(card['commercial_forecast'])} {card['unit']}"
                     + (f" · fecha consultada {card['target_date']:%d/%m/%Y}"

@@ -30,7 +30,7 @@
   <button class="btn btn-outline-primary" type="submit">Consultar</button>
 </form>
 {% if recommendations and suggestion_mode != 'client_restock' %}
-<p class="form-text" role="note">Prioridad por recurrencia de ventas observadas del cliente. No supone nuevas compras ni valida cantidades; las sugerencias de entrega mantienen sus controles independientes.</p>
+<p class="form-text" role="note">La prioridad de productos es orientativa. Puede usar recurrencia reciente solo si supera la histórica en una auditoría cronológica; no supone nuevas compras ni valida cantidades. Las entregas mantienen sus controles independientes.</p>
 {% endif %}
 <div class="product-grid {% if role == 'vendedor' %}seller-recommendations{% endif %}">
 {% for item in recommendations %}
@@ -39,6 +39,7 @@
   {% if item.historical_rank and suggestion_mode != 'client_restock' %}
   <p class="form-text">Prioridad histórica {{ item.historical_rank }} de {{ item.historical_total }} · {{ item.historical_sale_days }} días con ventas registradas hasta {{ item.historical_cutoff_date|date:'d/m/Y' }}. No es una predicción.</p>
   {% if item.historical_seasonal_days %}<p class="form-text">Período de referencia comparable ({{ item.historical_seasonal_start|date:'d/m/Y' }}–{{ item.historical_seasonal_end|date:'d/m/Y' }}): {{ item.historical_seasonal_days }} días con ventas. Referencia descriptiva, no pronóstico.</p>{% endif %}
+  {% if item.priority_method != 'historical' %}<p class="form-text">Prioridad de revisión {{ item.priority_rank }} de {{ item.historical_total }} · {{ item.priority_method_label }}. Auditoría retrospectiva: {{ item.priority_audit_hits }} de {{ item.priority_audit_cases }} períodos con compra, frente a {{ item.priority_baseline_hits }} usando recurrencia histórica. No estima cantidad de entrega.</p>{% endif %}
   {% endif %}
   <dl class="product-summary-facts">
     <div><dt>Disponibilidad</dt><dd>{% if item.available != None %}{{ item.available|floatformat:"-3" }} <small>{{ item.stock_unit|default:'unidad por confirmar' }}</small>{% else %}Por confirmar{% endif %}</dd></div>

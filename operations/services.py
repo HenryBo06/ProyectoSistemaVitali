@@ -942,6 +942,25 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
         product.casefold(),
     ))
     historical_rank = {product: index + 1 for index, product in enumerate(historical_order)}
+    # An adaptive choice must pass an independent, later holdout. If a comparable
+    # prior-year season is visible, retain that descriptive priority until
+    # seasonality itself has been independently evaluated.
+    from smartorder.product_priority import evaluate_product_priority
+    priority = None
+    if mode == "sale" and historical_order:
+        recorded_days = list(dataset.lines.filter(
+            client=client, date__lte=historical_cutoff,
+        ).values_list("date", "product"))
+        priority = evaluate_product_priority(
+            recorded_days, as_of=today, products=historical_order,
+            allow_override=not use_seasonal,
+        )
+    prioritized_order = (
+        list(priority.ranked) if priority and priority.validated else historical_order
+    )
+    priority_rank = {
+        product: index + 1 for index, product in enumerate(prioritized_order)
+    }
     tariffs = {
         row.product: row for row in PriceTariff.objects.filter(client=client)
     }
@@ -1020,6 +1039,12 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             "historical_sale_days": int(metrics.get("days_with_sale") or 0),
             "historical_rank": historical_rank.get(row["Producto"]),
             "historical_total": len(historical_rank),
+            "priority_rank": priority_rank.get(row["Producto"]),
+            "priority_method": priority.method if priority and priority.validated else "historical",
+            "priority_method_label": priority.method_label if priority and priority.validated else "Recurrencia histórica",
+            "priority_audit_cases": priority.audit_cases if priority and priority.validated else 0,
+            "priority_audit_hits": priority.audit_hits if priority and priority.validated else 0,
+            "priority_baseline_hits": priority.baseline_audit_hits if priority and priority.validated else 0,
             "historical_cutoff_date": historical_cutoff,
             "historical_seasonal_days": seasonal.get(row["Producto"], 0) if use_seasonal else 0,
             "historical_seasonal_start": reference_from if use_seasonal else None,
@@ -1080,7 +1105,8 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
     # purchase frequency and USD for ties, always bounded by the as-of date.
     return sorted(cards, key=lambda card: (
         card["suggested"] is None,
-        card["historical_rank"] or (len(historical_rank) + 1),
+        (card["priority_rank"] if mode == "sale" else card["historical_rank"])
+        or (len(historical_rank) + 1),
         card["product"].casefold(),
     ))
 
