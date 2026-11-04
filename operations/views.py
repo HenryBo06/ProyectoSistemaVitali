@@ -2036,6 +2036,40 @@ def etl_preview(request):
     if request.method == "POST":
         try:
             mode = request.POST.get("action", "preview")
+
+            if mode == "quick_xlsx":
+                # Ordinary XLSX sales files are already understood by the canonical importer.
+                # Keep advanced ETL profiles optional and never manufacture unit/source evidence.
+                raw, filename = _xlsx_upload(request, "etl_quick_file")
+                if active_sales() is not None and request.POST.get("replace_existing") != "on":
+                    raise ValueError(
+                        "Ya existe un histórico activo. Confirme explícitamente que desea "
+                        "reemplazarlo antes de importar otro archivo.")
+                try:
+                    dataset = import_sales(
+                        raw, filename, request.user, verified=False,
+                        full_snapshot_confirmed=False,
+                        provenance=SalesDataset.Provenance.UNKNOWN,
+                        date_semantics=SalesDataset.DateSemantics.SALE_ORDER,
+                    )
+                except (ValueError, IntegrityError):
+                    raise
+                except Exception:
+                    # Keep the traceback for a VM operator, not in the browser or
+                    # the uploaded file. The reference makes a 500 diagnosable.
+                    import logging
+                    reference = secrets.token_hex(4)
+                    logging.getLogger(__name__).exception(
+                        "SmartOrder quick XLSX upload failed [reference=%s]", reference)
+                    messages.error(
+                        request, "No se pudo importar el Excel por un error interno. "
+                        f"Referencia: {reference}. Revise los registros del contenedor web.")
+                    return redirect("etl_preview")
+                messages.success(
+                    request, f"Excel importado correctamente: {dataset.row_count:,} "
+                    "filas. Histórico activo como referencia sin verificar; "
+                    "las cantidades automáticas siguen protegidas.")
+                return redirect("etl_preview")
             if mode == "save_profile":
                 alias = request.POST.get("alias", "").strip()
                 name = request.POST.get("name", "").strip()
@@ -2160,7 +2194,8 @@ def etl_preview(request):
     ).order_by("-created_at")[:15])
     return TemplateResponse(request, "operations/etl_preview.html",
                             _base(request, report=report, profiles=profiles,
-                                  inspection_history=history, loadable_inspections=loadable))
+                                  inspection_history=history, loadable_inspections=loadable,
+                                  quick_active_dataset=active_sales()))
 
 
 @admin_required

@@ -18,6 +18,108 @@ class EtlPreviewTests(TestCase):
                                            is_staff=True)
         cls.seller = U.objects.create_user(username="etl_seller", password="secretpass-1")
 
+
+    def _sample_quick_xlsx(self, *, product="Alitas LAB"):
+        from datetime import date
+        book = Workbook()
+        sheet = book.active
+        sheet.title = "Ventas2025"
+        sheet.append([
+            "Fecha", "Cliente", "Zona_Geografica", "Canal_Distribucion",
+            "Canal_Venta", "Producto", "Categoria", "Cantidad_kg_unid",
+            "Precio_Unitario_USD", "Monto_Venta_USD",
+        ])
+        sheet.append([date(2025, 1, 1), "Cliente LAB", "Centro", "LAB", "LAB",
+                      product, "Cortes", 2, 5, 10])
+        sheet.append([date(2025, 1, 3), "Cliente LAB", "Centro", "LAB", "LAB",
+                      product, "Cortes", 3, 5, 15])
+        output = BytesIO()
+        book.save(output)
+        book.close()
+        return output.getvalue()
+
+    def test_quick_xlsx_upload_needs_no_profile_or_unit_assignment(self):
+        from .models import SalesLine, EtlLoadRun
+        self.client.force_login(self.admin)
+        raw = self._sample_quick_xlsx()
+        response = self.client.post(reverse("etl_preview"), {
+            "action": "quick_xlsx",
+            "etl_quick_file": SimpleUploadedFile("ventas_demo_2025.xlsx", raw),
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Excel importado correctamente")
+        dataset = SalesDataset.objects.get(active=True)
+        self.assertEqual(dataset.row_count, 2)
+        self.assertFalse(dataset.verified)
+        self.assertFalse(dataset.full_snapshot_confirmed)
+        self.assertEqual(dataset.provenance, SalesDataset.Provenance.UNKNOWN)
+        self.assertEqual(dataset.date_semantics, SalesDataset.DateSemantics.SALE_ORDER)
+        self.assertEqual(SalesLine.objects.filter(dataset=dataset).count(), 2)
+        self.assertEqual(set(SalesLine.objects.filter(dataset=dataset).values_list("unit", flat=True)), {""})
+        self.assertFalse(EtlLoadRun.objects.exists())
+        self.assertEqual(get_user_model().objects.count(), 2)
+
+    def test_quick_xlsx_does_not_silently_replace_existing_history(self):
+        self.client.force_login(self.admin)
+        url = reverse("etl_preview")
+        self.client.post(url, {
+            "action": "quick_xlsx",
+            "etl_quick_file": SimpleUploadedFile("original.xlsx", self._sample_quick_xlsx()),
+        })
+        old = SalesDataset.objects.get(active=True)
+        second = self._sample_quick_xlsx(product="Muslos LAB")
+        refused = self.client.post(url, {
+            "action": "quick_xlsx",
+            "etl_quick_file": SimpleUploadedFile("nuevo.xlsx", second),
+        })
+        self.assertEqual(refused.status_code, 200)
+        self.assertContains(refused, "Confirme explícitamente")
+        old.refresh_from_db()
+        self.assertTrue(old.active)
+        self.assertEqual(SalesDataset.objects.count(), 1)
+        accepted = self.client.post(url, {
+            "action": "quick_xlsx", "replace_existing": "on",
+            "etl_quick_file": SimpleUploadedFile("nuevo.xlsx", second),
+        })
+        self.assertEqual(accepted.status_code, 302)
+        self.assertEqual(SalesDataset.objects.count(), 2)
+        self.assertEqual(SalesDataset.objects.get(active=True).filename, "nuevo.xlsx")
+
+    def test_quick_xlsx_invalid_file_is_validation_message_not_server_error(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("etl_preview"), {
+            "action": "quick_xlsx",
+            "etl_quick_file": SimpleUploadedFile("no_es_excel.xlsx", b"invalid"),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No se pudo ejecutar ETL")
+        self.assertFalse(SalesDataset.objects.exists())
+
+    def test_quick_xlsx_internal_error_is_logged_with_reference(self):
+        from unittest.mock import patch
+        self.client.force_login(self.admin)
+        with self.assertLogs("operations.views", level="ERROR") as captured:
+            with patch("operations.views.import_sales", side_effect=RuntimeError("unexpected failure")):
+                response = self.client.post(reverse("etl_preview"), {
+                    "action": "quick_xlsx",
+                    "etl_quick_file": SimpleUploadedFile(
+                        "ventas.xlsx", self._sample_quick_xlsx()),
+                }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Referencia:")
+        self.assertIn("SmartOrder quick XLSX upload failed", captured.output[0])
+        self.assertFalse(SalesDataset.objects.exists())
+
+    def test_quick_xlsx_upload_not_accessible_to_seller(self):
+        self.client.force_login(self.seller)
+        response = self.client.post(reverse("etl_preview"), {
+            "action": "quick_xlsx",
+            "etl_quick_file": SimpleUploadedFile(
+                "ventas.xlsx", self._sample_quick_xlsx()),
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(SalesDataset.objects.exists())
+
     def test_csv_alias_mapping_and_no_mutation(self):
         raw = b"fecha,cliente,producto,cantidad,precio,unidad\n2026-01-10,C1,Alitas,2,5,kg\n"
         report = preview_sales(raw, "venta.csv")

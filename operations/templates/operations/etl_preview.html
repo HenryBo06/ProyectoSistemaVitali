@@ -1,6 +1,43 @@
 {% extends "operations/base.html" %}
-{% block title %}ETL · Preparar fuentes{% endblock %}
+{% block title %}ETL · Preparar fuentes</div></details>
+{% endblock %}
 {% block content %}
+
+<section class="panel mb-4" aria-labelledby="quick-etl-title">
+  <div class="panel-header">
+    <h2 class="panel-title" id="quick-etl-title">Subir Excel de ventas</h2>
+    <p class="panel-subtitle">Carga sencilla: selecciona un XLSX con Fecha, Cliente, Producto, Cantidad y Precio. SmartOrder reconoce automáticamente los encabezados habituales.</p>
+  </div>
+  <div class="panel-body">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="quick_xlsx">
+      <label class="form-label fw-semibold" for="etl-quick-file">Archivo de ventas (.xlsx)</label>
+      <input class="form-control mb-3" type="file" id="etl-quick-file" name="etl_quick_file"
+             accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+      {% if quick_active_dataset %}
+      <div class="alert alert-warning">
+        Actualmente está activo <strong>{{ quick_active_dataset.filename }}</strong>
+        ({{ quick_active_dataset.row_count }} filas). Una nueva carga lo sustituirá como fuente activa; las cargas anteriores se conservan.
+      </div>
+      <div class="form-check mb-3">
+        <input class="form-check-input" type="checkbox" id="etl-quick-replace" name="replace_existing" value="on" required>
+        <label class="form-check-label" for="etl-quick-replace">Confirmo que deseo sustituir el histórico activo.</label>
+      </div>
+      {% endif %}
+      <button class="btn btn-primary" type="submit">Importar Excel</button>
+    </form>
+    <p class="form-text mt-3 mb-0">
+      La carga se registra como <strong>referencia no verificada</strong>: no inventa la procedencia,
+      las unidades comerciales ni las fechas de entrega. La fecha del archivo se interpreta
+      provisionalmente como fecha de venta/pedido. Las cantidades automáticas permanecen bloqueadas
+      hasta que se confirme la fuente, las unidades y su cobertura.
+    </p>
+  </div>
+</section>
+<details class="mb-4"><summary class="fw-semibold">Opciones avanzadas: perfiles de ETL, inspecciones, CSV y aprobaciones</summary>
+<div class="mt-3">
+
 <div class="page-heading"><div><p class="page-eyebrow">Administración · Datos</p>
 <h1>Preparación ETL de históricos</h1><p>Extrae, transforma y valida archivos sin alterar el histórico activo ni la inferencia.</p></div></div>
 <div class="alert alert-info">La revisión ETL no activa una fuente. Primero hay que confirmar columnas, unidad comercial, fechas, calidad y cobertura. La integración PostgreSQL y Odoo se gestionan aparte.</div>
