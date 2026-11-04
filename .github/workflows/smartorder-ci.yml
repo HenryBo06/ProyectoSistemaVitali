@@ -53,3 +53,10 @@ jobs:
           python manage.py migrate --noinput
           python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','vitali_web.settings'); import django; django.setup(); from django.contrib.auth import get_user_model; get_user_model().objects.create_user(username='ci_persistent_user')"
           python -c "import os; os.environ.setdefault('DJANGO_SETTINGS_MODULE','vitali_web.settings'); import django; django.setup(); from django.contrib.auth import get_user_model; assert get_user_model().objects.filter(username='ci_persistent_user').exists()"
+      - name: Full Django regression suite on PostgreSQL
+        env:
+          SMARTORDER_DATABASE_URL: postgresql://ci@127.0.0.1:5432/smartorder_ci?sslmode=disable
+          SMARTORDER_SECRET_KEY: ci-ephemeral-nonproduction-key
+        run: |
+          python manage.py check
+          python manage.py test operations tests --noinput
