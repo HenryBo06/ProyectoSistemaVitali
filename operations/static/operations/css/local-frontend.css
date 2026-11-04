@@ -741,3 +741,53 @@ body.order-reviewing #sale-configuration { display: none; }
   .local-app .app-header .brand-product { display: none; }
   .local-app .app-header .header-actions { gap: .3rem; }
 }
+
+
+/* Commercial guidance and onboarding improvements for VM desktop and mobile. */
+.local-app .seller-mode-tab { column-gap: .32rem; }
+.local-app .seller-ai-feature {
+  padding: clamp(1rem, 1.7vw, 1.5rem);
+  border: 1px solid #cbded9;
+  border-left: 4px solid var(--v-bottle);
+  border-radius: 12px;
+  box-shadow: 0 5px 18px rgba(19, 53, 62, .045);
+}
+.local-app .seller-ai-feature h2 { font-size: clamp(1.1rem, 1.7vw, 1.35rem); margin-bottom: .75rem; }
+.local-app .seller-feature-product,
+.local-app .seller-feature-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .15rem;
+  margin: 0 0 .8rem;
+  min-width: 0;
+}
+.local-app .seller-feature-product span,
+.local-app .seller-feature-action > span { color: var(--v-muted); font-size: .76rem; font-weight: 650; }
+.local-app .seller-feature-product strong { color: var(--v-ink); font-size: 1.08rem; line-height: 1.3; }
+.local-app .seller-feature-action {
+  padding: .8rem 1rem;
+  border-radius: 9px;
+  background: #f2f8f6;
+  border: 1px solid #d4e8e1;
+}
+.local-app .seller-feature-action strong { color: var(--v-bottle-dark); font-size: .95rem; }
+.local-app .seller-feature-action p { margin: .25rem 0 0; line-height: 1.5; }
+.local-app .seller-empty-state {
+  grid-column: 1 / -1;
+  text-align: left;
+  max-width: 100%;
+  padding: clamp(1.35rem, 3vw, 2rem);
+  background: #fff;
+  border: 1px solid #dbe7e3;
+  border-left: 4px solid #abcac1;
+  box-shadow: 0 5px 18px rgba(19, 53, 62, .035);
+}
+.local-app .seller-empty-state h2 { font-size: 1.18rem; margin-bottom: .6rem; }
+.local-app .seller-empty-state p { color: var(--v-muted); max-width: 70ch; }
+.local-app .filter-bar select:disabled,
+.local-app .filter-bar button:disabled { cursor: not-allowed; opacity: .7; }
+@media (max-width: 575.98px) {
+  .local-app .seller-mode-tab { column-gap: .18rem; }
+  .local-app .seller-feature-action { padding: .75rem; }
+}

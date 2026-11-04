@@ -1064,6 +1064,27 @@ def users(request):
                     selected = request.POST.getlist("clients") if role == "vendedor" else []
                     _assign(user, selected, client_options)
                     messages.success(request, f"Cuenta {username} creada.")
+                elif action == "assign_unassigned":
+                    # Explicit onboarding without taking clients from another seller.
+                    user = get_object_or_404(User.objects.select_for_update(),
+                                             pk=request.POST.get("user_id"))
+                    if user.is_staff or not user.is_active:
+                        raise ValueError("Selecciona un vendedor activo para asignar la cartera.")
+                    if not client_options:
+                        raise ValueError("Carga un histórico de ventas antes de asignar clientes.")
+                    current = list(Assignment.objects.filter(
+                        user=user, client__in=client_options
+                    ).values_list("client", flat=True))
+                    owned = set(Assignment.objects.filter(
+                        client__in=client_options
+                    ).values_list("client", flat=True))
+                    unassigned = [client for client in client_options if client not in owned]
+                    if not unassigned:
+                        raise ValueError("Todos los clientes del histórico ya tienen vendedor.")
+                    _assign(user, current + unassigned, client_options)
+                    messages.success(
+                        request, f"{len(unassigned)} clientes sin responsable "
+                        f"asignados a {user.username}; no se transfirieron carteras ajenas.")
                 elif action == "assign":
                     user = get_object_or_404(User, pk=request.POST.get("user_id"))
                     if user.is_staff:
@@ -1117,6 +1138,10 @@ def users(request):
     assignments = {}
     for assignment in Assignment.objects.select_related("user"):
         assignments.setdefault(assignment.user_id, []).append(assignment.client)
+    assigned_names = {
+        client for seller_clients in assignments.values() for client in seller_clients
+    }
+    unassigned_clients = [client for client in client_options if client not in assigned_names]
     display_users = [
         {"id": account.pk, "username": account.username,
          "role": "admin" if account.is_staff else "vendedor",
@@ -1128,6 +1153,7 @@ def users(request):
         request, accounts=accounts, users=display_users, assignments=assignments,
         access_events=AccessEvent.objects.select_related("actor").order_by("-created_at")[:50],
         clients=client_options, client_options=client_options,
+        unassigned_clients=unassigned_clients,
     ))
 
 

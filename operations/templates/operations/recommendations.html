@@ -1,12 +1,12 @@
 {% extends 'operations/base.html' %}
 {% block title %}{% if role == 'vendedor' %}IA comercial para vendedores{% else %}Consulta de productos{% endif %}{% endblock %}
 {% block content %}
-<div class="page-heading seller-page-heading"><div><p class="page-eyebrow">{% if suggestion_mode == 'client_restock' %}Existencias del cliente{% else %}Venta contextual{% endif %}</p><h1>{% if role == 'vendedor' and suggestion_mode == 'sale' %}IA comercial · Qué ofrecer y qué hacer{% elif role == 'vendedor' %}Reposición del cliente{% else %}Consulta de productos{% endif %}</h1><p>{% if role == 'vendedor' and suggestion_mode == 'sale' %}Revisa qué producto ofrecer primero, la evidencia disponible y el siguiente paso con tu cliente. Tú decides y confirmas la venta.{% elif suggestion_mode == 'client_restock' %}Compara el conteo de hoy con el objetivo definido por administración.{% else %}Disponibilidad y datos operativos para la fecha seleccionada.{% endif %}</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Crear venta{% endif %}</a>{% endif %}</div>
+<div class="page-heading seller-page-heading"><div><p class="page-eyebrow">{% if suggestion_mode == 'client_restock' %}Existencias del cliente{% else %}Venta contextual{% endif %}</p><h1>{% if role == 'vendedor' and suggestion_mode == 'sale' %}IA comercial · Qué ofrecer y qué hacer{% elif role == 'vendedor' %}Reposición del cliente{% else %}Consulta de productos{% endif %}</h1><p>{% if role == 'vendedor' and suggestion_mode == 'sale' %}Revisa qué producto ofrecer primero, la evidencia disponible y el siguiente paso con tu cliente. Tú decides y confirmas la venta.{% elif suggestion_mode == 'client_restock' %}Compara el conteo de hoy con el objetivo definido por administración.{% else %}Disponibilidad y datos operativos para la fecha seleccionada.{% endif %}</p></div>{% if role == 'vendedor' and clients and catalog_available %}<a class="btn btn-primary" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Crear venta{% endif %}</a>{% endif %}</div>
 {% if role == 'vendedor' %}
 <nav class="seller-mode-tabs" aria-label="Tipo de consulta comercial">
-  <a class="seller-mode-tab{% if suggestion_mode == 'sale' %} is-active{% endif %}" {% if suggestion_mode == 'sale' %}aria-current="page"{% endif %} href="?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}"><span class="d-none d-sm-inline">Sugerencia de </span>Venta</a>
-  <a class="seller-mode-tab{% if suggestion_mode == 'client_restock' %} is-active{% endif %}" {% if suggestion_mode == 'client_restock' %}aria-current="page"{% endif %} href="?mode=client_restock&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Reposición<span class="d-none d-sm-inline"> del cliente</span></a>
-  <a class="seller-mode-tab" href="{% url 'client_stock' %}?client={{ selected_client|urlencode }}"><span class="d-none d-sm-inline">Registrar </span>Conteo</a>
+  <a class="seller-mode-tab{% if suggestion_mode == 'sale' %} is-active{% endif %}" {% if suggestion_mode == 'sale' %}aria-current="page"{% endif %} href="?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}"><span class="d-none d-sm-inline">Sugerencia de</span><span>Venta</span></a>
+  <a class="seller-mode-tab{% if suggestion_mode == 'client_restock' %} is-active{% endif %}" {% if suggestion_mode == 'client_restock' %}aria-current="page"{% endif %} href="?mode=client_restock&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}"><span>Reposición</span><span class="d-none d-sm-inline">del cliente</span></a>
+  <a class="seller-mode-tab" href="{% url 'client_stock' %}?client={{ selected_client|urlencode }}"><span class="d-none d-sm-inline">Registrar</span><span>Conteo</span></a>
 </nav>
 {% endif %}
 {% if maintenance_ui and role == 'admin' and dataset %}
@@ -20,25 +20,29 @@
   </div>
   <div>
     <label class="form-label" for="client">Cliente</label>
-    <select class="form-select" id="client" name="client">{% for client in clients %}<option {% if client == selected_client %}selected{% endif %}>{{ client }}</option>{% endfor %}</select>
+    <select class="form-select" id="client" name="client" {% if not clients %}disabled aria-describedby="client-assignment-help"{% endif %}>{% for client in clients %}<option value="{{ client }}" {% if client == selected_client %}selected{% endif %}>{{ client }}</option>{% empty %}<option value="">{% if not catalog_available %}Catálogo sin ventas cargadas{% elif role == 'vendedor' %}Sin clientes asignados{% else %}Sin clientes disponibles{% endif %}</option>{% endfor %}</select>
+    {% if not clients and role == 'vendedor' and catalog_available %}<div id="client-assignment-help" class="form-text">Administración debe asignarte clientes del histórico.</div>{% endif %}
   </div>
   <div>
     <label class="form-label" for="delivery">Entrega solicitada</label>
     <input class="form-control" type="date" id="delivery" name="required_date" value="{{ required_date|date:'Y-m-d' }}" min="{{ min_date|date:'Y-m-d' }}" max="{{ max_date|date:'Y-m-d' }}">
   </div>
   {% if role == 'vendedor' %}<input type="hidden" name="mode" value="{{ suggestion_mode }}">{% endif %}
-  <button class="btn btn-outline-primary" type="submit">Consultar</button>
+  <button class="btn btn-outline-primary" type="submit" {% if not clients or not catalog_available %}disabled{% endif %}>Consultar</button>
 </form>
 {% if recommendations and suggestion_mode != 'client_restock' %}
 <p class="form-text" role="note">La prioridad de productos es orientativa. Puede usar recurrencia reciente solo si supera la histórica en una auditoría cronológica; no supone nuevas compras ni valida cantidades. Las entregas mantienen sus controles independientes.</p>
 {% endif %}
 {% if role == 'vendedor' and suggestion_mode == 'sale' and recommendations %}
-<section class="panel mb-3" aria-labelledby="seller-ai-focus">
+<section class="panel mb-3 seller-ai-feature" aria-labelledby="seller-ai-focus">
   <p class="page-eyebrow">Asistente comercial · orientación para el vendedor</p>
   <h2 id="seller-ai-focus">Sugerencia de venta para este cliente</h2>
-  <p><strong>Producto para revisar primero:</strong> {{ recommendations.0.product }}.</p>
-  <p><strong>Acción sugerida:</strong> {{ recommendations.0.action_title }}.</p>
-  <p>{{ recommendations.0.action_reason }}</p>
+  <p class="seller-feature-product"><span>Producto prioritario</span><strong>{{ recommendations.0.product }}</strong></p>
+  <div class="seller-feature-action">
+    <span>Siguiente acción comercial</span>
+    <strong>Acción sugerida: {{ recommendations.0.action_title }}</strong>
+    <p>{{ recommendations.0.action_reason }}</p>
+  </div>
   <p class="form-text"><strong>Antes de comprometer una venta:</strong> {{ recommendations.0.action_checks }}</p>
   <a class="btn btn-primary" href="{% url 'order_create' %}?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}&amp;product={{ recommendations.0.product|urlencode }}">Preparar venta de este producto</a>
   <p class="form-text mb-0 mt-2">La IA ayuda a priorizar y actuar; no llama al cliente, no crea pedidos y no confirma cantidades ni disponibilidad.</p>
@@ -113,6 +117,6 @@
   </details>
   {% endif %}
 </article>
-{% empty %}<div class="empty-state">{% if not catalog_available %}<h2>Catálogo no disponible</h2><p>Administración debe cargar y habilitar ventas para consultar productos.</p>{% elif not client_in_catalog %}<h2>Este cliente no tiene ventas registradas en el catálogo activo</h2><p>Solicita a administración revisar la asignación y la fuente vigente.</p>{% else %}<h2>No hay productos con ventas registradas para esta consulta</h2><p>Revisa el cliente y la fecha de entrega o solicita una revisión administrativa.</p>{% endif %}</div>{% endfor %}
+{% empty %}<div class="empty-state seller-empty-state" role="status">{% if not catalog_available %}<h2>Aún no hay un histórico de ventas activo</h2><p>Administración debe importar un Excel de ventas antes de consultar productos.</p>{% elif role == 'vendedor' and not clients %}<h2>Aún no tienes clientes asignados</h2><p>El histórico de ventas ya está disponible, pero tu cartera está vacía. Solicita a administración que abra <strong>Usuarios y clientes</strong> y te asigne los clientes que vas a atender.</p><p class="form-text mb-0">Cuando se guarde tu cartera, vuelve a entrar a esta pantalla para consultar qué producto ofrecer primero y qué acción tomar.</p>{% elif not client_in_catalog %}<h2>Este cliente no tiene ventas registradas en el catálogo activo</h2><p>Solicita a administración revisar la asignación y la fuente vigente.</p>{% else %}<h2>No hay productos con ventas registradas para esta consulta</h2><p>Revisa el cliente y la fecha de entrega o solicita una revisión administrativa.</p>{% endif %}</div>{% endfor %}
 </div>
 {% endblock %}

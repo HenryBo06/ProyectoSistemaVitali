@@ -91,6 +91,9 @@
   </div>
 </div>
 {% if users and clients %}
+{% if unassigned_clients %}
+<div class="alert alert-info" role="status"><strong>{{ unassigned_clients|length }} cliente{{ unassigned_clients|length|pluralize }} del histórico activo aún sin vendedor.</strong> Puedes asignarlos a un vendedor activo desde abajo sin mover las carteras que ya pertenecen a otras personas.</div>
+{% endif %}
 <div class="section-label">
   <h2>Asignar clientes</h2>
   <small>Guardar una asignación reemplaza la lista anterior de ese vendedor.</small>
@@ -124,6 +127,15 @@
             </fieldset>
             <button class="btn btn-outline-primary" type="submit">Guardar clientes</button>
           </form>
+          {% if item.is_active and unassigned_clients %}
+          <form method="post" class="mt-3">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="assign_unassigned">
+            <input type="hidden" name="user_id" value="{{ item.id }}">
+            <button class="btn btn-primary" type="submit">Asignar {{ unassigned_clients|length }} cliente{{ unassigned_clients|length|pluralize }} sin vendedor</button>
+            <p class="form-text mb-0 mt-2">Conserva los clientes actuales de {{ item.username }} y no transfiere clientes de otros vendedores.</p>
+          </form>
+          {% endif %
         </div>
       </section>
     </div>

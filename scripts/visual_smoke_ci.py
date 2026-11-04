@@ -86,6 +86,8 @@ def django_smoke(browser) -> None:
     })
     page.goto(f"http://127.0.0.1:8000/recomendaciones/?{query}", wait_until="domcontentloaded")
     page.get_by_role("heading", name="Reposición del cliente").wait_for(timeout=30000)
+    if page.locator(".seller-mode-tab").count() != 3:
+        raise AssertionError("Seller mode navigation should show three readable options.")
     page.get_by_text("Acción sugerida:", exact=False).first.wait_for(timeout=30000)
     page.get_by_text("Producto avícola LAB (simulado)", exact=True).first.wait_for(timeout=30000)
     tabs = page.locator(".seller-mode-tabs")

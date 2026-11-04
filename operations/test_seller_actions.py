@@ -19,6 +19,51 @@ class SellerActionsRoleTests(LocalCase, TestCase):
                          "inventario-lab.xlsx", self.admin, True)
         Assignment.objects.create(user=self.seller, client="Cliente A")
 
+    def test_unassigned_seller_sees_actionable_empty_state_not_missing_sales(self):
+        from .models import SalesDataset
+        self.client.force_login(self.seller)
+        response = self.client.get(reverse("recommendations"))
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context_data["clients"])
+        self.assertTrue(SalesDataset.objects.filter(active=True).exists())
+        self.assertContains(response, "Aún no tienes clientes asignados")
+        self.assertContains(response, "Sin clientes asignados")
+        self.assertNotContains(response, "Este cliente no tiene ventas registradas")
+        self.assertNotContains(response, "Crear venta")
+        self.assertContains(response, 'type="submit" disabled')
+
+    def test_admin_can_assign_unowned_clients_without_taking_other_seller_portfolio(self):
+        from django.contrib.auth import get_user_model
+        from .models import SalesDataset, SalesLine
+        other = get_user_model().objects.create_user(
+            username="otro_vendedor", password="ClaveDemoVendedor234")
+        Assignment.objects.create(user=other, client="Cliente A")
+        dataset = SalesDataset.objects.get(active=True)
+        extra_line = SalesLine.objects.filter(dataset=dataset).first()
+        extra_line.pk = None
+        extra_line.client = "Cliente B"
+        extra_line.save()
+        self.client.force_login(self.admin)
+        listing = self.client.get(reverse("users"))
+        self.assertEqual(listing.status_code, 200)
+        self.assertContains(listing, "cliente del histórico activo aún sin vendedor")
+        response = self.client.post(reverse("users"), {
+            "action": "assign_unassigned", "user_id": self.seller.pk,
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "asignados a")
+        self.assertTrue(Assignment.objects.filter(user=self.seller, client="Cliente B").exists())
+        self.assertTrue(Assignment.objects.filter(user=other, client="Cliente A").exists())
+        self.assertEqual(Assignment.objects.filter(client="Cliente A").count(), 1)
+
+    def test_seller_cannot_use_admin_fast_assignment(self):
+        self.client.force_login(self.seller)
+        response = self.client.post(reverse("users"), {
+            "action": "assign_unassigned", "user_id": self.seller.pk,
+        })
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Assignment.objects.exists())
+
     def test_seller_has_specific_action_in_web_and_shared_streamlit_context(self):
         self.client.force_login(self.seller)
         web = self.client.get(reverse("recommendations"), {"client": "Cliente A", "mode": "sale"})
