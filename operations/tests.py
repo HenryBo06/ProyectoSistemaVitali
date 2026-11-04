@@ -430,6 +430,73 @@ class LocalWorkflowTests(LocalCase, TestCase):
         self.assertGreater(backend[1]["sales_usd_display"], "$0.00")
         self.assertEqual(backend[1]["historical_sale_days"], 1)
 
+    def test_dated_historical_ranking_changes_with_target_and_never_uses_future_sales(self):
+        """Calendar-relative product priority is descriptive and cutoff-safe."""
+        from .services import recommendation_cards
+        book = Workbook()
+        tab = book.active
+        tab.append(("Fecha", "Cliente", "Producto", "Cantidad_kg_unid",
+                    "Precio_Unitario_USD", "Monto_Venta_USD", "Unidad"))
+        for index, day in enumerate((3, 6, 9)):
+            tab.append((date(2025, 11, day), "Cliente A", "Alitas",
+                        2 + index, 10, (2 + index) * 10, "kg"))
+        for day in (4, 8, 12, 16):
+            tab.append((date(2025, 12, day), "Cliente A", "Chorizo",
+                        3, 100, 300, "lb"))
+        tab.append((date(2025, 11, 7), "Cliente A", "Chorizo", 500, 100, 50000, "lb"))
+        tab.append((date(2025, 12, 10), "Cliente A", "Alitas", 1, 10, 10, "kg"))
+        buffer = BytesIO()
+        book.save(buffer)
+        dataset = self._upload_sales(buffer.getvalue())
+        self._assign_seller()
+        nov_today, nov_target = date(2026, 11, 2), date(2026, 11, 5)
+        dec_today, dec_target = date(2026, 12, 2), date(2026, 12, 5)
+        november = recommendation_cards(dataset, nov_target, "Cliente A", today=nov_today)
+        december = recommendation_cards(dataset, dec_target, "Cliente A", today=dec_today)
+        self.assertEqual([r["product"] for r in november], ["Alitas", "Chorizo"])
+        self.assertEqual([r["product"] for r in december], ["Chorizo", "Alitas"])
+        self.assertEqual([r["historical_seasonal_days"] for r in november], [3, 1])
+        self.assertEqual([r["historical_seasonal_days"] for r in december], [4, 1])
+        self.assertTrue(all(r["suggested"] is None for r in november + december))
+        self.assertTrue(all(r["commercial_forecast"] is None for r in november + december))
+        self.assertEqual(november[0]["historical_cutoff_date"], nov_today - timedelta(days=1))
+
+        # In March 2025 the November/December sales don't exist yet.
+        # No future-only product can appear as a historical purchase.
+        march = recommendation_cards(
+            dataset, date(2025, 3, 7), "Cliente A",
+            today=date(2025, 3, 4),
+        )
+        self.assertEqual(march, [])
+
+    def test_historical_rank_replay_excludes_later_sales_from_same_dataset(self):
+        from .services import recommendation_cards
+        book = Workbook()
+        tab = book.active
+        tab.append(("Fecha", "Cliente", "Producto", "Cantidad_kg_unid",
+                    "Precio_Unitario_USD", "Monto_Venta_USD", "Unidad"))
+        for day in (date(2025, 1, 3), date(2025, 2, 3), date(2025, 3, 3)):
+            tab.append((day, "Cliente A", "Alitas", 2, 5, 10, "kg"))
+        for day in (date(2025, 1, 4), date(2025, 6, 3), date(2025, 6, 4),
+                    date(2025, 7, 5), date(2025, 9, 3)):
+            tab.append((day, "Cliente A", "Chorizo", 1, 1000, 1000, "lb"))
+        buffer = BytesIO()
+        book.save(buffer)
+        dataset = self._upload_sales(buffer.getvalue())
+        before = recommendation_cards(
+            dataset, date(2025, 4, 8), "Cliente A",
+            today=date(2025, 4, 5),
+        )
+        self.assertEqual([r["product"] for r in before], ["Alitas", "Chorizo"])
+        self.assertEqual([r["historical_sale_days"] for r in before], [3, 1])
+        self.assertTrue(all(r["historical_cutoff_date"] == date(2025, 4, 4) for r in before))
+        after = recommendation_cards(
+            dataset, date(2025, 10, 8), "Cliente A",
+            today=date(2025, 10, 5),
+        )
+        self.assertEqual([r["product"] for r in after], ["Chorizo", "Alitas"])
+        self.assertEqual(after[0]["historical_sale_days"], 5)
+
     def test_unconfirmed_inventory_units_do_not_change_customer_sale_quantity(self):
         today = timezone.localdate()
         dataset = self._upload_sales(

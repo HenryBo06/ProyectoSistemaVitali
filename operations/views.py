@@ -136,6 +136,8 @@ def _seller_cards(cards, *, preserve_priority: bool = False):
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
         "commercial_forecast", "target_date",
         "historical_sale_days", "historical_rank", "historical_total",
+        "historical_cutoff_date", "historical_seasonal_days",
+        "historical_seasonal_start", "historical_seasonal_end",
         "discount_percent", "tariff_available", "available", "stock_unit", "stock_date",
         "inventory_warning", "client_stock",
         "client_stock_location", "client_stock_target", "client_stock_projected",
@@ -163,8 +165,18 @@ def _seller_cards(cards, *, preserve_priority: bool = False):
                 f" Prioridad histórica {card['historical_rank']} de "
                 f"{card['historical_total']}, con "
                 f"{card['historical_sale_days']} días con ventas registradas. "
+                f" Se usaron únicamente registros hasta "
+                f"{card['historical_cutoff_date']:%d/%m/%Y}. "
                 "Es actividad histórica, no una predicción de compra futura."
             )
+            if card.get("historical_seasonal_days"):
+                text += (
+                    f" En el período comparable del año anterior "
+                    f"({card['historical_seasonal_start']:%d/%m/%Y}–"
+                    f"{card['historical_seasonal_end']:%d/%m/%Y}) "
+                    f"hubo {card['historical_seasonal_days']} días con ventas; "
+                    "es una referencia estacional descriptiva."
+                )
         commercial_forecast = card.get("commercial_forecast")
         if commercial_forecast is not None:
             unit_text = f" {unit}" if unit else ""

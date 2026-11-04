@@ -339,6 +339,8 @@ def products():
                 "Prioridad histórica": (
                     f"{card['historical_rank']} de {card['historical_total']} · "
                     f"{card['historical_sale_days']} días con venta"
+                    + (f" · {card['historical_seasonal_days']} en época comparable"
+                       if card.get("historical_seasonal_days") else "")
                     if card.get("historical_rank") and mode == "sale" else "No aplica"
                 ),
                 "Oportunidad comercial · no es cantidad de entrega": (
@@ -376,6 +378,12 @@ def products():
                             f"{card['historical_total']} · "
                             f"{card['historical_sale_days']} días con ventas"
                         )
+                        if card.get("historical_seasonal_days"):
+                            st.caption(
+                                f"{card['historical_seasonal_days']} días observados "
+                                "en la época equivalente del año anterior. "
+                                "Referencia, no pronóstico."
+                            )
                     st.caption(f"Oportunidad · no es cantidad solicitada: {opportunity}")
                     st.caption(f"Disponibilidad: {availability} · Tarifa autorizada: USD {tariff}")
         valid_products = [card["product"] for card in cards]

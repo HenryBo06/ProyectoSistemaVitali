@@ -686,7 +686,11 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             frame = forecast_rows(
                 dataset.digest, dataset.file.path, delivery, source_verified, today, dataset.pk,
             )
-            rows = frame[frame["Cliente"] == client].to_dict("records") if client else frame.to_dict("records")
+            rows = (
+                frame[frame["Cliente"] == client].to_dict("records")
+                if client and "Cliente" in frame else
+                frame.to_dict("records") if not client else []
+            )
         else:
             event = _sale_event(dataset, client, delivery, event_id) if client else None
             frame = sale_forecast_rows(
@@ -696,7 +700,11 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
                 tuple(event["history_dates"]) if event else (),
                 dataset.pk, dataset.last_date,
             )
-            rows = frame[frame["Cliente"] == client].to_dict("records") if client else frame.to_dict("records")
+            rows = (
+                frame[frame["Cliente"] == client].to_dict("records")
+                if client and "Cliente" in frame else
+                frame.to_dict("records") if not client else []
+            )
             for row in rows:
                 row["commercial_forecast"] = row.get("commercial_forecast") or row.get("forecast")
                 row["forecast"] = None
@@ -884,13 +892,36 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
     flows = list(DatedFlow.objects.filter(
         batch=batch, confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
     )) if batch else []
+    # A historical replay must not see sales dated after the simulated decision.
+    # For stale demo sources, show observations around the matching calendar
+    # period of the preceding year, without claiming a predictive probability.
+    historical_cutoff = today - timedelta(days=1)
     commercial = {
         row["product"]: row
-        for row in dataset.lines.filter(client=client).values("product").annotate(
+        for row in dataset.lines.filter(
+            client=client, date__lte=historical_cutoff
+        ).values("product").annotate(
             revenue=Sum("amount"), days_with_sale=Count("date", distinct=True)
         )
     }
+    reference_day = (delivery.replace(year=delivery.year - 1)
+                     if (delivery.month, delivery.day) != (2, 29)
+                     else delivery.replace(year=delivery.year - 1, day=28))
+    reference_from = reference_day - timedelta(days=14)
+    reference_to = min(historical_cutoff, reference_day + timedelta(days=14))
+    seasonal = {}
+    if reference_from <= reference_to:
+        seasonal = {
+            row["product"]: int(row["days_with_sale"])
+            for row in dataset.lines.filter(
+                client=client, date__range=(reference_from, reference_to)
+            ).values("product").annotate(
+                days_with_sale=Count("date", distinct=True)
+            )
+        }
+    use_seasonal = any(seasonal.values())
     historical_order = sorted(commercial, key=lambda product: (
+        -seasonal.get(product, 0) if use_seasonal else 0,
         -int(commercial[product].get("days_with_sale") or 0),
         -commercial[product].get("revenue", Decimal("0")),
         product.casefold(),
@@ -974,6 +1005,10 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             "historical_sale_days": int(metrics.get("days_with_sale") or 0),
             "historical_rank": historical_rank.get(row["Producto"]),
             "historical_total": len(historical_rank),
+            "historical_cutoff_date": historical_cutoff,
+            "historical_seasonal_days": seasonal.get(row["Producto"], 0) if use_seasonal else 0,
+            "historical_seasonal_start": reference_from if use_seasonal else None,
+            "historical_seasonal_end": reference_to if use_seasonal else None,
             "reference_period": reference_period,
             "unit_confirmed": units_confirmed,
             "stock_unit": item.unit if item and item.unit else "",
@@ -1026,7 +1061,8 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             ),
         })
     # Quantities in kg, lb and units are NOT comparable ranking scores.
-    # Use observed purchase frequency; tie-break with comparable USD revenue.
+    # Use calendar-specific observations when available, then total historical
+    # purchase frequency and USD for ties, always bounded by the as-of date.
     return sorted(cards, key=lambda card: (
         card["suggested"] is None,
         card["historical_rank"] or (len(historical_rank) + 1),
