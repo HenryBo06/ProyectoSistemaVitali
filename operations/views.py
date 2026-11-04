@@ -171,7 +171,7 @@ def _seller_cards(cards, *, preserve_priority: bool = False):
             )
             if card.get("historical_seasonal_days"):
                 text += (
-                    f" En el período comparable del año anterior "
+                    f" En el período histórico comparable "
                     f"({card['historical_seasonal_start']:%d/%m/%Y}–"
                     f"{card['historical_seasonal_end']:%d/%m/%Y}) "
                     f"hubo {card['historical_seasonal_days']} días con ventas; "
