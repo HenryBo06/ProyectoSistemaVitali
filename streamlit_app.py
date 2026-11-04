@@ -381,7 +381,7 @@ def products():
                         if card.get("historical_seasonal_days"):
                             st.caption(
                                 f"{card['historical_seasonal_days']} días observados "
-                                "en la época equivalente del año anterior. "
+                                "en un período histórico comparable. "
                                 "Referencia, no pronóstico."
                             )
                     st.caption(f"Oportunidad · no es cantidad solicitada: {opportunity}")
@@ -457,7 +457,7 @@ def products():
                         st.write(f"Cantidad observada: {card['reference_qty']} · " +
                                  (card["unit"] if card["unit_confirmed"] else "Unidad pendiente de confirmar"))
                     else:
-                        st.caption("No hay un período equivalente del año anterior para este producto.")
+                        st.caption("No hay registros de un período comparable para este producto.")
                     if card["available"] is not None:
                         st.write(f"Entradas antes de entrega: {card['incoming']} · Compromisos previos: {card['commitments_before']} · Compromisos de la semana: {card['commitments']}")
                 evaluation = card.get("sale_evaluation")
