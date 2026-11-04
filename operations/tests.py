@@ -425,6 +425,8 @@ class LocalWorkflowTests(LocalCase, TestCase):
         cards = response.context["recommendations"]
         self.assertEqual([item["product"] for item in cards], ["Alitas", "Chorizo"])
         self.assertEqual([item["historical_rank"] for item in cards], [1, 2])
+        self.assertEqual([item["priority_rank"] for item in cards], [1, 2])
+        self.assertEqual([item["priority_method"] for item in cards], ["historical", "historical"])
         self.assertEqual([item["historical_sale_days"] for item in cards], [3, 1])
         self.assertTrue(all(item["suggested"] is None for item in cards))
         self.assertContains(response, "Prioridad histórica 1 de 2")

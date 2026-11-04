@@ -136,6 +136,8 @@ def _seller_cards(cards, *, preserve_priority: bool = False):
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
         "commercial_forecast", "target_date",
         "historical_sale_days", "historical_rank", "historical_total",
+        "priority_rank", "priority_method", "priority_method_label",
+        "priority_audit_cases", "priority_audit_hits", "priority_baseline_hits",
         "historical_cutoff_date", "historical_seasonal_days",
         "historical_seasonal_start", "historical_seasonal_end",
         "discount_percent", "tariff_available", "available", "stock_unit", "stock_date",
@@ -177,6 +179,14 @@ def _seller_cards(cards, *, preserve_priority: bool = False):
                     f"hubo {card['historical_seasonal_days']} días con ventas; "
                     "es una referencia estacional descriptiva."
                 )
+        if card.get("priority_method") not in (None, "historical") and card.get("priority_rank"):
+            text += (
+                f" Orden de revisión evaluado: {card['priority_rank']} de "
+                f"{card['historical_total']} con {card['priority_method_label']}; "
+                f"{card['priority_audit_hits']} aciertos en {card['priority_audit_cases']} "
+                f"ventanas frente a {card['priority_baseline_hits']} de la recurrencia histórica. "
+                "Se refiere solo al orden de productos, no a cantidades ni probabilidades."
+            )
         commercial_forecast = card.get("commercial_forecast")
         if commercial_forecast is not None:
             unit_text = f" {unit}" if unit else ""

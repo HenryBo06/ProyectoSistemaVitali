@@ -346,7 +346,7 @@ def products():
                 "Prioridad evaluada": (
                     f"{card['priority_rank']} de {card['historical_total']} · "
                     f"{card['priority_method_label']} (auditada en {card['priority_audit_cases']} períodos)"
-                    if mode == "sale" and card.get("priority_method") != "historical"
+                    if mode == "sale" and card.get("priority_rank") and card.get("priority_method") not in (None, "historical")
                     else "Se conserva la prioridad histórica"
                     if mode == "sale" else "No aplica"
                 ),
@@ -390,6 +390,13 @@ def products():
                                 f"{card['historical_seasonal_days']} días observados "
                                 "en un período histórico comparable. "
                                 "Referencia, no pronóstico."
+                            )
+                        if card.get("priority_rank") and card.get("priority_method") not in (None, "historical"):
+                            st.caption(
+                                f"Prioridad evaluada {card['priority_rank']} de {card['historical_total']} · "
+                                f"{card['priority_method_label']}; "
+                                f"{card['priority_audit_hits']} de {card['priority_audit_cases']} "
+                                "períodos con compra en auditoría. No predice cantidad."
                             )
                     st.caption(f"Oportunidad · no es cantidad solicitada: {opportunity}")
                     st.caption(f"Disponibilidad: {availability} · Tarifa autorizada: USD {tariff}")
