@@ -126,6 +126,65 @@ class RecommendationTests(unittest.TestCase):
         self.assertIsNotNone(result["audit_overforecast"])
         self.assertIsNotNone(result["baseline_overforecast"])
 
+    def test_requested_weekday_changes_verified_forecast_with_closed_2025_history(self):
+        """Same as-of date, different calendar targets, with no post-cutoff data."""
+        first = date(2025, 1, 1)
+        rows = []
+        for offset in range(365):
+            day = first + timedelta(days=offset)
+            qty = 10.0 if day.weekday() == 0 else 1.0
+            rows.append({
+                "Fecha": pd.Timestamp(day), "Cliente": "Cliente A",
+                "Producto": "Producto X", "Unidad": "kg",
+                "Cantidad_kg_unid": qty,
+            })
+        data = SalesData(
+            pd.DataFrame(rows), "calendar-2025", ("Ventas",), 0,
+            date_semantics="sale_order", provenance="simulated",
+            coverage={
+                ("Cliente A", "Producto X", "kg"):
+                    ((first, first + timedelta(days=364)),),
+            },
+        )
+        engine = RecommendationEngine(data)
+        as_of = date(2026, 1, 1)
+        monday = engine.for_sale(date(2026, 1, 5), True, as_of).iloc[0]
+        tuesday = engine.for_sale(date(2026, 1, 6), True, as_of).iloc[0]
+        self.assertEqual(monday["forecast"], 10.0)
+        self.assertEqual(tuesday["forecast"], 1.0)
+        self.assertEqual(monday["target_date"], date(2026, 1, 5))
+        self.assertEqual(tuesday["target_date"], date(2026, 1, 6))
+        self.assertEqual(monday["cutoff_date"], date(2025, 12, 31))
+        self.assertEqual(tuesday["cutoff_date"], date(2025, 12, 31))
+        self.assertTrue(monday["eligible_for_auto"])
+        self.assertTrue(tuesday["eligible_for_auto"])
+        self.assertIsNone(monday["quantity"])
+        self.assertIsNone(tuesday["quantity"])
+
+    def test_sparse_2025_calendar_is_not_a_verified_daily_demand_source(self):
+        """Sales events do not establish daily no-sales observations."""
+        first = date(2025, 1, 1)
+        records = []
+        for offset in range(0, 365, 17):
+            day = first + timedelta(days=offset)
+            records.append({
+                "Fecha": pd.Timestamp(day), "Cliente": "Cliente A",
+                "Producto": "Producto X", "Unidad": "kg",
+                "Cantidad_kg_unid": 10.0,
+            })
+        # Deliberately no approved coverage, like the provided demonstration XLSX.
+        data = SalesData(
+            pd.DataFrame(records), "sparse-2025", ("Ventas",), 0,
+            date_semantics="sale_order", provenance="simulated",
+        )
+        result = RecommendationEngine(data).for_sale(
+            date(2025, 12, 31), True, date(2025, 12, 30),
+        ).iloc[0]
+        self.assertFalse(result["eligible_for_auto"])
+        self.assertIsNone(result["commercial_forecast"])
+        self.assertIsNone(result["quantity"])
+        self.assertEqual(result["evidence_status"], "unknown_coverage")
+
     def test_sale_suggestion_uses_only_days_before_the_target(self):
         first = date(2025, 1, 1)
         target = first + timedelta(days=210)
