@@ -85,8 +85,7 @@ def django_smoke(browser) -> None:
         "required_date": (date.today() + timedelta(days=2)).isoformat(),
     })
     page.goto(f"http://127.0.0.1:8000/recomendaciones/?{query}", wait_until="domcontentloaded")
-    page.get_by_role("heading", name="IA comercial · Qué ofrecer y qué hacer").wait_for(timeout=30000)
-    page.get_by_role("heading", name="Sugerencia de venta para este cliente").wait_for(timeout=30000)
+    page.get_by_role("heading", name="Reposición del cliente").wait_for(timeout=30000)
     page.get_by_text("Acción sugerida:", exact=False).first.wait_for(timeout=30000)
     page.get_by_text("Producto avícola LAB (simulado)", exact=True).first.wait_for(timeout=30000)
     tabs = page.locator(".seller-mode-tabs")
