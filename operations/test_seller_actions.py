@@ -21,6 +21,7 @@ class SellerActionsRoleTests(LocalCase, TestCase):
 
     def test_unassigned_seller_sees_actionable_empty_state_not_missing_sales(self):
         from .models import SalesDataset
+        Assignment.objects.filter(user=self.seller).delete()
         self.client.force_login(self.seller)
         response = self.client.get(reverse("recommendations"))
         self.assertEqual(response.status_code, 200)
@@ -37,6 +38,7 @@ class SellerActionsRoleTests(LocalCase, TestCase):
         from .models import SalesDataset, SalesLine
         other = get_user_model().objects.create_user(
             username="otro_vendedor", password="ClaveDemoVendedor234")
+        Assignment.objects.filter(user=self.seller).delete()
         Assignment.objects.create(user=other, client="Cliente A")
         dataset = SalesDataset.objects.get(active=True)
         extra_line = SalesLine.objects.filter(dataset=dataset).first()
@@ -62,7 +64,8 @@ class SellerActionsRoleTests(LocalCase, TestCase):
             "action": "assign_unassigned", "user_id": self.seller.pk,
         })
         self.assertEqual(response.status_code, 403)
-        self.assertFalse(Assignment.objects.exists())
+        self.assertEqual(Assignment.objects.count(), 1)
+        self.assertTrue(Assignment.objects.filter(user=self.seller, client="Cliente A").exists())
 
     def test_seller_has_specific_action_in_web_and_shared_streamlit_context(self):
         self.client.force_login(self.seller)
