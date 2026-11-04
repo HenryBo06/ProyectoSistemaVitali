@@ -346,6 +346,8 @@ def django_etl_approved_load_smoke(browser) -> None:
     page.locator('input[name="password"]').fill(CREDENTIALS["lab_admin_01"])
     page.get_by_role("button", name="Entrar a mi espacio").click()
     page.goto("http://127.0.0.1:8000/administracion/etl/", wait_until="domcontentloaded")
+    page.get_by_role("heading", name="Subir Excel de ventas").wait_for()
+    page.locator("details > summary").filter(has_text="Opciones avanzadas").click()
     page.get_by_role("heading", name="Preparación ETL de históricos").wait_for()
 
     profile_form = page.locator('form:has(input[name="action"][value="save_profile"])')
@@ -357,6 +359,7 @@ def django_etl_approved_load_smoke(browser) -> None:
     )
     profile_form.get_by_role("button", name="Guardar nueva versión").click()
     page.get_by_text("Perfil smoke-vitali-2025 versión 1 guardado").wait_for(timeout=20000)
+    page.locator("details > summary").filter(has_text="Opciones avanzadas").click()
     profile_option = page.locator("#etl-profile option").filter(has_text="smoke-vitali-2025").first
     profile_id = profile_option.get_attribute("value")
     if not profile_id:
@@ -373,6 +376,7 @@ def django_etl_approved_load_smoke(browser) -> None:
         "name": "lab-ventas-2025.csv", "mimeType": "text/csv", "buffer": raw,
     })
     page.get_by_role("button", name="Inspeccionar sin cargar").click()
+    page.locator("details > summary").filter(has_text="Opciones avanzadas").click()
     page.get_by_text("Estructura preliminar válida").wait_for(timeout=20000)
     if page.locator('select[name="unit_value"]').count() != 2:
         raise AssertionError("The two LAB products must require separate provisional units.")
