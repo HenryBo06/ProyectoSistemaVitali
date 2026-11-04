@@ -68,6 +68,7 @@ jobs:
             .local-synthetic-audit/normal/smartorder_auditoria_SINTETICA.json
             .local-synthetic-audit/normal/ventas_SINTETICAS.csv
             .local-synthetic-audit/normal/ventas_SINTETICAS.xlsx
+            .local-synthetic-audit/normal/smartorder_informe_SINTETICO.html
             .local-synthetic-audit/stress/smartorder_auditoria_SINTETICA.json
           if-no-files-found: warn
           retention-days: 14

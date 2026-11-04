@@ -146,3 +146,7 @@ credenciales, datos personales ni conexiones a sistemas de Vitali. La
 activación empresarial real continúa siendo una fase distinta, sujeta a
 autorización comercial explícita y datos auditables, sin subir información
 confidencial a GitHub ni utilizarla en pruebas públicas.
+
+## 8. Informe visual HTML autónomo
+
+Cada ejecución produce también un archivo `smartorder_informe_SINTETICO.html` sin JavaScript ni dependencias en Internet. Presenta métricas agregadas de ambas ventanas, resultados por los ocho patrones, distribución por presentación, cuarentena adversarial y huella SHA-256. El informe informa explícitamente cuando Hit@1 está saturado en un horizonte; no muestra nombres de clientes ni filas individuales. El workflow archiva este HTML junto con el JSON, CSV y XLSX simulados para su utilización en la exposición.

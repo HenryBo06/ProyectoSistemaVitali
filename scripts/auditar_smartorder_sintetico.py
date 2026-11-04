@@ -13,6 +13,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from smartorder.synthetic_lab import FIELDNAMES, run_audit, serialize_csv
+from smartorder.synthetic_report import render_html
 
 
 def export_xlsx(rows, path, report):
@@ -66,6 +67,9 @@ def main() -> None:
         output.mkdir(parents=True, exist_ok=True)
         (output / "smartorder_auditoria_SINTETICA.json").write_text(
             json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
+        )
+        (output / "smartorder_informe_SINTETICO.html").write_text(
+            render_html(report), encoding="utf-8",
         )
         if options.export_csv:
             (output / "ventas_SINTETICAS.csv").write_bytes(serialize_csv(rows))

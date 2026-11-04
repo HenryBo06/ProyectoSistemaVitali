@@ -267,7 +267,7 @@ python scripts/auditar_smartorder_sintetico.py --seed 20261103 --clients 16 --da
 ~~~
 
 La salida aparece en .local-synthetic-audit/, ignorada por Git: reporte JSON
-de comparaciones con reservas temporales, CSV y XLSX completamente simulados.
+de comparaciones con reservas temporales, informe HTML visual offline, CSV y XLSX completamente simulados.
 También puede generar una prueba de volumen sin XLSX:
 
 ~~~bash

@@ -136,6 +136,21 @@ class AdvancedSyntheticLabTests(unittest.TestCase):
         self.assertEqual(len({row["Referencia_linea"] for row in parsed}), len(parsed))
         self.assertTrue(all(row["Monto_Venta_USD"] for row in parsed))
 
+    def test_offline_visual_report_is_aggregate_only_and_warns_of_saturation(self):
+        from smartorder.synthetic_report import render_html
+        report, rows = run_audit(
+            seed=11, clients=8, products=8, days=420,
+        )
+        html = render_html(report)
+        self.assertIn("NO SON DATOS EMPRESARIALES", html)
+        self.assertIn("escenarios", html.lower())
+        self.assertIn("kg", html)
+        self.assertIn("SHA-256", html)
+        self.assertNotIn("<script", html.lower())
+        self.assertNotIn("https://", html)
+        self.assertNotIn(rows[0].client, html)
+        self.assertIn(report["huella_csv_sha256"], html)
+
     def test_invalid_parameters_are_rejected(self):
         with self.assertRaises(ValueError):
             generate(clients=2)
