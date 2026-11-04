@@ -198,6 +198,8 @@ def django_etl_smoke(browser) -> None:
     page.locator('input[name="password"]').fill(CREDENTIALS["lab_admin_01"])
     page.get_by_role("button", name="Entrar a mi espacio").click()
     page.goto("http://127.0.0.1:8000/administracion/etl/", wait_until="domcontentloaded")
+    page.get_by_role("heading", name="Subir Excel de ventas").wait_for(timeout=20000)
+    page.locator("details > summary").filter(has_text="Opciones avanzadas").click()
     page.get_by_role("heading", name="Preparación ETL de históricos").wait_for(timeout=20000)
     csv_data = (
         "DiaFactura;Cuenta;Articulo;Volumen;PrecioNeto;TipoUnidad\n"
@@ -212,6 +214,7 @@ def django_etl_smoke(browser) -> None:
         '{"Fecha":"DiaFactura","Cliente":"Cuenta","Producto":"Articulo",'
         '"Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"PrecioNeto","Unidad":"TipoUnidad"}')
     page.get_by_role("button", name="Inspeccionar sin cargar").click()
+    page.locator("details > summary").filter(has_text="Opciones avanzadas").click()
     page.get_by_text("Estructura preliminar válida").wait_for(timeout=20000)
     page.get_by_text("2.5", exact=True).first.wait_for(timeout=20000)
     if page.locator("body").evaluate("(e) => e.scrollWidth > window.innerWidth + 2"):
