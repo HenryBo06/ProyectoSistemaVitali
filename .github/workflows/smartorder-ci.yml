@@ -1,10 +1,13 @@
 name: SmartOrder CI
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, codex/smartorder-densidad-20261101]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
@@ -60,3 +63,40 @@ jobs:
         run: |
           python manage.py check
           python manage.py test operations tests --noinput
+
+  cleanup-legacy-branches:
+    # Deliberately runs once, on this named main integration commit, after full CI.
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, 'cleanup legacy branches')
+    needs: django-and-postgres
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete only historical refs already incorporated into main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r branch; do
+            [ -n "$branch" ] || continue
+            if ! gh api "repos/$GITHUB_REPOSITORY/branches/$branch" --jq '.name' >/dev/null 2>&1; then
+              echo "Already removed: $branch"
+              continue
+            fi
+            ahead="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$branch" --jq '.ahead_by')"
+            if [ "$ahead" != "0" ]; then
+              echo "::error::Keeping $branch because it has $ahead commits absent from main"
+              exit 1
+            fi
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$branch" >/dev/null
+            echo "Removed: $branch"
+          done <<'BRANCHES'
+          codex/academic-ai-delivery
+          codex/frontend-redesign
+          codex/integracion-vitali-20261101
+          codex/smartorder-densidad-20261101
+          docs/documentacion-final
+          feat/django-local-frontend-refresh
+          fix/streamlit-demo-accounts
+          fix/streamlit-persistent-postgres
+          BRANCHES

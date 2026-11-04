@@ -1,8 +1,11 @@
 name: SmartOrder Synthetic Browser Smoke
 
+permissions:
+  contents: read
+
 on:
   push:
-    branches: [main, codex/smartorder-densidad-20261101]
+    branches: [main]
   workflow_dispatch:
 
 jobs:

@@ -1,3 +1,7 @@
+> **MVP integrado en `main` (3 de noviembre de 2026):** la prioridad de productos se basa en ventas históricas con corte temporal; las cantidades automáticas permanecen bloqueadas cuando las unidades, fechas, cobertura o vigencia no están verificadas. GitHub Actions validó 197 pruebas en SQLite/PostgreSQL 17 y el recorrido sintético de navegador. No se ha desplegado ni configurado ninguna VM.
+>
+> **Material académico conservado:** [presentación](entregables/SmartOrder_AI_Presentacion_IA.pptx) · [explicación del modelo](docs/EXPLICACION_MODELO_IA.md) · [guía de demostración](docs/GUIA_DEMOSTRACION_CLASE.md). Las capturas corresponden a una demostración sintética de octubre de 2026, no a los datos reales ni al frontend actual.
+
 > **Estado local, 4 de octubre de 2026:** Django y Streamlit comparten funciones y permisos. El laboratorio integra Odoo Community con operación física, compras, calidad administrativa, mantenimiento y cierre contable simulados comprobados. Incluye diez clientes, ocho productos, tres puntos y 18 meses de historia sintética reconciliada. El inventario nativo revisado tiene corte local del 4 de octubre; el historial y las verificaciones relevantes están resumidos en este README. Las cuentas y archivos previos se preservan; no se acredita operación real ni validación fiscal salvadoreña.
 
 <h1 align="center">SmartOrder AI</h1>

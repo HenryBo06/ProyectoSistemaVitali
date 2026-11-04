@@ -719,12 +719,22 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
                 )
     elif mode == "client_restock":
         rows = []
-        target = RestockTarget.objects.filter(
-            scope=RestockTarget.Scope.CLIENT, owner_key=f"client:{client}"
-        )
+        # Fetch targets and most recent counts once, avoiding per-product queries.
+        targets_by_product = {
+            goal.product: goal for goal in RestockTarget.objects.filter(
+                scope=RestockTarget.Scope.CLIENT, owner_key=f"client:{client}"
+            )
+        }
+        latest_counts = {}
+        for count in ClientStockCount.objects.filter(client=client).order_by(
+            "product", "location", "-observed_on", "-created_at", "-pk"
+        ):
+            latest_counts.setdefault(count.product, {}).setdefault(
+                count.location.strip().casefold(), count
+            )
         products = set(dataset.lines.filter(client=client).values_list("product", flat=True).distinct())
-        products.update(target.values_list("product", flat=True))
-        products.update(ClientStockCount.objects.filter(client=client).values_list("product", flat=True).distinct())
+        products.update(targets_by_product)
+        products.update(latest_counts)
         products.update(ClientStockMovement.objects.filter(client=client).values_list("product", flat=True).distinct())
         batch = active_inventory()
         flows, flow_units, ambiguous_flows = _dated_flow_commitments(
@@ -747,6 +757,9 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
         movement_rows = list(ClientStockMovement.objects.filter(
             client=client, effective_date__gte=today, effective_date__lte=delivery,
         ).select_related("related_order_line__order").order_by("effective_date", "pk")) if delivery >= today else []
+        movements_by_product = {}
+        for movement in movement_rows:
+            movements_by_product.setdefault(movement.product, []).append(movement)
         same_day_order_products = {line.product for _, line, _ in _confirmed_order_lines(
             today, today, client, committed_only=True,
         )}
@@ -760,20 +773,16 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
                     "La reposición fuera de siete días requiere revisión manual.",
                 })
                 continue
-            latest_by_location = {}
-            for count in ClientStockCount.objects.filter(client=client, product=product).order_by(
-                "location", "-observed_on", "-created_at", "-pk"
-            ):
-                latest_by_location.setdefault(count.location.strip().casefold(), count)
+            latest_by_location = latest_counts.get(product, {})
             location_counts = list(latest_by_location.values())
-            goal = target.filter(product=product).first()
+            goal = targets_by_product.get(product)
             units_match = bool(location_counts and goal and all(
                 count.observed_on == today and count.unit.strip().casefold() == goal.unit.strip().casefold()
                 and count.unit.strip()
                 for count in location_counts
             ))
             current = sum((count.available for count in location_counts), Decimal("0")) if units_match else None
-            movements = [movement for movement in movement_rows if movement.product == product]
+            movements = movements_by_product.get(product, ())
             count_locations = set(latest_by_location)
             confirmed_movements = [movement for movement in movements if movement.confirmed]
 
