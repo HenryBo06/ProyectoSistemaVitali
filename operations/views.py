@@ -1643,9 +1643,11 @@ def export_batch(request):
         messages.error(request, "Seleccione entre 1 y 500 productos aprobados.")
         return redirect("orders")
     with transaction.atomic():
-        lines = list(OrderLine.objects.select_for_update().select_related(
+        # PostgreSQL rejects FOR UPDATE on nullable outer-joined reviewer.
+        # Lock the order lines and their mandatory parent orders, not reviewer.
+        lines = list(OrderLine.objects.select_related(
             "order", "order__seller", "reviewer"
-        ).filter(pk__in=ids).order_by("id"))
+        ).select_for_update(of=("self", "order")).filter(pk__in=ids).order_by("id"))
         if len(lines) != len(ids) or any(
             line.status != OrderLine.Status.APPROVED or
             not _sources_current(line.order)

@@ -32,3 +32,12 @@
 La suite automatizada y la aplicación en un laboratorio sintético no equivalen a aceptación comercial de Vitali. Para pasar a operación real, es necesario recibir y aprobar: unidad por producto, significado comercial de `Fecha`, evidencia de días con cobertura completa, identificadores de líneas cuando exista actualización incremental, tarifas y stock contrastados, y datos recientes.
 
 No habilitar predicción automática por forzar coberturas, alterar `verified` o inventar `kg` / `lb` / `unidad`. En la demostración, la prioridad histórica se puede usar para elegir qué producto **revisar** y la cantidad de entrega se decide manualmente. **No se requiere ni se ejecuta despliegue de VM en esta fase.**
+
+
+## Hallazgos al ejecutar toda la suite en PostgreSQL 16
+
+La ampliación del CI detectó un defecto operativo que SQLite no manifestaba: la descarga/confirmación de lotes hacía `SELECT ... FOR UPDATE` incluyendo la unión opcional `OrderLine.reviewer`, lo que PostgreSQL rechaza. La consulta se corrigió para bloquear explícitamente `OrderLine` y su pedido padre, sin bloquear la relación opcional.
+
+Se detectaron además tres pruebas de creación de cuentas demo que asumían SQLite y fallaban correctamente bajo PostgreSQL porque **la aplicación prohíbe sembrar cuentas demo en PostgreSQL**. Las pruebas de creación/validación de contraseñas se ejecutan exclusivamente en SQLite y se añadió una prueba explícita de rechazo en PostgreSQL. No se relajó la protección empresarial para hacer pasar los tests.
+
+El flujo de exportación se valida de nuevo en ambos motores, junto con las restricciones de roles y la interfaz Streamlit.
