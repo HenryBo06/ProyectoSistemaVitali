@@ -16,7 +16,7 @@
 | Inferencia | Pruebas `tests` y motor `smartorder.recommendations` | Respetar cortes cronológicos, cobertura, unidades, procedencia y vigencia; series sin garantías mantienen cantidades manuales |
 | Pedidos y administración | `operations.tests`, `operations.test_sales_roles`, `operations.test_commercial_pilot` | Registro de pedido, seguridad de tarifas, revisión administrativa, exportación y separación de permisos |
 | Django / Streamlit | Prueba de puente + navegador Chromium | Misma lógica y validaciones; escritorio/móvil; vendedores sin permisos de carga ETL |
-| Compatibilidad de base de datos | GitHub Actions, SQLite y PostgreSQL 16 efímero | Suite Django completa en ambas bases, migraciones y persistencia entre procesos |
+| Compatibilidad de base de datos | GitHub Actions, SQLite y PostgreSQL 17 efímero | Suite Django completa en ambas bases, migraciones y persistencia entre procesos |
 | Funcionamiento en VM | **Excluido de esta fase** | Instalación posterior por Codex cuando se apruebe el MVP |
 
 ## Observaciones del Excel recibido
@@ -34,10 +34,14 @@ La suite automatizada y la aplicación en un laboratorio sintético no equivalen
 No habilitar predicción automática por forzar coberturas, alterar `verified` o inventar `kg` / `lb` / `unidad`. En la demostración, la prioridad histórica se puede usar para elegir qué producto **revisar** y la cantidad de entrega se decide manualmente. **No se requiere ni se ejecuta despliegue de VM en esta fase.**
 
 
-## Hallazgos al ejecutar toda la suite en PostgreSQL 16
+## Hallazgos al ejecutar toda la suite en PostgreSQL 17
 
 La ampliación del CI detectó un defecto operativo que SQLite no manifestaba: la descarga/confirmación de lotes hacía `SELECT ... FOR UPDATE` incluyendo la unión opcional `OrderLine.reviewer`, lo que PostgreSQL rechaza. La consulta se corrigió para bloquear explícitamente `OrderLine` y su pedido padre, sin bloquear la relación opcional.
 
 Se detectaron además tres pruebas de creación de cuentas demo que asumían SQLite y fallaban correctamente bajo PostgreSQL porque **la aplicación prohíbe sembrar cuentas demo en PostgreSQL**. Las pruebas de creación/validación de contraseñas se ejecutan exclusivamente en SQLite y se añadió una prueba explícita de rechazo en PostgreSQL. No se relajó la protección empresarial para hacer pasar los tests.
 
 El flujo de exportación se valida de nuevo en ambos motores, junto con las restricciones de roles y la interfaz Streamlit.
+
+## Verificación continua tras fusionar en main
+
+Los workflows SmartOrder CI y Synthetic Browser Smoke se ejecutan en los PR contra `main` y ante nuevos commits en `main` (conservan el trigger de la rama temporal hasta su limpieza). La matriz de CI emplea PostgreSQL 17, la misma versión mayor declarada en `compose.yaml`, además de SQLite. Las pruebas siguen usando únicamente entornos y datos sintéticos temporales; esto no instala ni modifica ninguna VM.
