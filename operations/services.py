@@ -537,15 +537,15 @@ def _sale_event(dataset: SalesDataset, client: str, delivery: date,
                 if row.territory.strip().casefold() in national
                 or row.territory.strip().casefold() in zone_names]
     if event_id:
+        # Explicit but unauthorized/inactive events must never silently become
+        # a different national celebration.
         event = next((row for row in eligible if str(row.pk) == str(event_id)), None)
         if event is None:
             return None
     else:
-        event = None
-    if event is None:
         event = next((row for row in eligible if row.territory.strip().casefold() in national), None)
-    if event is None:
-        event = next((row for row in eligible if row.territory.strip().casefold() in zone_names), None)
+        if event is None:
+            event = next((row for row in eligible if row.territory.strip().casefold() in zone_names), None)
     if event is None:
         return None
     offset = (delivery - event.start_date).days
@@ -686,7 +686,11 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             frame = forecast_rows(
                 dataset.digest, dataset.file.path, delivery, source_verified, today, dataset.pk,
             )
-            rows = frame[frame["Cliente"] == client].to_dict("records") if client else frame.to_dict("records")
+            rows = (
+                frame[frame["Cliente"] == client].to_dict("records")
+                if client and "Cliente" in frame else
+                frame.to_dict("records") if not client else []
+            )
         else:
             event = _sale_event(dataset, client, delivery, event_id) if client else None
             frame = sale_forecast_rows(
@@ -696,7 +700,11 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
                 tuple(event["history_dates"]) if event else (),
                 dataset.pk, dataset.last_date,
             )
-            rows = frame[frame["Cliente"] == client].to_dict("records") if client else frame.to_dict("records")
+            rows = (
+                frame[frame["Cliente"] == client].to_dict("records")
+                if client and "Cliente" in frame else
+                frame.to_dict("records") if not client else []
+            )
             for row in rows:
                 row["commercial_forecast"] = row.get("commercial_forecast") or row.get("forecast")
                 row["forecast"] = None
@@ -881,15 +889,50 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
     if batch:
         for change in InventoryAdjustment.objects.filter(batch=batch).order_by("created_at", "pk"):
             adjustments[(change.client, change.product)] = change
-    flows = list(DatedFlow.objects.filter(
-        batch=batch, confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
-    )) if batch else []
+    flows_by_pair = {}
+    if batch:
+        flow_query = DatedFlow.objects.filter(
+            batch=batch, confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
+        )
+        if client:
+            flow_query = flow_query.filter(client=client)
+        for flow in flow_query:
+            flows_by_pair.setdefault((flow.client, flow.product), []).append(flow)
+    # A historical replay must not see sales dated after the simulated decision.
+    # For stale demo sources, show observations around the matching calendar
+    # period of the preceding year, without claiming a predictive probability.
+    historical_cutoff = today - timedelta(days=1)
     commercial = {
         row["product"]: row
-        for row in dataset.lines.filter(client=client).values("product").annotate(
+        for row in dataset.lines.filter(
+            client=client, date__lte=historical_cutoff
+        ).values("product").annotate(
             revenue=Sum("amount"), days_with_sale=Count("date", distinct=True)
         )
     }
+    reference_day = (delivery.replace(year=delivery.year - 1)
+                     if (delivery.month, delivery.day) != (2, 29)
+                     else delivery.replace(year=delivery.year - 1, day=28))
+    reference_from = reference_day - timedelta(days=14)
+    reference_to = min(historical_cutoff, reference_day + timedelta(days=14))
+    seasonal = {}
+    if reference_from <= reference_to:
+        seasonal = {
+            row["product"]: int(row["days_with_sale"])
+            for row in dataset.lines.filter(
+                client=client, date__range=(reference_from, reference_to)
+            ).values("product").annotate(
+                days_with_sale=Count("date", distinct=True)
+            )
+        }
+    use_seasonal = any(seasonal.values())
+    historical_order = sorted(commercial, key=lambda product: (
+        -seasonal.get(product, 0) if use_seasonal else 0,
+        -int(commercial[product].get("days_with_sale") or 0),
+        -commercial[product].get("revenue", Decimal("0")),
+        product.casefold(),
+    ))
+    historical_rank = {product: index + 1 for index, product in enumerate(historical_order)}
     tariffs = {
         row.product: row for row in PriceTariff.objects.filter(client=client)
     }
@@ -908,7 +951,7 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
         change = adjustments.get(key)
         available = Decimal(str(change.available if change else item.available)) if item else None
         stock_date = (change.observed_on if change else item.observed_on) if item else None
-        due_flows = [flow for flow in flows if (flow.client, flow.product) == key]
+        due_flows = flows_by_pair.get(key, ())
         incoming = sum((flow.quantity for flow in due_flows
                         if flow.kind == DatedFlow.Kind.INCOMING
                         and today <= flow.due_date <= delivery), Decimal("0"))
@@ -965,6 +1008,13 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
             "category": categories.get(row["Producto"], ""),
             "sales_usd_display": f"${metrics.get('revenue', Decimal('0')):,.2f}",
             "days_with_sale": metrics.get("days_with_sale", 0),
+            "historical_sale_days": int(metrics.get("days_with_sale") or 0),
+            "historical_rank": historical_rank.get(row["Producto"]),
+            "historical_total": len(historical_rank),
+            "historical_cutoff_date": historical_cutoff,
+            "historical_seasonal_days": seasonal.get(row["Producto"], 0) if use_seasonal else 0,
+            "historical_seasonal_start": reference_from if use_seasonal else None,
+            "historical_seasonal_end": reference_to if use_seasonal else None,
             "reference_period": reference_period,
             "unit_confirmed": units_confirmed,
             "stock_unit": item.unit if item and item.unit else "",
@@ -1016,10 +1066,12 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
                 if not stock_unit_confirmed else ""
             ),
         })
+    # Quantities in kg, lb and units are NOT comparable ranking scores.
+    # Use calendar-specific observations when available, then total historical
+    # purchase frequency and USD for ties, always bounded by the as-of date.
     return sorted(cards, key=lambda card: (
         card["suggested"] is None,
-        -(card["suggested"] or Decimal("0")),
-        -commercial.get(card["product"], {}).get("revenue", Decimal("0")),
+        card["historical_rank"] or (len(historical_rank) + 1),
         card["product"].casefold(),
     ))
 
@@ -1246,3 +1298,77 @@ def top_products_for(dataset: SalesDataset, clients: list[str] | None = None,
         lines = lines.filter(client__in=clients)
     rows = lines.values("product").annotate(revenue=Sum("amount")).order_by("-revenue")[:limit]
     return [{"product": row["product"], "revenue": row["revenue"]} for row in rows]
+
+
+def import_reviewed_sales(raw: bytes, filename: str, inspection, user, *,
+                          provenance: str, date_semantics: str,
+                          units_by_product: dict[str, str] | None = None) -> SalesDataset:
+    """Activate only a previously approved, identical, fully validated ETL source.
+
+    Incremental merges are deliberately excluded until business keys are agreed.
+    The legacy persistence path still owns SalesDataset/SalesLine/coverage writes.
+    """
+    from smartorder.etl import canonical_sales_xlsx
+    from .models import AccessEvent, EtlLoadRun
+
+    if not user.is_staff:
+        raise ValueError("Solo administración puede aprobar cargas ETL.")
+    if inspection.profile_id is None:
+        raise ValueError("La carga necesita una inspección con perfil versionado.")
+    if (inspection.schema_changed or inspection.issue_count or inspection.invalid_rows
+            or not inspection.row_count or inspection.valid_rows != inspection.row_count):
+        raise ValueError("La inspección elegida no está aprobada para carga.")
+    if provenance not in {SalesDataset.Provenance.REAL, SalesDataset.Provenance.SIMULATED}:
+        raise ValueError("Confirme explícitamente si la fuente es real o simulada.")
+    if date_semantics not in SalesDataset.DateSemantics.values:
+        raise ValueError("Confirme el significado comercial de la fecha.")
+    if sha256(raw).hexdigest() != inspection.source_sha256:
+        raise ValueError("El archivo no coincide con la huella SHA-256 inspeccionada.")
+
+    profile = inspection.profile
+    normalized, report = canonical_sales_xlsx(
+        raw, filename, manual=profile.mapping, date_format=profile.date_format,
+        decimal_separator=profile.decimal_separator, sheet_name=profile.sheet_name,
+        units_by_product=units_by_product)
+    if (report["schema_sha256"] != inspection.schema_sha256
+            or report["row_count"] != inspection.row_count
+            or report["format"] != inspection.source_format):
+        raise ValueError("El esquema o el volumen difiere de la inspección aprobada.")
+    # Missing units are resolved explicitly by product, never inferred from
+    # product names or invented from inventory; coverage remains UNKNOWN.
+    dataset = None
+    try:
+        with transaction.atomic():
+            if EtlLoadRun.objects.filter(source_sha256=inspection.source_sha256).exists():
+                raise ValueError("Este archivo ya fue cargado mediante ETL.")
+            dataset = import_sales(
+                normalized, f"etl-{inspection.source_sha256[:20]}.xlsx",
+                user, verified=(
+                    provenance == SalesDataset.Provenance.REAL
+                    and report["unit_assumption_status"] == "source_provided"
+                ),
+                full_snapshot_confirmed=True,
+                provenance=provenance, date_semantics=date_semantics)
+            EtlLoadRun.objects.create(
+                inspection=inspection, dataset=dataset, profile=profile,
+                source_sha256=inspection.source_sha256, loaded_by=user)
+            AccessEvent.objects.create(
+                actor=user, action="etl_snapshot_activated", target=str(dataset.pk),
+                details={
+                    "inspection_id": inspection.pk, "profile_alias": profile.alias,
+                    "profile_version": profile.version, "source_sha256": inspection.source_sha256,
+                    "rows": report["row_count"], "date_semantics": date_semantics,
+                    "provenance": provenance,
+                    "confirmed_unit_products": report["confirmed_unit_products"],
+                    "unit_assumption_status": report["unit_assumption_status"],
+                    "units_pending_company_confirmation": bool(
+                        report["missing_unit_count"]
+                    ),
+                })
+        return dataset
+    except Exception:
+        # File storage is not transactional; remove an orphan if the outer
+        # transaction fails after import_sales has written the file.
+        if dataset is not None and dataset.file:
+            dataset.file.storage.delete(dataset.file.name)
+        raise

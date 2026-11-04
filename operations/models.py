@@ -675,6 +675,84 @@ class PriceTariff(models.Model):
         ]
 
 
+
+class ExternalDatabaseConnection(models.Model):
+    """External PostgreSQL metadata; credentials never live in the application DB."""
+
+    class Purpose(models.TextChoices):
+        SALES = "sales", "Histórico de ventas"
+        REPORTING = "reporting", "Consulta y reportes"
+        REFERENCE = "reference", "Catálogos de referencia"
+
+    alias = models.SlugField(max_length=48, unique=True)
+    name = models.CharField(max_length=100)
+    engine = models.CharField(max_length=20, default="postgresql")
+    purpose = models.CharField(max_length=20, choices=Purpose.choices, default=Purpose.SALES)
+    host = models.CharField(max_length=253)
+    port = models.PositiveIntegerField(default=5432)
+    database = models.CharField(max_length=128)
+    username = models.CharField(max_length=128)
+    password_env = models.CharField(max_length=100)
+    sslmode = models.CharField(max_length=20, default="require")
+    enabled = models.BooleanField(default=False)
+    last_test_ok = models.BooleanField(null=True, blank=True, default=None)
+    last_tested_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="external_database_connections")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "alias"]
+        constraints = [
+            models.CheckConstraint(condition=Q(port__gte=1) & Q(port__lte=65535),
+                                   name="external_db_valid_port"),
+        ]
+
+
+class EtlMappingProfile(models.Model):
+    """Immutable mapping version. Schema changes require explicit new approval."""
+
+    alias = models.SlugField(max_length=48)
+    version = models.PositiveIntegerField()
+    name = models.CharField(max_length=100)
+    mapping = models.JSONField(default=dict)
+    date_format = models.CharField(max_length=20, default="%Y-%m-%d")
+    decimal_separator = models.CharField(max_length=1, default=".")
+    sheet_name = models.CharField(max_length=80, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name="etl_mapping_profiles")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["alias", "-version"]
+        constraints = [models.UniqueConstraint(fields=["alias", "version"],
+                                               name="etl_profile_version_once")]
+
+
+class EtlInspectionRun(models.Model):
+    """Audit-only fingerprints and quality metrics; never store source rows."""
+
+    profile = models.ForeignKey(EtlMappingProfile, on_delete=models.PROTECT,
+                                related_name="inspections", null=True, blank=True)
+    filename = models.CharField(max_length=255)
+    source_sha256 = models.CharField(max_length=64)
+    schema_sha256 = models.CharField(max_length=64)
+    source_format = models.CharField(max_length=8)
+    row_count = models.PositiveIntegerField()
+    valid_rows = models.PositiveIntegerField()
+    invalid_rows = models.PositiveIntegerField()
+    issue_count = models.PositiveIntegerField()
+    schema_changed = models.BooleanField(default=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+                                   related_name="etl_inspections")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["profile", "-created_at"], name="etl_profile_created_idx")]
+
+
 class SourceSync(models.Model):
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -687,3 +765,21 @@ class SourceSync(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["status"], condition=Q(status="running"), name="one_running_source_sync")]
+
+
+class EtlLoadRun(models.Model):
+    """Immutable provenance for an approved full-snapshot ETL activation."""
+
+    inspection = models.OneToOneField(
+        EtlInspectionRun, on_delete=models.PROTECT, related_name="approved_load")
+    dataset = models.OneToOneField(
+        SalesDataset, on_delete=models.PROTECT, related_name="etl_load")
+    source_sha256 = models.CharField(max_length=64, unique=True)
+    profile = models.ForeignKey(
+        EtlMappingProfile, on_delete=models.PROTECT, related_name="approved_loads")
+    loaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="etl_loads")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

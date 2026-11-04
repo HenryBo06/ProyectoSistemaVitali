@@ -221,6 +221,10 @@ Desde la carpeta del proyecto:
 
 La batería ejecutada el 4 de octubre con `manage.py test operations tests --noinput` pasó **83 pruebas en 61.545 segundos**, incluidas las dos comprobaciones nuevas del alta inicial remota con código privado. Cubre ETL, recomendaciones, permisos, ventas, edición/cancelación, autorización, exportación, contextos Odoo, comparación de producción, correcciones encadenadas, fecha inicial compartida y cantidad manual explícita en ambas interfaces. Las pruebas de interfaz usan bases temporales; las solicitudes del conector se aíslan en las pruebas. También pasó `scripts/comprobar_conector_odoo.py` contra el addon de `vitali_lab`; sus documentos sintéticos se revierten al terminar. En esa comprobación no se inició el servidor HTTP de Odoo, por lo que no acredita una transferencia HTTP en vivo. Los límites de simulación y las fechas de verificación indicados en este README forman parte del historial del prototipo.
 
+## Despliegue Docker Compose
+
+Hay una base piloto para Linux con Django/Gunicorn, PostgreSQL interno y Caddy con TLS en [`docs/deployment/VM-INSTALL.md`](docs/deployment/VM-INSTALL.md). Requiere configurar secretos, dominio, certificados/red y respaldo con TI; no incluye ni acredita una VM certificada ni un conector a la base de ventas de Vitali.
+
 ## Estructura y límites de uso
 
 | Ruta | Responsabilidad |

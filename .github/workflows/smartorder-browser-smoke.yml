@@ -1,0 +1,41 @@
+name: SmartOrder Synthetic Browser Smoke
+
+on:
+  push:
+    branches: [main, codex/smartorder-densidad-20261101]
+  workflow_dispatch:
+
+jobs:
+  synthetic-browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Python and browser dependencies
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install "playwright>=1.55,<2"
+          python -m playwright install --with-deps chromium
+      - name: Seed isolated synthetic lab and check both interfaces
+        env:
+          SMARTORDER_DEBUG: "1"
+          SMARTORDER_ALLOW_LOCAL_SETUP: "1"
+        run: |
+          export SMARTORDER_WEB_HOME="$GITHUB_WORKSPACE/.local-web-lab"
+          export SMARTORDER_DB="$SMARTORDER_WEB_HOME/smartorder.sqlite3"
+          export SMARTORDER_ODOO_CONFIG=""
+          python scripts/preparar_smartorder_lab.py
+          python manage.py runserver 127.0.0.1:8000 --noreload > "$RUNNER_TEMP/django.log" 2>&1 &
+          python -m streamlit run streamlit_app.py --server.headless true --server.address 127.0.0.1 --server.port 8501 > "$RUNNER_TEMP/streamlit.log" 2>&1 &
+          python scripts/visual_smoke_ci.py
+      - name: Upload synthetic browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartorder-synthetic-browser-evidence
+          path: .local-web-lab/browser-evidence/*.png
+          if-no-files-found: warn

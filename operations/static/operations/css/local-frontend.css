@@ -312,6 +312,25 @@
 }
 .local-app .workbench { border-radius: 12px; }
 .local-app .seller-next-step { border-radius: 14px; }
+.local-app .product-summary-facts > .commercial-forecast {
+  border: 1px solid #bdd9e4;
+  background: #edf6fa;
+}
+.local-app .product-summary-facts > .commercial-forecast dt { color: #315b6d; font-weight: 650; }
+.local-app .product-summary-facts > .commercial-forecast dd { color: #17495f; }
+.local-app .helper-block.commercial-forecast {
+  border-left-color: #23627d;
+  background: #edf6fa;
+  color: #17495f;
+}
+.local-app .product-summary { border-top: 3px solid #176b63; }
+.local-app .sale-product:has(.product-toggle:checked) {
+  border-color: #176b63;
+  box-shadow: 0 0 0 1px #176b63;
+}
+.local-app .sale-product .sale-qty { border-color: #6c9d91; }
+.local-app #sale-review { border-left: 4px solid #176b63; }
+.local-app .review-action-box { border-left: 4px solid #23627d !important; }
 
 /* Centered first-run and sign-in experience: same brand language as the new UI. */
 .local-app-anonymous {
@@ -467,4 +486,258 @@
 @media print {
   .local-app .dashboard-context { border-color: #ccc; background: transparent; }
   .local-app .panel, .local-app .stat { box-shadow: none; }
+}
+
+/* Compact seller workspace: retain Isaac's palette and components while shortening daily tasks. */
+.local-app .seller-dashboard .page-heading { margin-bottom: .7rem; padding-bottom: .65rem; }
+.local-app .seller-dashboard .page-heading h1 { font-size: 1.34rem; line-height: 1.22; }
+.local-app .seller-workspace + .section-label h2 { font-size: 1.15rem; }
+.local-app .seller-dashboard .page-heading p { margin-top: .25rem; }
+.local-app .seller-rule { margin: 0 0 .65rem; color: var(--v-muted); font-size: .84rem; }
+.local-app .seller-dashboard > .row { gap: .35rem !important; margin: 0 0 .65rem !important; }
+.local-app .seller-stat { display: flex; align-items: center; gap: .6rem; padding: .35rem .65rem; box-shadow: none; }
+.local-app .seller-stat .stat-value { font-size: 1.06rem; line-height: 1.15; }
+.local-app .seller-stat .stat-label { font-size: .8rem; }
+.local-app .seller-dashboard .section-label { margin: .7rem 0 .35rem; }
+.local-app .seller-dashboard .section-label small { font-size: .82rem; }
+.local-app .seller-client-panel { padding-inline: .8rem; }
+.local-app .seller-client-list a { padding-block: .48rem; gap: .6rem; }
+.local-app .seller-client-list .client-initial { flex-basis: 30px; width: 30px; height: 30px; }
+.local-app .seller-client-list .client-name small { display: none; }
+.local-app .seller-dashboard .seller-workspace { gap: .65rem; margin-top: .8rem !important; }
+.local-app .seller-dashboard .panel-body { padding: .8rem 1rem; }
+.local-app .seller-dashboard .section-heading-inline { margin-bottom: .25rem; }
+.local-app .seller-dashboard .seller-empty { padding: .45rem .2rem; }
+.local-app .seller-dashboard .seller-empty span { display: none; }
+.local-app .seller-page-heading { margin-bottom: .6rem; padding-bottom: .55rem; }
+.local-app .seller-page-heading h1 { font-size: 1.34rem; line-height: 1.22; }
+.local-app .seller-page-heading p { margin-top: .2rem; font-size: .89rem; }
+.local-app .seller-recommendations { display: grid; grid-template-columns: 1fr; gap: .45rem; margin-top: .65rem; }
+.local-app .seller-product-summary { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(0, 2.2fr) auto; align-items: center; gap: .45rem 1rem; padding: .65rem .8rem; border-radius: 9px; box-shadow: none; }
+.local-app .seller-product-summary .product-summary-heading { display: block; margin: 0; }
+.local-app .seller-product-summary .product-summary-heading .page-eyebrow { display: none; }
+.local-app .seller-product-summary h2 { font-size: .96rem; line-height: 1.28; font-weight: 650; }
+.local-app .seller-product-summary .badge-status { display: inline-block; margin-top: .2rem; }
+.local-app .seller-product-summary .product-summary-facts { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem 1rem; margin: 0; }
+.local-app .seller-product-summary .product-summary-facts > div { padding: 0; background: transparent; }
+.local-app .seller-product-summary dt { font-size: .73rem; }
+.local-app .seller-product-summary dd { margin: 0; font-size: .89rem; font-weight: 650; }
+.local-app .seller-product-summary .seller-opportunity-copy { grid-column: 2; margin: 0; color: var(--v-muted); font-size: .82rem; }
+.local-app .seller-product-summary .seller-explanation { grid-column: 2; font-size: .8rem; }
+.local-app .seller-product-summary .seller-explanation summary { cursor: pointer; }
+.local-app .seller-product-summary .seller-explanation p { margin: .3rem 0 0; }
+.local-app .seller-product-summary .seller-row-action { grid-column: 3; grid-row: 1 / span 3; white-space: nowrap; font-size: .84rem; font-weight: 650; }
+.local-app .seller-product-summary .alert { grid-column: 1 / -1; margin: 0; padding: .4rem .6rem; }
+.local-app .order-destination { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto; align-items: end; gap: .55rem .75rem; padding: .65rem .8rem; margin-top: -.5rem; }
+.local-app .order-destination label, .local-app .order-product-tools label { margin-bottom: .2rem; font-size: .82rem; }
+.local-app .order-destination .form-control, .local-app .order-destination .form-select { min-height: 38px; }
+.local-app .order-destination .btn { min-height: 38px; }
+.local-app .order-product-tools { display: flex; justify-content: flex-end; }
+.local-app .order-product-tools select { min-height: 36px; width: 220px; }
+.local-app .order-product-tools label { display: block; }
+.local-app .sale-product { display: grid; grid-template-columns: minmax(150px, .85fr) minmax(280px, 1.8fr) minmax(260px, 1.7fr); align-items: center; gap: .5rem 1rem; margin-bottom: .45rem; padding: .65rem .8rem; box-shadow: none; }
+.local-app .sale-product .product-line-head { padding: 0; border: 0; }
+.local-app .sale-product .product-choice { font-size: .94rem; gap: .55rem; }
+.local-app .sale-product .product-choice input { width: 20px; height: 20px; }
+.local-app .sale-product .product-line-head .badge-status { font-size: .7rem; }
+.local-app .sale-product .product-facts { grid-column: 2; display: flex; flex-wrap: wrap; gap: .25rem .85rem; margin: 0; font-size: .8rem; }
+.local-app .sale-product .product-facts > span { padding: 0; background: none; }
+.local-app .sale-product .product-facts strong { display: inline; margin: 0; }
+.local-app .sale-product .seller-opportunity-copy { grid-column: 2; margin: 0; font-size: .8rem; }
+.local-app .sale-product .seller-explanation { grid-column: 2; font-size: .8rem; }
+.local-app .sale-product .product-fields { grid-column: 3; grid-row: 1 / span 3; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem .45rem; margin: 0; }
+.local-app .sale-product .product-fields .form-label { margin-bottom: .15rem; font-size: .78rem; }
+.local-app .sale-product .product-fields .form-control { min-height: 36px; padding: .35rem .5rem; font-size: .9rem; }
+.local-app .sale-product .product-fields .full { grid-column: 1 / -1; }
+.local-app .selection-status { min-height: 0; margin: 0 0 .45rem; }
+.local-app .order-secondary { padding: .75rem 1rem; }
+.local-app .order-secondary > summary { cursor: pointer; color: var(--v-bottle-dark); font-weight: 650; }
+.local-app .order-secondary > summary span { margin-left: .4rem; color: var(--v-muted); font-size: .8rem; font-weight: 400; }
+.local-app .order-secondary[open] > summary { margin-bottom: .75rem; }
+.local-app #sale-review { margin-top: .65rem !important; }
+body.order-reviewing #destination-form,
+body.order-reviewing #sale-configuration { display: none; }
+
+@media (max-width: 767.98px) {
+  .local-app .seller-product-summary { grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .6rem; }
+  .local-app .seller-product-summary .product-summary-heading { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; }
+  .local-app .seller-product-summary .product-summary-facts { grid-column: 1 / -1; gap: .2rem .8rem; }
+  .local-app .seller-product-summary .seller-opportunity-copy,
+  .local-app .seller-product-summary .seller-explanation { grid-column: 1 / -1; }
+  .local-app .seller-product-summary .seller-row-action { grid-column: 1 / -1; grid-row: auto; justify-self: start; }
+  .local-app .order-destination { grid-template-columns: 1fr 1fr; }
+  .local-app .order-destination .btn { grid-column: 1 / -1; justify-self: start; }
+  .local-app .order-product-tools { justify-content: stretch; }
+  .local-app .order-product-tools > div, .local-app .order-product-tools select { width: 100%; }
+  .local-app .sale-product { grid-template-columns: minmax(0, 1fr) auto; gap: .35rem .6rem; }
+  .local-app .sale-product .product-line-head { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; }
+  .local-app .sale-product .product-facts,
+  .local-app .sale-product .seller-opportunity-copy,
+  .local-app .sale-product .seller-explanation { grid-column: 1 / -1; }
+  .local-app .sale-product .product-fields { grid-column: 1 / -1; grid-row: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .local-app .sale-product .product-fields .full { grid-column: 1 / -1; }
+  .local-app .sale-product .use-suggestion { margin-top: .3rem !important; }
+}
+@media (max-width: 420px) {
+  .local-app .seller-dashboard .page-heading { gap: .55rem; }
+  .local-app .seller-dashboard .page-heading h1 { font-size: 1.34rem; }
+  .local-app .seller-dashboard .seller-client-list .client-action { display: inline; font-size: .75rem; }
+  .local-app .sale-product .product-fields { grid-template-columns: 1fr 1fr; }
+  .local-app .sale-product .product-fields .full { grid-column: 1 / -1; }
+  .local-app .order-destination { grid-template-columns: 1fr; }
+  .local-app .order-destination .btn { grid-column: auto; width: 100%; }
+}
+
+/* Restock facts are one full-width grid item, never auto-placed in a narrow seller column. */
+.local-app .seller-product-summary .seller-restock-summary {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: .5rem .65rem;
+  background: var(--v-crate);
+  border-radius: 8px;
+}
+.local-app .seller-restock-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .45rem .85rem;
+}
+.local-app .seller-restock-facts > div { min-width: 0; overflow-wrap: anywhere; }
+.local-app .seller-restock-facts span,
+.local-app .seller-restock-facts strong { display: block; }
+.local-app .seller-restock-facts span,
+.local-app .seller-restock-facts small { font-size: .78rem; color: var(--v-muted); }
+.local-app .seller-restock-facts strong { margin-top: .1rem; font-size: .9rem; color: var(--v-ink); font-weight: 650; }
+.local-app .seller-restock-details { margin-top: .4rem; font-size: .82rem; }
+.local-app .seller-restock-details summary { cursor: pointer; }
+.local-app .seller-restock-details p { margin: .4rem 0 0; overflow-wrap: anywhere; }
+@media (max-width: 420px) {
+  .local-app .seller-restock-facts { gap: .35rem .55rem; }
+}
+
+/* Seller type hierarchy: readable body text, smaller display elements and CTAs. */
+.local-app .seller-page-heading .btn,
+.local-app .seller-page-heading + .d-flex .btn,
+.local-app .seller-page-heading ~ .filter-bar .btn,
+.local-app .seller-dashboard .btn { font-size: .89rem; font-weight: 600; line-height: 1.3; }
+.local-app .seller-recommendations .filter-title strong { font-size: .87rem; }
+.local-app .seller-dashboard .section-heading-inline h2 { font-size: 1.08rem; }
+.local-app .seller-dashboard .seller-client-list .client-name,
+.local-app .seller-dashboard .seller-client-list a { font-size: .92rem; }
+.local-app .seller-recommendations .seller-product-summary .badge-status { font-weight: 600; }
+
+/* Compact seller navigation inspired by Lovable's restrained task tabs.
+   Exactly one row on phones; never stack three full-size buttons. */
+.local-app .seller-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .35rem;
+  max-width: 650px;
+  margin: 0 0 .65rem;
+}
+.local-app .seller-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 40px;
+  padding: .35rem .55rem;
+  border: 1px solid #a9c6c0;
+  border-radius: 8px;
+  color: var(--v-bottle-dark);
+  background: #fff;
+  text-align: center;
+  text-decoration: none;
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.local-app .seller-mode-tab.is-active { color: #fff; background: var(--v-bottle); border-color: var(--v-bottle); }
+.local-app .seller-mode-tab:focus-visible { outline: 2px solid var(--v-bottle); outline-offset: 2px; }
+.local-app .seller-page-heading h1,
+.local-app .seller-dashboard .page-heading h1 { font-size: 1.18rem; line-height: 1.25; }
+.local-app .seller-dashboard .section-heading-inline h2 { font-size: 1rem; }
+.local-app .seller-product-summary h2 { font-size: .92rem; font-weight: 650; }
+.local-app .seller-product-summary .seller-row-action { font-size: .84rem; }
+.local-app .seller-page-heading .btn { font-size: .84rem; padding: .48rem .7rem; min-height: 38px; }
+@media (max-width: 575.98px) {
+  .local-app .seller-page-heading { gap: .3rem .65rem; margin-bottom: .45rem; padding-bottom: .45rem; }
+  .local-app .seller-page-heading p:not(.page-eyebrow) { display: none; }
+  .local-app .seller-page-heading .page-eyebrow { font-size: .7rem; margin-bottom: .2rem; }
+  .local-app .seller-mode-tabs { gap: .3rem; margin-bottom: .55rem; }
+  .local-app .seller-mode-tab { padding-inline: .35rem; font-size: .82rem; }
+  .local-app .seller-recommendations { margin-top: .45rem; }
+  .local-app .seller-product-summary { padding: .55rem .65rem; }
+  .local-app .seller-product-summary .product-summary-facts { gap: .2rem .65rem; }
+}
+
+/* The seller already knows what Cliente and Entrega mean; omit the redundant
+   filter card title, while retaining explicit labels and server-side filters. */
+.local-app .seller-mode-tabs + .filter-bar {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  gap: .5rem .75rem;
+  padding: .65rem .8rem;
+}
+.local-app .seller-mode-tabs + .filter-bar .filter-title { display: none; }
+@media (max-width: 575.98px) {
+  .local-app .seller-mode-tabs + .filter-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .45rem;
+    padding: .65rem .75rem;
+  }
+  .local-app .seller-page-heading .btn { margin-top: .4rem; }
+}
+
+/* Vitali project identity: the repository's existing six-color V and palette. */
+.local-app {
+  --v-bottle: #0c6f7c;
+  --v-bottle-dark: #085863;
+  --v-leaf: #5ba744;
+  --v-leaf-dark: #418a33;
+  --v-mango: #e07c2a;
+  --v-spectrum: linear-gradient(90deg, #5ba744 0% 16.66%, #f6cd28 16.66% 33.33%,
+    #ee9233 33.33% 50%, #dd3a42 50% 66.66%, #42b7d3 66.66% 83.33%, #1479a5 83.33% 100%);
+}
+.local-app .app-header::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--v-spectrum);
+  pointer-events: none;
+}
+.local-app .brand { gap: .6rem; }
+.local-app .brand-symbol, .local-app .menu-brand-symbol, .local-app .auth-brand-symbol {
+  display: block;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 5px;
+}
+.local-app .brand-symbol { width: 34px; height: 34px; }
+.local-app .brand-product { padding-left: .75rem; }
+.local-app .brand-wordmark strong, .local-app .auth-wordmark strong { color: var(--v-bottle-dark); }
+.local-app .menu-brand-symbol { display: inline-block; vertical-align: middle; margin-right: .4rem; }
+.local-app .auth-brand-symbol { width: 42px; height: 42px; }
+.local-app .nav-intro-mark { display: block; width: 38px; height: 38px; padding: 0; object-fit: contain; background: transparent; }
+.local-app .nav-intro { border-color: #cae4dd; }
+.local-app .side-link.active { color: var(--v-bottle-dark); box-shadow: inset 3px 0 var(--v-bottle); }
+.local-app .side-link.active::before { background: var(--v-leaf); border-color: var(--v-bottle); }
+.local-app .seller-mode-tab.is-active { background: var(--v-bottle); border-color: var(--v-bottle); }
+@media (max-width: 420px) {
+  .local-app .brand { gap: .45rem; }
+  .local-app .brand-symbol { width: 30px; height: 30px; }
+  .local-app .brand-wordmark strong { font-size: .92rem; letter-spacing: .23em; }
+  .local-app .brand-wordmark small { font-size: .53rem; }
+  .local-app .brand-product { padding-left: .55rem; }
+}
+
+/* 320px phones: preserve the V mark and wordmark without letting the optional
+   product caption wrap under the menu toggle. The link keeps its accessible name. */
+@media (max-width: 359.98px) {
+  .local-app .app-header-inner { padding-inline: .65rem; }
+  .local-app .app-header .brand { gap: .35rem; flex: 0 1 auto; }
+  .local-app .app-header .brand-symbol { width: 28px; height: 28px; }
+  .local-app .app-header .brand-wordmark strong { font-size: .86rem; letter-spacing: .14em; }
+  .local-app .app-header .brand-wordmark small { font-size: .5rem; }
+  .local-app .app-header .brand-product { display: none; }
+  .local-app .app-header .header-actions { gap: .3rem; }
 }

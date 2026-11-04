@@ -1,6 +1,7 @@
+{% load static %}
 <nav class="side-nav" aria-label="Secciones">
   <div class="nav-intro">
-    <span class="nav-intro-mark" aria-hidden="true">V</span>
+    <img class="nav-intro-mark" src="{% static 'operations/favicon.svg' %}" width="38" height="38" alt="" aria-hidden="true">
     <span><strong>Panel de trabajo</strong><small>{% if request.user.is_staff %}Control administrativo{% else %}Gestión de mi cartera{% endif %}</small></span>
   </div>
   <p class="nav-caption">Inicio</p>
@@ -64,6 +65,9 @@
     <p class="nav-caption mt-4">Administración</p>
     <a class="side-link {% if nav == 'tariffs' %}active{% endif %}" href="{% url 'tariffs' %}"
        {% if nav == 'tariffs' %}aria-current="page"{% endif %}>Clientes y tarifas</a>
+    <a class="side-link {% if nav == 'database_connections' %}active{% endif %}"
+       href="{% url 'database_connections' %}" {% if nav == 'database_connections' %}aria-current="page"{% endif %}>Conexiones de bases de datos</a>
+    <a class="side-link {% if nav == 'etl_preview' %}active{% endif %}" href="{% url 'etl_preview' %}" {% if nav == 'etl_preview' %}aria-current="page"{% endif %}>Preparación ETL de datos</a>
     {% if maintenance_ui %}
     <a class="side-link {% if nav == 'sales_upload' %}active{% endif %}"
        href="{% url 'sales_upload' %}"

@@ -1,8 +1,14 @@
 {% extends 'operations/base.html' %}
 {% block title %}Productos y sugerencias{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="page-eyebrow">{% if suggestion_mode == 'client_restock' %}Existencias del cliente{% else %}Venta contextual{% endif %}</p><h1>Productos y sugerencias</h1><p>{% if suggestion_mode == 'client_restock' %}Compara el conteo de hoy con el objetivo definido por administración.{% else %}Consulta antecedentes del cliente para la entrega seleccionada.{% endif %}</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Crear venta{% endif %}</a>{% endif %}</div>
-{% if role == 'vendedor' %}<div class="d-flex flex-wrap gap-2 mb-3"><a class="btn {% if suggestion_mode == 'sale' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Sugerencia de venta</a><a class="btn {% if suggestion_mode == 'client_restock' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="?mode=client_restock&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Reposición del cliente</a><a class="btn btn-outline-primary" href="{% url 'client_stock' %}?client={{ selected_client|urlencode }}">Registrar conteo</a></div>{% endif %}
+<div class="page-heading seller-page-heading"><div><p class="page-eyebrow">{% if suggestion_mode == 'client_restock' %}Existencias del cliente{% else %}Venta contextual{% endif %}</p><h1>Productos y sugerencias</h1><p>{% if suggestion_mode == 'client_restock' %}Compara el conteo de hoy con el objetivo definido por administración.{% else %}Productos, disponibilidad y tarifas para la entrega seleccionada.{% endif %}</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Crear venta{% endif %}</a>{% endif %}</div>
+{% if role == 'vendedor' %}
+<nav class="seller-mode-tabs" aria-label="Tipo de consulta comercial">
+  <a class="seller-mode-tab{% if suggestion_mode == 'sale' %} is-active{% endif %}" {% if suggestion_mode == 'sale' %}aria-current="page"{% endif %} href="?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}"><span class="d-none d-sm-inline">Sugerencia de </span>Venta</a>
+  <a class="seller-mode-tab{% if suggestion_mode == 'client_restock' %} is-active{% endif %}" {% if suggestion_mode == 'client_restock' %}aria-current="page"{% endif %} href="?mode=client_restock&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">Reposición<span class="d-none d-sm-inline"> del cliente</span></a>
+  <a class="seller-mode-tab" href="{% url 'client_stock' %}?client={{ selected_client|urlencode }}"><span class="d-none d-sm-inline">Registrar </span>Conteo</a>
+</nav>
+{% endif %}
 {% if maintenance_ui and role == 'admin' and dataset %}
 {% if source_status == 'reference' %}<div class="alert alert-warning" role="status">Fuente sin verificar: las cifras son referencia y la cantidad se decide manualmente.</div>{% elif source_status == 'stale' %}<div class="alert alert-warning" role="status">El histórico no tiene ventas recientes. Revisa las fechas antes de decidir un pedido.</div>{% endif %}
 <details class="source-details"><summary>Fuente y cobertura</summary><div class="source-details-body"><span>{{ dataset.filename }}</span><span>{{ dataset.first_date|date:'d/m/Y' }}–{{ dataset.last_date|date:'d/m/Y' }}</span><span>Última venta: {{ latest_sale_date|date:'d/m/Y' }}</span></div></details>
@@ -23,21 +29,60 @@
   {% if role == 'vendedor' %}<input type="hidden" name="mode" value="{{ suggestion_mode }}">{% endif %}
   <button class="btn btn-outline-primary" type="submit">Consultar</button>
 </form>
-<div class="product-grid">
+{% if recommendations and suggestion_mode != 'client_restock' %}
+<p class="form-text" role="note">Prioridad por recurrencia de ventas observadas del cliente. No supone nuevas compras ni valida cantidades; las sugerencias de entrega mantienen sus controles independientes.</p>
+{% endif %}
+<div class="product-grid {% if role == 'vendedor' %}seller-recommendations{% endif %}">
 {% for item in recommendations %}
-<article class="panel product-summary decision-{{ item.state }}">
-  <div class="product-summary-heading"><div><p class="page-eyebrow">{{ item.category|default:'Producto' }}</p><h2>{{ item.product }}</h2></div><span class="badge-status {% if item.suggested == None %}status-manual{% else %}status-approved{% endif %}">{% if item.suggested == None %}Cantidad manual{% else %}Con sugerencia{% endif %}</span></div>
-  <dl class="product-summary-facts"><div><dt>Existencia disponible</dt><dd>{% if item.available != None %}{{ item.available }} <small>{{ item.stock_unit|default:'unidad por confirmar' }}</small>{% else %}Por confirmar{% endif %}</dd></div><div><dt>Cantidad sugerida</dt><dd>{% if item.suggested != None %}{{ item.suggested }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div></dl>
+<article class="panel product-summary decision-{{ item.state }}{% if role == 'vendedor' %} seller-product-summary{% endif %}">
+  <div class="product-summary-heading"><div><p class="page-eyebrow">{{ item.category|default:'Producto' }}</p><h2>{{ item.product }}</h2></div><span class="badge-status {% if suggestion_mode == 'client_restock' and item.suggested == None or suggestion_mode != 'client_restock' and item.commercial_forecast == None and item.suggested == None %}status-manual{% else %}status-approved{% endif %}">{% if role == 'vendedor' and suggestion_mode == 'client_restock' %}{% if item.suggested != None %}Reposición sugerida{% else %}Reposición manual{% endif %}{% elif role == 'vendedor' and item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif role == 'vendedor' and item.commercial_forecast != None %}Oportunidad{% elif role == 'vendedor' and item.suggested != None %}Cantidad sugerida{% elif role == 'vendedor' %}Sin estimación{% elif item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif item.suggested == None %}Cantidad manual{% else %}Con sugerencia{% endif %}</span></div>
+  {% if item.historical_rank and suggestion_mode != 'client_restock' %}
+  <p class="form-text">Prioridad histórica {{ item.historical_rank }} de {{ item.historical_total }} · {{ item.historical_sale_days }} días con ventas registradas hasta {{ item.historical_cutoff_date|date:'d/m/Y' }}. No es una predicción.</p>
+  {% if item.historical_seasonal_days %}<p class="form-text">Período de referencia comparable ({{ item.historical_seasonal_start|date:'d/m/Y' }}–{{ item.historical_seasonal_end|date:'d/m/Y' }}): {{ item.historical_seasonal_days }} días con ventas. Referencia descriptiva, no pronóstico.</p>{% endif %}
+  {% endif %}
+  <dl class="product-summary-facts">
+    <div><dt>Disponibilidad</dt><dd>{% if item.available != None %}{{ item.available|floatformat:"-3" }} <small>{{ item.stock_unit|default:'unidad por confirmar' }}</small>{% else %}Por confirmar{% endif %}</dd></div>
+    {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}
+    <div><dt>Cantidad recomendada para reponer</dt><dd>{% if item.suggested != None %}{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Sin recomendación{% endif %}</dd></div>
+    {% if item.commercial_forecast != None %}<div><dt>Oportunidad comercial · referencia de venta, no es reposición</dt><dd>{{ item.commercial_forecast|floatformat:"-3" }} <small>{{ item.unit }}</small></dd></div>{% endif %}
+    {% elif role == 'vendedor' %}
+    <div><dt>Oportunidad · no es cantidad de entrega</dt><dd>{% if item.commercial_forecast != None %}{{ item.commercial_forecast|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Sin estimación{% endif %}</dd></div>
+    {% if item.suggested != None %}<div><dt>Cantidad sugerida para entrega</dt><dd>{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small></dd></div>{% endif %}
+    {% else %}<div><dt>Cantidad sugerida</dt><dd>{% if item.suggested != None %}{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div>{% endif %}
+    {% if role == 'vendedor' %}<div><dt>Tarifa autorizada</dt><dd>{% if item.unit_price != None %}USD {{ item.unit_price|floatformat:2 }}{% else %}Pendiente{% endif %}</dd></div>{% endif %}
+  </dl>
   {% if maintenance_ui and item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
   {% if item.inventory_warning %}<div class="alert alert-warning" role="status">{{ item.inventory_warning }}</div>{% endif %}
-  <p class="muted">{{ item.explanation }}</p>
-  {% if role == 'vendedor' and item.reference_date and item.reference_qty != None %}<p class="helper-block">Venta registrada el {{ item.reference_date|date:'d/m/Y' }}: {{ item.reference_qty }} {{ item.unit }} para este cliente.</p>{% endif %}
-  {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}<p><strong>Conteo del cliente:</strong> {% if item.client_stock != None %}{{ item.client_stock }} {{ item.unit }} en {{ item.client_stock_location }}{% else %}hoy pendiente o vencido{% endif %} · <strong>Objetivo:</strong> {{ item.client_stock_target|default_if_none:'por definir' }} {% if item.client_stock_target != None %}{{ item.unit }}{% endif %}</p>{% if item.client_stock_projected != None %}<p>Proyección al {{ required_date|date:'d/m/Y' }}: {{ item.client_stock_projected }} {{ item.unit }} · entradas confirmadas {{ item.client_stock_incoming }} · salidas confirmadas {{ item.client_stock_outgoing }}.</p>{% endif %}{% endif %}
+  {% if role == 'vendedor' %}
+  {% if item.explanation %}<details class="seller-explanation"><summary>Ver explicación</summary><p>{{ item.explanation }}</p></details>{% endif %}
+  {% else %}<p class="muted">{{ item.explanation }}</p>{% endif %}
+  {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}
+  <section class="seller-restock-summary" aria-label="Existencias del cliente y objetivo de reposición">
+    <div class="seller-restock-facts">
+      <div>
+        <span>En el cliente</span>
+        <strong>{% if item.client_stock != None %}{{ item.client_stock|floatformat:'-3' }} {{ item.unit }}{% else %}Conteo pendiente{% endif %}</strong>
+      </div>
+      <div>
+        <span>Objetivo de reposición</span>
+        <strong>{% if item.client_stock_target != None %}{{ item.client_stock_target|floatformat:'-3' }} {{ item.unit }}{% else %}Por definir{% endif %}</strong>
+      </div>
+    </div>
+    {% if item.client_stock_projected != None %}
+    <details class="seller-restock-details">
+      <summary>Ver proyección de existencias</summary>
+      <p>Proyección al {{ required_date|date:'d/m/Y' }}: {{ item.client_stock_projected|floatformat:'-3' }} {{ item.unit }}. Entradas confirmadas: {{ item.client_stock_incoming|floatformat:'-3' }}. Salidas confirmadas: {{ item.client_stock_outgoing|floatformat:'-3' }}.</p>
+    </details>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% if role == 'vendedor' %}<a class="seller-row-action" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}&amp;product={{ item.product|urlencode }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Preparar venta{% endif %} <span aria-hidden="true">→</span></a>{% endif %}
   {% if role == 'admin' %}
   <details class="product-evidence">
     <summary>Histórico y datos de cálculo</summary>
     <p>Ventas: {{ item.sales_usd_display }} · Días con venta: {{ item.days_with_sale }}</p>
     <p>Referencia: {{ item.reference_qty|default_if_none:'Sin dato' }} · {{ item.reference_period }}</p>
+    {% if item.reference_date and item.reference_qty != None %}<p>Venta registrada el {{ item.reference_date|date:'d/m/Y' }}: {{ item.reference_qty|floatformat:'-3' }} {{ item.unit }}.</p>{% endif %}
     <p>Entradas antes de entrega: {{ item.incoming }} · Compromisos previos: {{ item.commitments_before }} · Compromisos de la semana: {{ item.commitments }}</p>
     {% if item.sale_evaluation %}
     <hr>

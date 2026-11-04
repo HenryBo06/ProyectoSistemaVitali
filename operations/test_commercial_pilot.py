@@ -110,6 +110,13 @@ class CommercialPilotTests(LocalCase, TestCase):
         self.assertContains(result, "Conservar nota")
         self.assertContains(result, "Contado")
         self.assertEqual(result.context["submission_token"], self.token)
+        content = result.content.decode()
+        review_position = content.index('id="review-sale"')
+        self.assertEqual(
+            content[:review_position].count("<details"),
+            content[:review_position].count("</details>"),
+            "Review must remain available outside the optional disclosure.",
+        )
 
     def test_seller_cannot_access_admin_endpoints_through_bridge(self):
         from django.core.exceptions import PermissionDenied

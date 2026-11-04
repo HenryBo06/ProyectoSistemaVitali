@@ -467,6 +467,74 @@ class PlanningInboxTests(LocalCase, TestCase):
         self.assertEqual(conflict["need"], Decimal("40.000"))
         self.assertIsNone(conflict["suggested"])
 
+    def test_reviewed_event_notifies_any_day_within_week_without_daily_spam(self):
+        today = timezone.localdate()
+        event = CommercialEvent.objects.create(
+            key="feria-test", title="Feria LAB (simulada)",
+            kind=CommercialEvent.Kind.COMMERCIAL,
+            start_date=today + timedelta(days=5),
+            end_date=today + timedelta(days=5),
+            territory="Nacional", reviewed=True, active=True, created_by=self.admin,
+        )
+        self.client.force_login(self.seller)
+        with patch("operations.views.timezone.localdate", return_value=today):
+            self.client.get(reverse("notification_inbox"))
+            self.client.get(reverse("notification_inbox"))
+        notices = list(UserNotification.objects.filter(
+            recipient=self.seller, kind=UserNotification.Kind.EVENT,
+        ))
+        self.assertEqual(len(notices), 1)
+        self.assertIn("dentro de 5 días", notices[0].body)
+        with patch("operations.views.timezone.localdate", return_value=today + timedelta(days=1)):
+            self.client.get(reverse("notification_inbox"))
+        self.assertEqual(UserNotification.objects.filter(
+            recipient=self.seller, kind=UserNotification.Kind.EVENT,
+        ).count(), 1)
+        with patch("operations.views.timezone.localdate", return_value=event.start_date):
+            self.client.get(reverse("notification_inbox"))
+            self.client.get(reverse("notification_inbox"))
+        self.assertEqual(UserNotification.objects.filter(
+            recipient=self.seller, kind=UserNotification.Kind.EVENT,
+        ).count(), 2)
+
+    def test_invalid_explicit_event_never_falls_back_to_another_event(self):
+        from .services import _sale_event
+        day = timezone.localdate() + timedelta(days=2)
+        national = CommercialEvent.objects.create(
+            key="test-national", title="Evento nacional",
+            kind=CommercialEvent.Kind.COMMERCIAL,
+            start_date=day, end_date=day, territory="Nacional",
+            active=True, reviewed=True, created_by=self.admin,
+        )
+        restricted = CommercialEvent.objects.create(
+            key="test-restricted", title="Evento de otra zona",
+            kind=CommercialEvent.Kind.LOCAL,
+            start_date=day, end_date=day, territory="Zona no asignada",
+            active=True, reviewed=True, created_by=self.admin,
+        )
+        self.assertIsNone(_sale_event(self.dataset, "Cliente A", day, restricted.pk))
+        self.assertIsNone(_sale_event(self.dataset, "Cliente A", day, "99999999"))
+        self.assertEqual(
+            _sale_event(self.dataset, "Cliente A", day, national.pk)["id"], national.pk,
+        )
+
+    def test_historical_calendar_candidates_are_available_but_not_automatically_active(self):
+        year = timezone.localdate().year - 4
+        self.client.force_login(self.admin)
+        response = self.client.post(reverse("planning"), {
+            "action": "seed_calendar", "year": year,
+        })
+        self.assertEqual(response.status_code, 302)
+        historical = CommercialEvent.objects.get(
+            key="semana-santa", start_date__year=year, territory="Nacional",
+        )
+        self.assertFalse(historical.reviewed)
+        self.assertFalse(historical.active)
+        self.client.force_login(self.seller)
+        self.assertEqual(self.client.post(reverse("planning"), {
+            "action": "seed_calendar", "year": year - 1,
+        }).status_code, 403)
+
     def test_event_calendar_seeds_reviewable_2026_dates_and_inbox_deduplicates(self):
         today = timezone.localdate()
         self.client.force_login(self.admin)
@@ -757,9 +825,75 @@ class PlanningInboxTests(LocalCase, TestCase):
             "reference_date": date(2025, 4, 17), "reference_qty": 20,
             "explanation": "Mediana de 4 fechas; validada en 8 comparaciones cronológicas.",
         }])[0]
-        self.assertIn("20 kg", seller_card["explanation"])
+        self.assertNotIn("20 kg", seller_card["explanation"])
         self.assertIn("18 kg", seller_card["explanation"])
         self.assertNotIn("comparaciones cronológicas", seller_card["explanation"])
+
+    def test_seller_sees_commercial_forecast_separate_from_delivery_quantity(self):
+        target_date = timezone.localdate() + timedelta(days=1)
+        delivery_date = timezone.localdate() + timedelta(days=2)
+        card = {
+            "product": "Alitas", "category": "Congelados", "unit": "kg",
+            "suggested": None, "commercial_forecast": Decimal("18.000"),
+            "target_date": target_date, "suggestion_mode": "sale",
+            "reference_date": date(2026, 1, 7), "reference_qty": Decimal("3.000"),
+            "explanation": "Detalle interno de auditoría que no debe mostrarse.",
+        }
+        self.client.force_login(self.seller)
+        with patch("operations.views.recommendation_cards", return_value=[card]):
+            response = self.client.get(reverse("recommendations"), {
+                "client": "Cliente A", "mode": "sale",
+                "required_date": delivery_date.isoformat(),
+            })
+            order_response = self.client.get(reverse("order_create"), {
+                "client": "Cliente A", "mode": "sale",
+                "required_date": delivery_date.isoformat(),
+            })
+            streamlit_context = screen_context(
+                "recommendations",
+                sign_in(self.seller.username, "ClaveDelVendedor123"),
+                params={
+                    "client": "Cliente A", "mode": "sale",
+                    "required_date": delivery_date.isoformat(),
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        seller_card = response.context["recommendations"][0]
+        self.assertEqual(seller_card["commercial_forecast"], Decimal("18.000"))
+        self.assertEqual(seller_card["target_date"], target_date)
+        self.assertEqual(response.context["required_date"], delivery_date)
+        self.assertIsNone(seller_card["suggested"])
+        self.assertContains(response, "Oportunidad comercial")
+        self.assertContains(response, "18 <small>kg</small>")
+        self.assertContains(response, "entrega manual")
+        self.assertContains(response, '/static/operations/css/local-frontend.css?v=seller-brand-20261103a')
+        self.assertContains(response, "Oportunidad · no es cantidad de entrega")
+        self.assertContains(response, "Ver explicación")
+        self.assertNotContains(response, "Confirma la necesidad; la cantidad pedida la decides tú")
+        self.assertNotContains(response, "Cantidad sugerida")
+        self.assertNotContains(response, "Detalle interno de auditoría")
+        self.assertContains(order_response, '/static/operations/css/local-frontend.css?v=seller-brand-20261103a')
+        self.assertContains(order_response, "Ver explicación")
+        self.assertNotContains(order_response, "Confirma la necesidad; la cantidad pedida la decides tú")
+        self.assertNotContains(order_response, "Venta registrada el 07/01/2026: 3 kg")
+        self.assertNotIn("reference_date", seller_card)
+        self.assertNotIn("reference_qty", seller_card)
+        self.assertNotIn("reference_date", streamlit_context["recommendations"][0])
+        self.assertNotIn("reference_qty", streamlit_context["recommendations"][0])
+        self.client.force_login(self.admin)
+        with patch("operations.views.recommendation_cards", return_value=[card]):
+            admin_response = self.client.get(reverse("recommendations"), {"client": "Cliente A"})
+        self.assertContains(admin_response, "Venta registrada el 07/01/2026: 3 kg.")
+        self.client.force_login(self.seller)
+        self.assertNotContains(order_response, 'value="18"')
+        self.assertNotContains(order_response, 'data-suggested="18"')
+        order, _ = self._order(quantity="5")
+        detail_response = self.client.get(reverse("order_detail", args=[order.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, '/static/operations/css/local-frontend.css?v=seller-brand-20261103a')
+        self.assertEqual(streamlit_context["recommendations"][0]["commercial_forecast"], Decimal("18.000"))
+        self.assertIsNone(streamlit_context["recommendations"][0]["suggested"])
 
     def test_empty_seller_recommendation_explains_missing_client_series(self):
         Assignment.objects.create(user=self.seller, client="Cliente sin ventas")
@@ -779,3 +913,14 @@ class PlanningInboxTests(LocalCase, TestCase):
                           if card["product"] == "Alitas")
         self.assertIsInstance(admin_card["sale_evaluation"], dict)
         self.assertEqual(admin_card["sale_evaluation"]["targets"], 8)
+
+    def test_seller_cannot_open_unassigned_client_dashboard_or_recommendations(self):
+        self.client.force_login(self.seller)
+
+        dashboard_response = self.client.get(reverse("dashboard"), {"client": "Cliente B"})
+        recommendations_response = self.client.get(
+            reverse("recommendations"), {"client": "Cliente B"},
+        )
+
+        self.assertEqual(dashboard_response.status_code, 403)
+        self.assertEqual(recommendations_response.status_code, 403)

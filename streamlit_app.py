@@ -1,8 +1,10 @@
 """Vitali's native Streamlit interface, sharing Django accounts and workflow."""
 
 import os
+from base64 import b64encode
 from datetime import date, timedelta
 from decimal import Decimal
+from html import escape
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -36,6 +38,14 @@ from operations.streamlit_bridge import call_screen, request_for, screen_context
 
 
 st.set_page_config(page_title="SmartOrder AI · Vitali", page_icon="V", layout="wide")
+# Reuse the existing project-owned six-color SVG rather than a new brand asset.
+VITALI_MARK_URI = "data:image/svg+xml;base64," + b64encode(
+    (Path(__file__).resolve().parent / "operations/static/operations/favicon.svg").read_bytes()
+).decode("ascii")
+VITALI_IDENTITY_HTML = (
+    f'<div class="vitali-identity"><img class="vitali-symbol" src="{VITALI_MARK_URI}" alt="" aria-hidden="true">'
+    '<div class="vitali-identity-copy"><strong>VITALI</strong><span>ALIMENTOS</span></div></div>'
+)
 st.html(f"<style>{(Path(__file__).resolve().parent / 'operations/static/operations/css/streamlit.css').read_text(encoding='utf-8')}</style>")
 
 
@@ -120,6 +130,12 @@ def table(rows):
         st.info("Aún no hay registros para mostrar.")
 
 
+def compact_seller_marker():
+    if not user.is_staff:
+        st.markdown('<span class="seller-density-marker" aria-hidden="true"></span>',
+                    unsafe_allow_html=True)
+
+
 def format_number(value, decimal_places=3, *, trim=True):
     """Presenta números con separadores en español, sin cambiar el valor guardado."""
     number = Decimal(str(value))
@@ -131,39 +147,36 @@ def format_number(value, decimal_places=3, *, trim=True):
 
 def dashboard():
     if not user.is_staff:
+        compact_seller_marker()
         st.title("Mi trabajo", icon=":material/home_work:")
-        st.caption("Disponibilidad, sugerencias y seguimiento de tu cartera.")
+        st.caption("Clientes y ventas de tu cartera.")
         c = context("dashboard")
         with st.container(horizontal=True):
-            st.metric("Clientes asignados", len(c["clients"]), border=True)
-            st.metric("Pedidos de mi cartera", c["order_count"], border=True)
-            st.metric("Requieren seguimiento", len(c.get("attention_orders", [])), border=True)
-        with st.container(border=True):
-            st.subheader("Siguiente paso: prepara una venta")
-            st.caption("Elige un cliente, revisa disponibilidad y sugerencias, ajusta cantidades y confirma tu decisión.")
-            st.markdown("**1 Cliente**  →  **2 Productos**  →  **3 Revisión**  →  **4 Confirmación**")
-            st.button("Consultar productos y sugerencias", type="primary", icon=":material/arrow_forward:",
-                      on_click=st.session_state.update,
-                      kwargs={"workspace": "Productos y pedidos"})
-        st.subheader("Requiere tu atención")
+            if c["clients"]:
+                st.metric("Clientes", len(c["clients"]))
+            if c["order_count"]:
+                st.metric("Pedidos", c["order_count"])
+            if c.get("attention_orders"):
+                st.metric("Por atender", len(c["attention_orders"]))
+        st.button("Preparar una venta", type="primary", icon=":material/arrow_forward:",
+                  on_click=st.session_state.update,
+                  kwargs={"workspace": "Productos y pedidos"})
+        if c.get("attention_orders"):
+            st.subheader("Pedidos por seguir")
         if c.get("attention_orders"):
             for order in c["attention_orders"]:
-                with st.container(border=True):
-                    st.write(f"**{order.client} · pedido #{order.pk}**")
-                    st.caption(f"Entrega solicitada {order.required_date:%d/%m/%Y} · {order.status_display}")
+                with st.container(horizontal=True, border=True):
+                    st.write(f"**{order.client} · #{order.pk}** · {order.status_display}")
                     if st.button("Abrir seguimiento", key=f"attention:{order.pk}"):
                         st.session_state.pending_order_target = order.pk
                         st.session_state.pending_workspace = "Pedidos y producción"
                         st.rerun()
-        else:
-            st.info("No tienes novedades operativas pendientes.")
-        st.subheader("Próximas entregas")
         if c.get("upcoming_orders"):
-            table([{"Cliente": order.client, "Pedido": order.pk,
-                    "Fecha comprometida": order.committed_date,
-                    "Estado": order.status_display} for order in c["upcoming_orders"]])
-        else:
-            st.caption("Aún no hay entregas comprometidas.")
+            st.subheader("Próximas entregas")
+            for order in c["upcoming_orders"]:
+                with st.container(border=True):
+                    st.write(f"**{order.client} · #{order.pk}**")
+                    st.write(f"Entrega {order.committed_date:%d/%m/%Y} · {order.status_display}")
         if c.get("opportunities"):
             st.subheader("Oportunidades para revisar")
             for item in c["opportunities"][:3]:
@@ -178,12 +191,11 @@ def dashboard():
                         }
                         st.session_state.pending_workspace = "Productos y pedidos"
                         st.rerun()
-        st.subheader("Mi cartera")
+        st.subheader("Clientes")
         for client in c["clients"]:
-            with st.container(border=True):
+            with st.container(horizontal=True, border=True):
                 name_col, action_col = st.columns([3, 1])
                 name_col.write(f"**{client}**")
-                name_col.caption("Cliente asignado a tu cartera")
                 action_col.button("Preparar venta", key=f"client:{client}", on_click=st.session_state.update,
                                   kwargs={"workspace": "Productos y pedidos", "product_client": client})
         if not c["clients"]:
@@ -256,8 +268,9 @@ def dashboard():
 
 
 def products():
+    compact_seller_marker()
     st.title("Productos y sugerencias", icon=":material/shopping_bag:")
-    st.caption("Consulta disponibilidad y sugerencias; confirma ventas sin aprobación administrativa.")
+    st.caption("Oportunidades, disponibilidad y tarifas autorizadas.")
     c = context("recommendations")
     source(c)
     if not c.get("clients"):
@@ -294,11 +307,14 @@ def products():
     c = context("recommendations", {
         "client": client, "required_date": delivery, "mode": mode, **event_params,
     })
-    st.caption(f"Entrega solicitada: {delivery:%d/%m/%Y} · administración confirmará el compromiso.")
     if not user.is_staff:
-        st.markdown("**1 Cliente y entrega**  →  **2 Productos**  →  **3 Revisión**  →  **4 Confirmación**")
-        st.caption("Las cantidades sugeridas son orientación. Tú revisas, ajustas y confirmas cada venta.")
-    st.subheader("Productos disponibles" if user.is_staff else "2 · Productos y sugerencias")
+        st.caption(f"Entrega solicitada: {delivery:%d/%m/%Y} · la cantidad del pedido la decides tú.")
+    st.subheader("Productos disponibles" if user.is_staff else "Productos para ofrecer")
+    if mode != "client_restock":
+        st.caption(
+            "Ordenados por recurrencia del historial de compras del cliente. "
+            "La prioridad histórica no predice una compra futura ni indica una cantidad para entregar."
+        )
     cards = c["recommendations"]
     if not cards:
         if not c.get("catalog_available"):
@@ -317,15 +333,59 @@ def products():
         line_filter = st.selectbox("Línea de producto", ["Todas las líneas", *lines],
                                    key=f"product_line:{client}",
                                    disabled=bool(st.session_state.get("sale_review")))
-        st.caption("Compara la sugerencia con la disponibilidad y confirma cada cantidad antes de continuar.")
-        table([{
-            "Producto": card["product"],
-            "Cantidad sugerida": (f"{format_number(card['suggested'])} {card['unit']}"
-                                  if card["suggested"] is not None else "Decisión manual"),
-            "Disponibilidad Vitali": ("Por confirmar" if card["available"] is None
-                                      else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"),
-        } for card in cards if line_filter == "Todas las líneas"
-          or (card.get("category") or "Sin línea") == line_filter])
+        with st.container(key="seller-desktop-catalog"):
+            table([{
+                "Producto": card["product"],
+                "Prioridad histórica": (
+                    f"{card['historical_rank']} de {card['historical_total']} · "
+                    f"{card['historical_sale_days']} días con venta"
+                    + (f" · {card['historical_seasonal_days']} en época comparable"
+                       if card.get("historical_seasonal_days") else "")
+                    if card.get("historical_rank") and mode == "sale" else "No aplica"
+                ),
+                "Oportunidad comercial · no es cantidad de entrega": (
+                    f"{format_number(card['commercial_forecast'])} {card['unit']}"
+                    + (f" · fecha consultada {card['target_date']:%d/%m/%Y}"
+                       if card.get("target_date") else "")
+                    if card.get("commercial_forecast") is not None else "Decisión manual · sin estimación"
+                ),
+                "Disponibilidad": ("Por confirmar" if card["available"] is None
+                                          else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"),
+                "Tarifa autorizada": f"USD {format_number(card['unit_price'], 2, trim=False)}" if card.get("unit_price") is not None else "Pendiente",
+            } for card in cards if line_filter == "Todas las líneas"
+              or (card.get("category") or "Sin línea") == line_filter])
+        with st.container(key="seller-mobile-catalog"):
+            for line_number, card in enumerate(cards):
+                if line_filter != "Todas las líneas" and (card.get("category") or "Sin línea") != line_filter:
+                    continue
+                opportunity = (
+                    f"{format_number(card['commercial_forecast'])} {card['unit']}"
+                    if card.get("commercial_forecast") is not None else "sin estimación"
+                )
+                availability = (
+                    f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}"
+                    if card["available"] is not None else "por confirmar"
+                )
+                tariff = (
+                    format_number(card["unit_price"], 2, trim=False)
+                    if card.get("unit_price") is not None else "pendiente"
+                )
+                with st.container(key=f"seller-mobile-catalog-row-{line_number}", border=True):
+                    st.markdown(f"**{escape(str(card['product']))}**")
+                    if mode == "sale" and card.get("historical_rank"):
+                        st.caption(
+                            f"Prioridad histórica {card['historical_rank']} de "
+                            f"{card['historical_total']} · "
+                            f"{card['historical_sale_days']} días con ventas"
+                        )
+                        if card.get("historical_seasonal_days"):
+                            st.caption(
+                                f"{card['historical_seasonal_days']} días observados "
+                                "en un período histórico comparable. "
+                                "Referencia, no pronóstico."
+                            )
+                    st.caption(f"Oportunidad · no es cantidad solicitada: {opportunity}")
+                    st.caption(f"Disponibilidad: {availability} · Tarifa autorizada: USD {tariff}")
         valid_products = [card["product"] for card in cards]
         previous_selection = list(st.session_state.get("products_selected", []))
         incompatible_products = [item for item in previous_selection if item not in valid_products]
@@ -343,7 +403,7 @@ def products():
                                if item in valid_products and item not in visible_products]
         product_options = list(dict.fromkeys([*visible_products, *selected_other_line]))
         if selected_other_line:
-            st.caption("Los productos ya seleccionados de otras líneas se conservan.")
+            st.caption("Se conservan los productos seleccionados de otras líneas.")
         selected = st.multiselect(
             "Productos a solicitar", product_options,
             placeholder="Selecciona productos para esta venta",
@@ -356,9 +416,6 @@ def products():
                     continue
                 st.markdown(f"**{card['product']}**")
                 st.write(card["explanation"])
-                if card.get("reference_date") and card.get("reference_qty") is not None:
-                    st.caption(f"Venta registrada el {card['reference_date']:%d/%m/%Y}: "
-                               f"{card['reference_qty']} {card['unit']} para este cliente.")
                 if mode == "client_restock":
                     stock = (f"{card['client_stock']} {card['unit']} en {card['client_stock_location']}"
                              if card["client_stock"] is not None else "Conteo de hoy pendiente o vencido")
@@ -387,6 +444,12 @@ def products():
                 if card["inventory_warning"]:
                     st.warning(card["inventory_warning"])
                 st.caption(card["explanation"])
+                if card.get("commercial_forecast") is not None:
+                    st.info(
+                        f"Oportunidad comercial: venta esperada "
+                        f"{card['commercial_forecast']:,.3f} {card['unit']} para la fecha consultada. "
+                        "No es una cantidad de entrega ni autoriza fabricación."
+                    )
                 with st.expander("Planificación de cantidades") :
                     st.write(card["explanation"])
                     if card["reference_qty"] is not None:
@@ -394,7 +457,7 @@ def products():
                         st.write(f"Cantidad observada: {card['reference_qty']} · " +
                                  (card["unit"] if card["unit_confirmed"] else "Unidad pendiente de confirmar"))
                     else:
-                        st.caption("No hay un período equivalente del año anterior para este producto.")
+                        st.caption("No hay registros de un período comparable para este producto.")
                     if card["available"] is not None:
                         st.write(f"Entradas antes de entrega: {card['incoming']} · Compromisos previos: {card['commitments_before']} · Compromisos de la semana: {card['commitments']}")
                 evaluation = card.get("sale_evaluation")
@@ -502,9 +565,8 @@ def products():
         st.session_state[exception_key] = bool(
             st.session_state.get("sale_draft_conditions", {}).get("exception_reason")
         )
-    st.subheader("2. Productos y condiciones")
-    st.caption("Selecciona los productos de esta venta. Completa la cantidad y unidad; las cantidades manuales o ajustadas requieren un motivo.")
-    st.caption("Las cantidades y notas se conservan al cambiar contexto; una unidad incompatible requiere volver a indicar la cantidad.")
+    st.subheader("Preparar venta")
+    st.caption("Indica la cantidad solicitada y su motivo. Las oportunidades no rellenan el pedido.")
     if st.session_state.get("sale_incompatible_lines"):
         st.warning("Se limpiaron los datos incompatibles y se regeneraron las condiciones del nuevo contexto: "
                    + ", ".join(st.session_state.sale_incompatible_lines))
@@ -525,7 +587,7 @@ def products():
                 else card["unit"] or "",
             )
         if card["suggested"] is not None and card["suggested"] > 0:
-            if st.button(f"Usar sugerencia · {format_number(card['suggested'])} {card['unit']}", key=f"use-suggestion:{scope}:{product}", disabled=review_active):
+            if st.button(f"Usar referencia · {format_number(card['suggested'])} {card['unit']}", key=f"use-suggestion:{scope}:{product}", disabled=review_active):
                 st.session_state[quantity_key] = str(card["suggested"])
     with st.container():
         exception = st.checkbox("Solicitar excepción comercial", key=exception_key,
@@ -534,20 +596,21 @@ def products():
                    "quantity": [], "unit": [], "reason": [], "unit_price": [], "discount_percent": [],
                    "submission_token": st.session_state.sale_token, "suggestion_mode": mode,
                    "event_id": event_id or ""}
-        for product in selected:
+        for line_number, product in enumerate(selected):
             card = by_product[product]
-            st.write(f"**{product}**")
-            quantity_col, unit_col = st.columns(2)
-            qty = quantity_col.text_input("Cantidad solicitada", key=f"qty:{scope}:{product}", disabled=review_active)
-            unit = unit_col.text_input(
-                "Unidad", disabled=(card["unit_confirmed"] and not card.get("unit_mismatch"))
-                or review_active, key=f"unit:{scope}:{product}",
-            )
-            price_col, discount_col = st.columns(2)
-            price = price_col.text_input("Precio unitario USD", value=str(card["unit_price"] or ""), disabled=not exception or review_active, key=f"price:{scope}:{product}:{exception}")
-            discount = discount_col.text_input("Descuento %", value=str(card["discount_percent"]), disabled=not exception or review_active, key=f"discount:{scope}:{product}:{exception}")
-            reason = st.text_input("Motivo de cantidad manual o ajuste", key=f"reason:{scope}:{product}", disabled=review_active)
-            st.divider()
+            with st.container(key=f"seller-order-line-{line_number}", border=True):
+                st.markdown(f"**{product}** · tarifa autorizada USD {format_number(card['unit_price'], 2, trim=False) if card['unit_price'] is not None else 'pendiente'} · oportunidad {format_number(card['commercial_forecast']) + ' ' + card['unit'] if card.get('commercial_forecast') is not None else 'sin estimación'}")
+                quantity_col, unit_col = st.columns(2)
+                qty = quantity_col.text_input("Cantidad solicitada", key=f"qty:{scope}:{product}", disabled=review_active)
+                unit = unit_col.text_input(
+                    "Unidad", disabled=(card["unit_confirmed"] and not card.get("unit_mismatch"))
+                    or review_active, key=f"unit:{scope}:{product}",
+                )
+                with st.expander("Precio y descuento", expanded=exception):
+                    price_col, discount_col = st.columns(2)
+                    price = price_col.text_input("Precio unitario USD", value=str(card["unit_price"] or ""), disabled=not exception or review_active, key=f"price:{scope}:{product}:{exception}")
+                    discount = discount_col.text_input("Descuento %", value=str(card["discount_percent"]), disabled=not exception or review_active, key=f"discount:{scope}:{product}:{exception}")
+                reason = st.text_input("Motivo de cantidad manual o ajuste", key=f"reason:{scope}:{product}", disabled=review_active)
             payload["unit_price"].append(price)
             payload["discount_percent"].append(discount)
             for field, value in (("product", product), ("quantity", qty), ("unit", unit), ("reason", reason)):
@@ -565,17 +628,17 @@ def products():
             payload["discount_percent"].append(new_discount)
             for field, value in (("product", new_product), ("quantity", new_qty), ("unit", new_unit), ("reason", new_reason)):
                 payload[field].append(value)
-        st.subheader("Condiciones de la venta")
         conditions = st.session_state.get("sale_draft_conditions", {})
-        payload["payment_terms"] = st.text_input("Condiciones comerciales", max_chars=255,
-                                                 value=conditions.get("payment_terms", ""),
-                                                 key=f"payment_terms:{scope}", disabled=review_active)
-        payload["note"] = st.text_area("Observaciones del pedido", value=conditions.get("note", ""),
-                                       key=f"sale_note:{scope}", disabled=review_active)
-        payload["exception_reason"] = st.text_area(
-            "Motivo de excepción comercial", value=conditions.get("exception_reason", ""),
-            disabled=not exception or review_active, key=f"exception_reason:{scope}",
-        ) if exception else ""
+        with st.expander("Condiciones y excepciones (opcional)", expanded=bool(conditions.get("payment_terms") or conditions.get("note") or exception)):
+            payload["payment_terms"] = st.text_input("Condiciones comerciales", max_chars=255,
+                                                     value=conditions.get("payment_terms", ""),
+                                                     key=f"payment_terms:{scope}", disabled=review_active)
+            payload["note"] = st.text_area("Observaciones del pedido", value=conditions.get("note", ""),
+                                           key=f"sale_note:{scope}", disabled=review_active)
+            payload["exception_reason"] = st.text_area(
+                "Motivo de excepción comercial", value=conditions.get("exception_reason", ""),
+                disabled=not exception or review_active, key=f"exception_reason:{scope}",
+            ) if exception else ""
         submit_action = st.radio(
             "Al continuar", ("Revisar pedido", "Guardar borrador"), horizontal=True,
             key=f"sale_submit_action:{scope}", disabled=review_active,
@@ -597,7 +660,7 @@ def products():
                 "reason": new_reason, "price": new_price, "discount": new_discount,
             }
             st.session_state.sale_draft_saved_for = scope
-        elif submitted:
+        elif submitted and submit_action == "Revisar pedido":
             from decimal import Decimal, InvalidOperation
             try:
                 if not payload["product"]:
@@ -628,7 +691,7 @@ def products():
         st.success("Borrador guardado. Puedes cambiar el cliente, la fecha o los productos; las líneas compatibles se conservarán.")
     reviewed = st.session_state.get("sale_review")
     if reviewed:
-        st.subheader("3. Revisa antes de confirmar")
+        st.subheader("Revisar venta")
         from decimal import Decimal, InvalidOperation
         try:
             rows, total = [], Decimal(0)
@@ -646,9 +709,9 @@ def products():
             table(rows)
             st.write(f"Total propuesto: USD {format_number(total, 2, trim=False)}")
             st.write(f"Cliente: {reviewed['client']} · entrega solicitada: {reviewed['required_date']}")
-            st.write(f"Condiciones: {reviewed['payment_terms']} · observaciones: {reviewed['note']}")
-            st.warning("Bajo pedido. Disponibilidad por validar; producción sin autorizar. La fecha solicitada no garantiza entrega.")
-            st.caption("La revisión bloquea los campos. Edita el pedido y revísalo nuevamente antes de confirmar.")
+            if reviewed["payment_terms"] or reviewed["note"]:
+                st.caption(f"Condiciones: {reviewed['payment_terms']} · {reviewed['note']}")
+            st.warning("Disponibilidad por validar. La venta no autoriza producción ni garantiza la fecha de entrega.")
             if st.button("Editar pedido"):
                 st.session_state.pop("sale_review", None)
                 st.rerun()
@@ -798,8 +861,9 @@ def planning_screen():
     st.caption("Eventos revisados por administración y planificación sobre conteos físicos por ubicación.")
     c = context("planning")
     st.subheader("Calendario")
+    st.caption("Puedes preparar años anteriores para evaluar temporadas; los eventos quedan pendientes de revisión y no implican ventas adicionales.")
     with st.form("seed-calendar"):
-        year = st.number_input("Año de candidatos", min_value=c["today"].year - 1,
+        year = st.number_input("Año de candidatos", min_value=c["today"].year - 8,
                                max_value=c["today"].year + 3, value=c["today"].year)
         if st.form_submit_button("Agregar candidatos de asuetos y temporadas"):
             if action("planning", {"action": "seed_calendar", "year": int(year)}) is not None:
@@ -963,6 +1027,11 @@ def planning_screen():
 def uploads():
     st.title("Datos en Excel")
     st.caption("Carga fuentes completas. Revisa su origen y la correspondencia de unidades antes de usarlas para decidir.")
+    st.info(
+        "La carga clásica de XLSX se mantiene temporalmente para compatibilidad. "
+        "Para CSV/XLSX con huella SHA-256, perfil versionado y aprobación, "
+        "usa el espacio «Preparación ETL de datos» del menú de administración."
+    )
     sales, stock = st.tabs(["Ventas", "Inventario"])
     with sales:
         c = context("sales_upload")
@@ -1411,6 +1480,292 @@ def pilot_dashboard_screen():
         st.warning("Disponibilidad pendiente de validar. Los pedidos pueden registrarse bajo pedido.")
 
 
+
+
+def etl_preview_screen():
+    """Use Django's role-checked, fingerprinted inspection and approved-load workflow."""
+    st.title("Preparación ETL de datos")
+    st.caption("Inspeccionar, validar y aprobar históricos CSV/XLSX sin rutas de carga paralelas.")
+    st.info(
+        "La inspección no activa datos. La carga posterior verifica el mismo archivo "
+        "por SHA-256, el perfil y las confirmaciones comerciales."
+    )
+    c = context("etl_preview")
+    profiles = c["profiles"]
+    with st.form("etl_data_preflight"):
+        source_file = st.file_uploader("Archivo CSV UTF-8 o Excel", type=["csv", "xlsx"])
+        profile_options = [""] + [str(item.pk) for item in profiles]
+        profile_names = {
+            str(item.pk): f"{item.alias} · v{item.version} · {item.name}"
+            for item in profiles
+        }
+        profile_id = st.selectbox(
+            "Perfil versionado para poder activar la carga", profile_options,
+            format_func=lambda x: profile_names.get(x, "Solo inspección; mapeo manual o alias conocidos"),
+        )
+        d1, d2 = st.columns(2)
+        date_format = d1.selectbox(
+            "Formato de fecha", ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
+            format_func=lambda value: {
+                "%Y-%m-%d": "AAAA-MM-DD", "%d/%m/%Y": "DD/MM/AAAA",
+                "%m/%d/%Y": "MM/DD/AAAA",
+            }[value],
+        )
+        decimal_separator = d2.selectbox(
+            "Separador decimal", [".", ","],
+            format_func=lambda value: "Punto" if value == "." else "Coma",
+        )
+        sheet_name = st.text_input("Hoja de Excel (opcional)")
+        with st.expander("Columnas diferentes: mapeo manual"):
+            mapping = st.text_area(
+                "JSON de campos canónicos y encabezados reales",
+                help='Ejemplo: {"Fecha":"Día de venta","Cliente":"Cuenta","Producto":"Artículo","Cantidad_kg_unid":"Cantidad","Precio_Unitario_USD":"Precio"}',
+            )
+        submitted = st.form_submit_button("Paso 1 · Inspeccionar sin cargar", type="primary")
+
+    if submitted:
+        if source_file is None:
+            st.warning("Seleccione un archivo para inspeccionar.")
+        else:
+            response = action(
+                "etl_preview", {
+                    "action": "preview", "profile_id": profile_id,
+                    "date_format": date_format, "decimal_separator": decimal_separator,
+                    "sheet_name": sheet_name, "mapping": mapping,
+                },
+                files={"etl_file": SimpleUploadedFile(
+                    source_file.name, source_file.getvalue(),
+                )},
+            )
+            if response is not None:
+                report = getattr(response, "context_data", {}).get("report")
+                if report is None:
+                    st.error("El archivo no produjo un reporte válido.")
+                else:
+                    # Store only the inspection summary; never keep source bytes
+                    # between reruns, across users or for later approval.
+                    st.session_state["etl_review_report"] = {
+                        "actor_pk": user.pk, "report": report,
+                    }
+                    st.rerun()
+
+    saved = st.session_state.get("etl_review_report") or {}
+    if saved.get("actor_pk") != user.pk:
+        st.session_state.pop("etl_review_report", None)
+        saved = {}
+    report = saved.get("report")
+
+    if report:
+        st.subheader("Inspección actual")
+        cols = st.columns(4)
+        cols[0].metric("Filas", report["row_count"])
+        cols[1].metric("Válidas", report["valid_rows"])
+        cols[2].metric("Con problemas", report["invalid_rows"])
+        cols[3].metric("Densidad observada", f"{report.get('coverage_density_percent', 0):.2f}%")
+        st.caption(
+            f"Archivo: {report['filename']} · Período: {report['date_min'] or 'Sin fecha'} "
+            f"— {report['date_max'] or 'Sin fecha'}"
+        )
+        st.caption(
+            "Densidad de fechas observadas por cliente/producto/unidad; los días sin "
+            "registros no son automáticamente ventas cero."
+        )
+        if report["ready_to_review"]:
+            st.success("Validación estructural correcta. Todavía no se ha activado el histórico.")
+        else:
+            st.warning("Hay problemas estructurales. No es posible activar esta inspección.")
+        with st.expander("Mapeo y muestra revisada"):
+            table([{"Campo destino": k, "Columna de origen": v}
+                   for k, v in report["mapping"].items()])
+            if report["samples"]:
+                st.caption("Muestra de hasta cinco registros transformados")
+                table(report["samples"])
+        for issue in report["issues"]:
+            st.error(issue)
+        if report["notes"]:
+            with st.expander("Observaciones y advertencias"):
+                for note in report["notes"]:
+                    st.write(note)
+        with st.expander("Trazabilidad"):
+            st.code(
+                "SHA-256 archivo: " + report["sha256"]
+                + "\nSHA-256 esquema: " + report["schema_sha256"],
+                language="text",
+            )
+
+        approved_run = next(
+            (entry for entry in c["loadable_inspections"]
+             if entry.pk == report.get("inspection_id")), None,
+        )
+        if report["ready_to_review"] and approved_run is not None:
+            st.subheader("Paso 2 · Aprobar la carga del histórico completo")
+            st.caption(
+                "Vuelve a adjuntar exactamente el archivo inspeccionado. No se permiten "
+                "lotes incrementales ni se convierte una unidad en otra."
+            )
+            unit_products = report.get("missing_unit_products", [])
+            if unit_products:
+                st.warning(
+                    f"{report.get('missing_unit_count', 0)} filas no traen unidad. "
+                    "Elige una presentación provisional por producto: kg, unidad o lb. "
+                    "No es una confirmación de Vitali; el histórico permanecerá sin verificar."
+                )
+            with st.form("etl_approved_load"):
+                st.caption(
+                    f"Inspección #{approved_run.pk} · {report['filename']} · "
+                    f"{report['row_count']} filas"
+                )
+                approved_file = st.file_uploader(
+                    "Mismo CSV o XLSX inspeccionado", type=["csv", "xlsx"],
+                    key=f"etl_approved_file:{approved_run.pk}",
+                )
+                unit_values = []
+                names = {"": "Seleccionar", "kg": "Kilogramos (kg)",
+                         "unidad": "Unidades (unidad)", "lb": "Libras (lb)"}
+                for number, product in enumerate(unit_products):
+                    unit_values.append(st.selectbox(
+                        f"Presentación provisional para {product}",
+                        ["", "kg", "unidad", "lb"],
+                        format_func=lambda value: names[value],
+                        key=f"etl_confirmed_unit:{approved_run.pk}:{number}",
+                    ))
+                provenance = st.selectbox(
+                    "Procedencia declarada", ["", "real", "simulated"],
+                    format_func=lambda value: {
+                        "": "Seleccionar", "real": "Real", "simulated": "Simulada",
+                    }[value],
+                )
+                semantics = st.selectbox(
+                    "Significado de la fecha", ["", "sale_order", "delivery"],
+                    format_func=lambda value: {
+                        "": "Seleccionar", "sale_order": "Fecha de venta o pedido",
+                        "delivery": "Fecha de entrega realizada",
+                    }[value],
+                )
+                origin = st.checkbox("Confirmo la procedencia declarada del archivo.")
+                full = st.checkbox(
+                    "Confirmo que el archivo reemplaza el histórico completo, "
+                    "y no es una carga incremental."
+                )
+                approved = st.checkbox(
+                    "Apruebo activar esta versión y conservar las fuentes anteriores."
+                )
+                load_clicked = st.form_submit_button(
+                    "Revalidar y activar histórico", type="primary",
+                )
+            if load_clicked:
+                if approved_file is None:
+                    st.error("Adjunta de nuevo el archivo inspeccionado.")
+                elif not provenance or not semantics or not all((origin, full, approved)):
+                    st.error("Completa la procedencia, la fecha y las tres confirmaciones.")
+                elif any(not unit for unit in unit_values):
+                    st.error("Selecciona una presentación provisional para cada producto.")
+                else:
+                    response = action(
+                        "etl_preview", {
+                            "action": "load", "inspection_id": approved_run.pk,
+                            "unit_product": unit_products, "unit_value": unit_values,
+                            "provenance": provenance, "date_semantics": semantics,
+                            "confirmed_origin": "on", "confirmed_full_snapshot": "on",
+                            "approved_load": "on",
+                        },
+                        files={"etl_load_file": SimpleUploadedFile(
+                            approved_file.name, approved_file.getvalue(),
+                        )},
+                    )
+                    if response is not None:
+                        st.session_state.pop("etl_review_report", None)
+                        st.rerun()
+        elif report["ready_to_review"]:
+            st.info(
+                "Para activar datos, inspecciona el archivo con un perfil de mapeo "
+                "versionado. Las inspecciones sin perfil son solo de lectura."
+            )
+    else:
+        st.info(
+            "Comienza con una inspección. Para aprobar después, selecciona un "
+            "perfil versionado; no se conserva el archivo original en esta pantalla."
+        )
+
+    with st.expander("Guardar un perfil de mapeo versionado"):
+        with st.form("etl_mapping_profile"):
+            new_alias = st.text_input("Alias del origen", placeholder="ventas-vitali")
+            new_name = st.text_input("Nombre del perfil", placeholder="CSV del ingeniero")
+            new_mapping = st.text_area(
+                "JSON de campos y columnas",
+                placeholder='{"Fecha":"Dia","Cliente":"Cuenta","Producto":"Articulo","Cantidad_kg_unid":"Volumen","Precio_Unitario_USD":"Tarifa"}',
+            )
+            new_dates = st.selectbox(
+                "Formato de fecha del perfil",
+                ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"],
+            )
+            new_decimal = st.selectbox("Separador decimal del perfil", [".", ","])
+            new_sheet = st.text_input("Nombre de hoja (opcional)")
+            if st.form_submit_button("Guardar versión"):
+                if action("etl_preview", {
+                    "action": "save_profile", "alias": new_alias, "name": new_name,
+                    "mapping": new_mapping, "date_format": new_dates,
+                    "decimal_separator": new_decimal, "sheet_name": new_sheet,
+                }) is not None:
+                    st.session_state.pop("etl_review_report", None)
+                    st.rerun()
+    with st.expander("Últimas inspecciones"):
+        table([
+            {"Fecha": row.created_at, "Origen": row.filename,
+             "Perfil": f"{row.profile.alias} v{row.profile.version}" if row.profile else "Sin perfil",
+             "Filas": row.row_count, "Problemas": row.issue_count,
+             "Cambio de esquema": row.schema_changed}
+            for row in c["inspection_history"]
+        ])
+
+
+def database_connections_screen():
+    st.title("Conexiones de bases de datos")
+    st.caption("PostgreSQL externo · solo lectura. Credenciales fuera de la aplicación.")
+    c = context("database_connections")
+    st.info("Registrar una conexión no importa ventas ni actualiza Odoo. La prueba ejecuta únicamente SELECT 1.")
+    with st.expander("Agregar conexión PostgreSQL", expanded=not bool(c["connections"])):
+        with st.form("external_database_registration"):
+            alias = st.text_input("Alias", placeholder="ventas-vitali")
+            name = st.text_input("Nombre", placeholder="Histórico comercial")
+            purpose = st.selectbox("Propósito", ["sales", "reporting", "reference"],
+                format_func=lambda x: {"sales": "Histórico de ventas", "reporting": "Consulta y reportes",
+                                       "reference": "Catálogos de referencia"}[x])
+            col1, col2 = st.columns([3, 1])
+            host = col1.text_input("Servidor", placeholder="db.empresa.local")
+            port = col2.number_input("Puerto", min_value=1, max_value=65535, value=5432)
+            database = st.text_input("Nombre de base")
+            username = st.text_input("Usuario de solo lectura")
+            secret = st.text_input("Variable privada con contraseña",
+                                   placeholder="SMARTORDER_SOURCE_VENTAS_PASSWORD")
+            sslmode = st.selectbox("TLS", ["require", "verify-full", "prefer"],
+                format_func=lambda x: {"require": "TLS requerido", "verify-full": "Verificar servidor",
+                                       "prefer": "Solo localhost"}[x])
+            if st.form_submit_button("Guardar conexión"):
+                if action("database_connections", {"action": "save", "alias": alias, "name": name,
+                    "purpose": purpose, "host": host, "port": port, "database": database,
+                    "username": username, "password_env": secret, "sslmode": sslmode}) is not None:
+                    st.rerun()
+    for item in c["connections"]:
+        with st.container(border=True):
+            st.write(f"**{item.name}** · {item.alias}")
+            st.caption(f"PostgreSQL · {item.get_purpose_display()} · {item.host}:{item.port}/{item.database}")
+            st.write(f"Estado: {'Habilitada' if item.enabled else 'Deshabilitada'} · "
+                     f"Última prueba: {'Correcta' if item.last_test_ok else 'Fallida' if item.last_test_ok is False else 'Sin probar'}")
+            test_btn, switch_btn = st.columns(2)
+            if test_btn.button("Probar acceso", key=f"db_test_{item.pk}"):
+                if action("database_connections", {"action": "test", "connection_id": item.pk}) is not None:
+                    st.rerun()
+            if switch_btn.button("Deshabilitar" if item.enabled else "Habilitar",
+                                 key=f"db_toggle_{item.pk}"):
+                if action("database_connections", {"action": "toggle", "connection_id": item.pk,
+                    "enabled": "no" if item.enabled else "yes"}) is not None:
+                    st.rerun()
+    st.caption("Para editar servidor, usuario o TLS utiliza el panel Django de administración. "
+               "La contraseña y la lista de servidores permitidos se provisionan como secretos externos.")
+    st.caption("La integración de Odoo conserva su administración independiente.")
+
+
 def odoo_settings_screen():
     st.title("Conexión y catálogos de Odoo")
     st.caption("Relaciona clientes, productos y unidades antes de transferir una venta.")
@@ -1585,7 +1940,7 @@ if user.is_authenticated and (notice_user, notice_admin) == (user.pk, user.is_st
     for level, message in saved_notices:
         getattr(st, level if level in {"warning", "success", "info"} else "info")(message)
 if not user.is_authenticated:
-    st.html('<div class="vitali-identity"><strong>VITALI</strong><span>ALIMENTOS</span></div>')
+    st.html(VITALI_IDENTITY_HTML)
     st.title("SmartOrder AI")
     st.caption("Vitali Alimentos · Ventas, pedidos y producción")
     initial = not get_user_model().objects.exists()
@@ -1616,7 +1971,7 @@ if not user.is_authenticated:
     st.stop()
 
 with st.sidebar:
-    st.html('<div class="vitali-identity"><strong>VITALI</strong><span>ALIMENTOS</span></div>')
+    st.html(VITALI_IDENTITY_HTML)
     st.title("SmartOrder AI")
     st.write(f"**{user.username}**")
     st.caption("Administración" if user.is_staff else "Vendedor · cartera asignada")
@@ -1628,7 +1983,7 @@ with st.sidebar:
                "Productos y pedidos": products, notification_label: notification_inbox_screen,
                "Pedidos y producción": orders, "Correcciones de inventario": corrections}
     if user.is_staff:
-        screens.update({"Clientes y tarifas": tariffs_screen, "Usuarios y cartera": accounts,
+        screens.update({"Clientes y tarifas": tariffs_screen, "Conexiones de bases de datos": database_connections_screen, "Preparación ETL de datos": etl_preview_screen, "Usuarios y cartera": accounts,
                         "Calendario y reposición": planning_screen,
                         "Resultados operativos": operational_reports_screen})
         if settings.SMARTORDER_MAINTENANCE_UI:
@@ -1646,7 +2001,7 @@ with st.sidebar:
         st.rerun()
     st.caption("El vendedor confirma ventas. Administración autoriza producción.")
 
-st.html('<div class="vitali-ticket"><span>SMARTORDER AI</span><em>Pedidos internos</em></div>')
+st.html(f'<div class="vitali-ticket"><img class="vitali-symbol" src="{VITALI_MARK_URI}" alt="" aria-hidden="true"><span class="vitali-ticket-name">SMARTORDER AI</span><em>Pedidos internos</em></div>')
 try:
     screens[page]()
 except (PermissionDenied, Http404) as exc:

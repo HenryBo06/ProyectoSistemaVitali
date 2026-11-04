@@ -1,7 +1,8 @@
 {% extends 'operations/base.html' %}
 {% block title %}Ventas en Excel{% endblock %}
 {% block content %}
-<div class="page-heading"><div><p class="page-eyebrow">Fuente de ventas</p><h1>Ventas en Excel</h1><p>Carga el histórico semanal completo. La aplicación valida las columnas y muestra qué productos y fechas contiene.</p></div></div>
+<div class="alert alert-info">Nuevo proceso recomendado: <a href="{% url 'etl_preview' %}">preparación ETL con CSV/XLSX, perfil versionado y aprobación por huella SHA-256</a>. La carga clásica XLSX permanece temporalmente por compatibilidad; será retirada tras validar la transición y los casos de aceptación.</div>
+<div class="page-heading"><div><p class="page-eyebrow">Fuente de ventas</p><h1>Histórico comercial de ventas</h1><p>Carga el histórico semanal completo. La aplicación valida las columnas y muestra qué productos y fechas contiene.</p></div></div>
 {% if dataset %}<div class="source-strip"><span><strong>Activo:</strong> {{ dataset.filename }}</span><span><strong>Período:</strong> {{ dataset.first_date|date:'d/m/Y' }}–{{ dataset.last_date|date:'d/m/Y' }}</span><span><strong>Filas:</strong> {{ dataset.row_count }}</span><span><strong>Procedencia:</strong> {{ dataset.get_provenance_display }}</span><span><strong>Fecha:</strong> {{ dataset.get_date_semantics_display }}</span><span><strong>Fuente:</strong> {% if dataset.verified %}Confirmada por administración{% else %}Referencia, pendiente de revisar{% endif %}</span></div>{% endif %}
 <div class="row g-3">
   <div class="col-xl-7">

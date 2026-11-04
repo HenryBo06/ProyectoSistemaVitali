@@ -131,11 +131,15 @@ def _invalidate_sessions(user):
             session.delete()
 
 
-def _seller_cards(cards):
+def _seller_cards(cards, *, preserve_priority: bool = False):
     fields = (
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
+        "commercial_forecast", "target_date",
+        "historical_sale_days", "historical_rank", "historical_total",
+        "historical_cutoff_date", "historical_seasonal_days",
+        "historical_seasonal_start", "historical_seasonal_end",
         "discount_percent", "tariff_available", "available", "stock_unit", "stock_date",
-        "inventory_warning", "reference_date", "reference_qty", "client_stock",
+        "inventory_warning", "client_stock",
         "client_stock_location", "client_stock_target", "client_stock_projected",
         "client_stock_incoming", "client_stock_outgoing", "suggestion_mode",
         "suggestion_event", "delivery_outside_forecast", "order_unit", "unit_mismatch",
@@ -143,7 +147,7 @@ def _seller_cards(cards):
 
     def seller_explanation(card):
         if card.get("suggestion_mode") == "client_restock":
-            return card.get("explanation") or "Se requiere revisión manual de las existencias del cliente."
+            return "Revisa las existencias y la cantidad de reposición del cliente."
         if card.get("unit_mismatch"):
             return (f"El histórico está en {card.get('unit')}; la tarifa de este cliente usa "
                     f"{card.get('order_unit')}. No se convierte la cantidad; indica una cantidad manual "
@@ -152,13 +156,40 @@ def _seller_cards(cards):
             return "La fecha de entrega supera el horizonte de siete días; indica la cantidad manualmente."
         unit = card.get("unit") or ""
         event = card.get("suggestion_event")
-        if event and card.get("reference_date") and card.get("reference_qty") is not None:
-            text = (f"Este cliente registró una venta de {card['reference_qty']:g} {unit} el "
-                    f"{card['reference_date']:%d/%m/%Y} durante {event}.")
-        elif event:
+        if event:
             text = f"Oportunidad para revisar: la entrega coincide con {event}."
         else:
             text = "Se revisaron las ventas registradas de este cliente para este producto y fecha."
+        if card.get("historical_rank"):
+            text += (
+                f" Prioridad histórica {card['historical_rank']} de "
+                f"{card['historical_total']}, con "
+                f"{card['historical_sale_days']} días con ventas registradas. "
+                f" Se usaron únicamente registros hasta "
+                f"{card['historical_cutoff_date']:%d/%m/%Y}. "
+                "Es actividad histórica, no una predicción de compra futura."
+            )
+            if card.get("historical_seasonal_days"):
+                text += (
+                    f" En el período histórico comparable "
+                    f"({card['historical_seasonal_start']:%d/%m/%Y}–"
+                    f"{card['historical_seasonal_end']:%d/%m/%Y}) "
+                    f"hubo {card['historical_seasonal_days']} días con ventas; "
+                    "es una referencia estacional descriptiva."
+                )
+        commercial_forecast = card.get("commercial_forecast")
+        if commercial_forecast is not None:
+            unit_text = f" {unit}" if unit else ""
+            target_date = card.get("target_date")
+            target_text = f" para la fecha consultada {target_date:%d/%m/%Y}" if target_date else ""
+            message = (
+                f"{text} Oportunidad comercial: venta esperada "
+                f"{commercial_forecast:g}{unit_text}{target_text}. "
+                "No es una cantidad de entrega ni autoriza fabricación."
+            )
+            if card.get("suggested") is not None:
+                message += f" Cantidad de entrega sugerida: {card['suggested']:g} {unit}."
+            return message
         if card.get("suggested") is not None:
             return f"{text} Sugerimos revisar {card['suggested']:g} {unit} para esta entrega; puedes ajustarla."
         return f"{text} No hay evidencia suficiente para proponer una cantidad automática; revísala manualmente."
@@ -166,7 +197,8 @@ def _seller_cards(cards):
     return [{**{key: card.get(key) for key in fields},
              "state": "suggested" if card["suggested"] is not None else "manual",
              "explanation": seller_explanation(card)}
-            for card in sorted(cards, key=lambda card: card["product"].casefold())]
+            for card in (cards if preserve_priority else sorted(
+                cards, key=lambda item: item["product"].casefold()))]
 
 
 def _seller_order(order):
@@ -285,7 +317,7 @@ def _ensure_event_notifications(user, today=None):
             zones.setdefault(client, set()).add(zone.casefold())
     national = {"nacional", "national", "el salvador", ""}
     for event in CommercialEvent.objects.filter(
-        active=True, reviewed=True, start_date__in=(today, today + timedelta(days=7))
+        active=True, reviewed=True, start_date__range=(today, today + timedelta(days=7))
     ):
         territory = event.territory.strip().casefold()
         for client in clients:
@@ -301,8 +333,12 @@ def _ensure_event_notifications(user, today=None):
                 "client": client, "product": product,
                 "required_date": event.start_date.isoformat(), "event_id": event.pk,
             })
-            day_label = "hoy" if event.start_date == today else "dentro de 7 días"
-            notice_day = today.isoformat()
+            days_to_event = (event.start_date - today).days
+            day_label = "hoy" if days_to_event == 0 else (
+                "mañana" if days_to_event == 1 else f"dentro de {days_to_event} días"
+            )
+            # One advance notification per event and client, and a new notice on event day.
+            notice_day = "today" if days_to_event == 0 else "advance"
             _create_user_notification(
                 user, f"event:{event.pk}:{client}:{product}:{event.start_date.isoformat()}:{notice_day}",
                 f"Revisa una venta para {event.title}",
@@ -468,8 +504,8 @@ def planning(request):
         try:
             if action == "seed_calendar":
                 year = int(request.POST.get("year", today.year))
-                if not today.year - 1 <= year <= today.year + 3:
-                    raise ValueError("El año debe estar entre el anterior y los próximos tres años.")
+                if not today.year - 8 <= year <= today.year + 3:
+                    raise ValueError("El año debe estar entre los ocho anteriores y los próximos tres años.")
                 created = 0
                 for key, title, kind, start, end, territory, source_url in commercial.salvadoran_event_candidates(year):
                     event, was_created = CommercialEvent.objects.get_or_create(
@@ -1114,7 +1150,8 @@ def recommendations(request):
     event_id = request.GET.get("event_id")
     cards = recommendation_cards(dataset, delivery, client, today=today, mode=mode,
                                  event_id=event_id) if dataset and client else []
-    safe_cards = _seller_cards(commercial.decorate_cards(cards, client))
+    safe_cards = _seller_cards(commercial.decorate_cards(cards, client),
+                               preserve_priority=True)
     return TemplateResponse(request, "operations/recommendations.html", _base(
         request, clients=clients, selected_client=client, client=client,
         suggestion_mode=mode,
@@ -1618,9 +1655,11 @@ def export_batch(request):
         messages.error(request, "Seleccione entre 1 y 500 productos aprobados.")
         return redirect("orders")
     with transaction.atomic():
-        lines = list(OrderLine.objects.select_for_update().select_related(
+        # PostgreSQL rejects FOR UPDATE on nullable outer-joined reviewer.
+        # Lock the order lines and their mandatory parent orders, not reviewer.
+        lines = list(OrderLine.objects.select_related(
             "order", "order__seller", "reviewer"
-        ).filter(pk__in=ids).order_by("id"))
+        ).select_for_update(of=("self", "order")).filter(pk__in=ids).order_by("id"))
         if len(lines) != len(ids) or any(
             line.status != OrderLine.Status.APPROVED or
             not _sources_current(line.order)
@@ -1960,6 +1999,222 @@ def pilot_dashboard(request):
         messages.error(request, "Seleccione un período válido.")
         start, end = today.replace(day=1), today
     return TemplateResponse(request, "operations/pilot_dashboard.html", _base(request, **commercial.pilot_dashboard(start, end)))
+
+
+
+
+
+@admin_required
+@require_http_methods(["GET", "POST"])
+def etl_preview(request):
+    """Schema-aware ETL inspection with immutable mapping profiles and audit."""
+    from smartorder.etl import preview_sales
+    from smartorder.data import CORE_HEADERS, HEADERS
+    from .models import EtlMappingProfile, EtlInspectionRun
+    import json as json_module
+    import re as re_module
+    report = None
+
+    if request.method == "POST":
+        try:
+            mode = request.POST.get("action", "preview")
+            if mode == "save_profile":
+                alias = request.POST.get("alias", "").strip()
+                name = request.POST.get("name", "").strip()
+                if not re_module.fullmatch(r"[a-z][a-z0-9_-]{2,47}", alias):
+                    raise ValueError("El alias del perfil requiere 3 a 48 caracteres.")
+                if not name or len(name) > 100:
+                    raise ValueError("Indique un nombre para el perfil de mapeo.")
+                raw_mapping = request.POST.get("mapping", "").strip()
+                mapping = json_module.loads(raw_mapping) if raw_mapping else {}
+                if not isinstance(mapping, dict):
+                    raise ValueError("El mapeo necesita un objeto JSON.")
+                if set(mapping) - set(HEADERS) or set(CORE_HEADERS) - set(mapping):
+                    raise ValueError("El perfil debe mapear los cinco campos obligatorios y usar destinos conocidos.")
+                if not all(isinstance(value, str) and 0 < len(value) <= 160 for value in mapping.values()):
+                    raise ValueError("Cada columna de origen necesita un nombre válido.")
+                if len(set(mapping.values())) != len(mapping):
+                    raise ValueError("Una columna no puede asignarse a varios destinos.")
+                date_format = request.POST.get("date_format", "%Y-%m-%d")
+                decimal_separator = request.POST.get("decimal_separator", ".")
+                sheet_name = request.POST.get("sheet_name", "").strip()
+                if date_format not in {"%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"} or decimal_separator not in {".", ","}:
+                    raise ValueError("Los formatos de fecha o decimales no están permitidos.")
+                if len(sheet_name) > 80:
+                    raise ValueError("El nombre de hoja es demasiado largo.")
+                with transaction.atomic():
+                    last = EtlMappingProfile.objects.select_for_update().filter(alias=alias).order_by("-version").first()
+                    version = (last.version + 1) if last else 1
+                    EtlMappingProfile.objects.create(
+                        alias=alias, name=name, version=version,
+                        mapping=mapping, date_format=date_format,
+                        decimal_separator=decimal_separator, sheet_name=sheet_name,
+                        created_by=request.user)
+                AccessEvent.objects.create(actor=request.user, action="etl_mapping_version",
+                                           target=alias, details={"version": version})
+                messages.success(request, f"Perfil {alias} versión {version} guardado sin alterar versiones anteriores.")
+                return redirect("etl_preview")
+            if mode == "load":
+                from .services import import_reviewed_sales
+                if not all(request.POST.get(name) == "on" for name in (
+                        "confirmed_origin", "confirmed_full_snapshot", "approved_load")):
+                    raise ValueError(
+                        "Confirme procedencia, histórico completo y aprobación explícita de la carga.")
+                inspection = get_object_or_404(
+                    EtlInspectionRun.objects.select_related("profile"),
+                    pk=request.POST.get("inspection_id"))
+                uploaded = request.FILES.get("etl_load_file")
+                if uploaded is None or uploaded.size > 20 * 1024 * 1024:
+                    raise ValueError("Adjunte nuevamente el archivo inspeccionado de hasta 20 MB.")
+                unit_products = request.POST.getlist("unit_product")
+                unit_values = request.POST.getlist("unit_value")
+                if len(unit_products) != len(unit_values) or len(unit_products) > 100:
+                    raise ValueError("La confirmación de unidades comerciales está incompleta.")
+                units_by_product = {}
+                for product, unit in zip(unit_products, unit_values):
+                    if product in units_by_product:
+                        raise ValueError("Existe un producto repetido en las unidades comerciales.")
+                    units_by_product[product] = unit
+                dataset = import_reviewed_sales(
+                    uploaded.read(), uploaded.name, inspection, request.user,
+                    provenance=request.POST.get("provenance", ""),
+                    date_semantics=request.POST.get("date_semantics", ""),
+                    units_by_product=units_by_product)
+                messages.success(
+                    request, f"ETL aprobado: {dataset.row_count:,} líneas activadas "
+                    "con historial anterior conservado.")
+                return redirect("sales_upload")
+            if mode != "preview":
+                raise ValueError("Operación ETL no permitida.")
+            uploaded = request.FILES.get("etl_file")
+            if uploaded is None:
+                raise ValueError("Seleccione un CSV o Excel para inspeccionar.")
+            if uploaded.size > 20 * 1024 * 1024:
+                raise ValueError("El archivo supera el límite de 20 MB.")
+            profile_id = request.POST.get("profile_id", "").strip()
+            profile = get_object_or_404(EtlMappingProfile, pk=profile_id) if profile_id else None
+            if profile:
+                mapping = profile.mapping
+                date_format = profile.date_format
+                decimal_separator = profile.decimal_separator
+                sheet_name = profile.sheet_name
+            else:
+                raw_mapping = request.POST.get("mapping", "").strip()
+                mapping = json_module.loads(raw_mapping) if raw_mapping else {}
+                date_format = request.POST.get("date_format", "%Y-%m-%d")
+                decimal_separator = request.POST.get("decimal_separator", ".")
+                sheet_name = request.POST.get("sheet_name", "").strip()
+            report = preview_sales(
+                uploaded.read(), uploaded.name, manual=mapping,
+                date_format=date_format, decimal_separator=decimal_separator,
+                sheet_name=sheet_name)
+            schema_changed = False
+            if profile:
+                prior = EtlInspectionRun.objects.filter(profile=profile, issue_count=0).order_by("created_at", "pk").first()
+                schema_changed = bool(prior and prior.schema_sha256 != report["schema_sha256"])
+            report["schema_changed"] = schema_changed
+            if schema_changed:
+                report["ready_to_review"] = False
+                report["issues"].append(
+                    "Cambio de estructura respecto a la última inspección con este perfil. "
+                    "Revise y cree una nueva versión del mapeo antes de aprobar la carga.")
+            inspection = EtlInspectionRun.objects.create(
+                profile=profile, filename=report["filename"],
+                source_sha256=report["sha256"], schema_sha256=report["schema_sha256"],
+                source_format=report["format"], row_count=report["row_count"],
+                valid_rows=report["valid_rows"], invalid_rows=report["invalid_rows"],
+                issue_count=len(report["issues"]), schema_changed=schema_changed,
+                created_by=request.user)
+            report["inspection_id"] = inspection.pk
+            if report["ready_to_review"]:
+                messages.success(request, "Extracción y validación preliminar completadas. Ningún dato se activó.")
+            else:
+                messages.warning(request, "El origen necesita revisión antes de cualquier carga.")
+        except (ValueError, IntegrityError) as exc:
+            messages.error(request, "No se pudo ejecutar ETL: " + (
+                "El perfil ya fue actualizado; reintente." if isinstance(exc, IntegrityError)
+                else str(exc)))
+    profiles = list(EtlMappingProfile.objects.order_by("alias", "-version")[:100])
+    history = list(EtlInspectionRun.objects.select_related("profile").order_by("-created_at")[:12])
+    loadable = list(EtlInspectionRun.objects.select_related("profile").filter(
+        profile__isnull=False, issue_count=0, invalid_rows=0,
+        row_count__gt=0, schema_changed=False,
+    ).order_by("-created_at")[:15])
+    return TemplateResponse(request, "operations/etl_preview.html",
+                            _base(request, report=report, profiles=profiles,
+                                  inspection_history=history, loadable_inspections=loadable))
+
+
+@admin_required
+@require_http_methods(["GET", "POST"])
+def database_connections(request):
+    """Metadata, health checks, and enable/disable. Never store passwords or run import SQL."""
+    from .database_connections import (
+        validate_connection_fields, test_postgres_readonly, mark_connection_test,
+    )
+    from .models import ExternalDatabaseConnection
+
+    if request.method == "POST":
+        try:
+            action = request.POST.get("action", "")
+            if action == "save":
+                connection_id = request.POST.get("connection_id", "")
+                entry = (get_object_or_404(ExternalDatabaseConnection, pk=connection_id)
+                         if connection_id else None)
+                fields = validate_connection_fields(request.POST)
+                if entry is None:
+                    entry = ExternalDatabaseConnection(created_by=request.user, **fields)
+                else:
+                    for key, value in fields.items():
+                        setattr(entry, key, value)
+                    entry.enabled = False  # Updating connection requires another test and opt-in.
+                    entry.last_test_ok = None
+                    entry.last_tested_at = None
+                entry.full_clean()
+                entry.save()
+                AccessEvent.objects.create(actor=request.user, action="external_db_saved",
+                                           target=entry.alias, details={"purpose": entry.purpose})
+                messages.success(request, "Conexión guardada sin almacenar credenciales. Compruebe el acceso.")
+            elif action in {"test", "toggle"}:
+                entry = get_object_or_404(ExternalDatabaseConnection,
+                                          pk=request.POST.get("connection_id"))
+                if action == "test":
+                    try:
+                        test_postgres_readonly(entry)
+                    except ValueError as exc:
+                        mark_connection_test(entry, False)
+                        messages.error(request, str(exc))
+                    else:
+                        mark_connection_test(entry, True)
+                        messages.success(request, "Conexión PostgreSQL de solo lectura comprobada.")
+                    AccessEvent.objects.create(actor=request.user, action="external_db_test",
+                                               target=entry.alias,
+                                               details={"success": entry.last_test_ok})
+                else:
+                    enable = request.POST.get("enabled") == "yes"
+                    if enable and not entry.last_test_ok:
+                        raise ValueError("Compruebe la conexión antes de habilitarla.")
+                    entry.enabled = enable
+                    entry.save(update_fields=["enabled", "updated_at"])
+                    AccessEvent.objects.create(actor=request.user, action="external_db_toggle",
+                                               target=entry.alias, details={"enabled": enable})
+                    messages.success(request, "Estado de conexión actualizado.")
+            else:
+                raise ValueError("Acción de conexión no permitida.")
+        except (ValueError, ValidationError, IntegrityError) as exc:
+            # Django validation errors may reveal fields, never include raw passwords.
+            messages.error(request, "No se pudo guardar: revise campos, alias y permisos."
+                           if isinstance(exc, (ValidationError, IntegrityError)) else str(exc))
+        return redirect("database_connections")
+
+    edit = (ExternalDatabaseConnection.objects.filter(pk=request.GET.get("edit")).first()
+            if request.GET.get("edit", "").isdigit() else None)
+    connections = list(ExternalDatabaseConnection.objects.order_by("name", "alias"))
+    return TemplateResponse(request, "operations/database_connections.html", _base(request,
+        connections=connections, edit_connection=edit,
+        allowed_hosts=os.environ.get("SMARTORDER_SOURCE_DB_ALLOWED_HOSTS",
+                                     "localhost,127.0.0.1,::1"),
+    ))
 
 
 @admin_required

@@ -2,6 +2,8 @@
 
 import secrets
 from unittest.mock import patch
+from unittest import skipUnless, skipIf
+from django.db import connection
 
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
@@ -22,6 +24,7 @@ class DemoBootstrapTests(TestCase):
             "seller_password": secrets.token_urlsafe(24),
         }
 
+    @skipUnless(connection.vendor == "sqlite", "Demo account provisioning is SQLite-only.")
     def test_creates_both_roles_and_allows_login(self):
         self.assertTrue(provision_demo_accounts(**self.config))
         User = get_user_model()
@@ -42,6 +45,7 @@ class DemoBootstrapTests(TestCase):
         self.client.force_login(seller)
         self.assertEqual(self.client.get(reverse("users")).status_code, 403)
 
+    @skipUnless(connection.vendor == "sqlite", "Demo account provisioning is SQLite-only.")
     def test_second_run_never_overwrites_passwords_or_accounts(self):
         self.assertTrue(provision_demo_accounts(**self.config))
         changed = dict(self.config, admin_password=secrets.token_urlsafe(24))
@@ -66,6 +70,7 @@ class DemoBootstrapTests(TestCase):
             self.assertFalse(provision_demo_accounts(**self.config))
         self.assertFalse(get_user_model().objects.exists())
 
+    @skipUnless(connection.vendor == "sqlite", "Credential validation belongs to SQLite demo provisioning.")
     def test_incomplete_or_weak_credentials_fail_without_creating_users(self):
         with self.assertRaises(ImproperlyConfigured):
             provision_demo_accounts(**dict(self.config, seller_password=""))
@@ -73,4 +78,9 @@ class DemoBootstrapTests(TestCase):
             provision_demo_accounts(**dict(self.config, seller_password="123"))
         with self.assertRaises(ImproperlyConfigured):
             provision_demo_accounts(**dict(self.config, seller_username=self.config["admin_username"]))
+        self.assertFalse(get_user_model().objects.exists())
+
+    @skipIf(connection.vendor == "sqlite", "PostgreSQL protection checked by CI with the live backend.")
+    def test_non_sqlite_demo_bootstrap_is_disabled_with_real_backend(self):
+        self.assertFalse(provision_demo_accounts(**self.config))
         self.assertFalse(get_user_model().objects.exists())

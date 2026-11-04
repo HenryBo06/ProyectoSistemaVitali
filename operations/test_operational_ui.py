@@ -118,8 +118,8 @@ class OperationalUITests(LocalCase, TransactionTestCase):
                 self.assertTrue(all(card["suggested"] is not None for card in shared["recommendations"]))
                 for card in shared["recommendations"]:
                     self.assertNotIn("forecast", card)
-                    self.assertIn("reference_date", card)
-                    self.assertIn("reference_qty", card)
+                    self.assertNotIn("reference_date", card)
+                    self.assertNotIn("reference_qty", card)
                     self.assertNotIn("audit_windows", card)
                     self.assertNotIn("sales_usd_display", card)
                 explicit = {"required_date": today.isoformat()}
@@ -138,15 +138,17 @@ class OperationalUITests(LocalCase, TransactionTestCase):
             app.run()
             self.assertFalse(app.exception)
             self.assertEqual(app.date_input[0].value, tomorrow)
-            summary = next(frame.value for frame in app.dataframe if "Cantidad sugerida" in frame.value.columns)
+            summary = next(frame.value for frame in app.dataframe
+                           if "Oportunidad comercial · no es cantidad de entrega" in frame.value.columns)
             self.assertEqual(len(summary), 8)
-            self.assertTrue(all(value != "Decisión manual" for value in summary["Cantidad sugerida"]))
+            self.assertNotIn("Cantidad sugerida", summary.columns)
             app.date_input[0].set_value(today).run()
             self.assertFalse(app.exception)
             self.assertEqual(app.date_input[0].value, today)
-            summary = next(frame.value for frame in app.dataframe if "Cantidad sugerida" in frame.value.columns)
+            summary = next(frame.value for frame in app.dataframe
+                           if "Oportunidad comercial · no es cantidad de entrega" in frame.value.columns)
             self.assertEqual(len(summary), 8)
-            self.assertTrue((summary["Cantidad sugerida"] != "Decisión manual").all())
+            self.assertNotIn("Cantidad sugerida", summary.columns)
             visible = " ".join(item.value for item in [*app.caption, *app.markdown, *app.warning])
             self.assertIn(reason, visible)
             for forbidden in (dataset.filename, "Ventas conocidas", "año anterior", "Fuente y cobertura"):

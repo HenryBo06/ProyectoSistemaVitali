@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      - backend
+
+  web:
+    build: .
+    restart: unless-stopped
+    environment:
+      SMARTORDER_WEB_HOME: /data
+      SMARTORDER_DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SMARTORDER_SECRET_KEY: ${SMARTORDER_SECRET_KEY:?Set SMARTORDER_SECRET_KEY}
+      SMARTORDER_SETUP_CODE: ${SMARTORDER_SETUP_CODE:?Set SMARTORDER_SETUP_CODE}
+      SMARTORDER_DEBUG: "0"
+      SMARTORDER_ALLOWED_HOSTS: ${SMARTORDER_DOMAIN:?Set SMARTORDER_DOMAIN}
+      SMARTORDER_CSRF_TRUSTED_ORIGINS: https://${SMARTORDER_DOMAIN:?Set SMARTORDER_DOMAIN}
+      SMARTORDER_TRUST_X_FORWARDED_PROTO: "1"
+      SMARTORDER_HSTS_SECONDS: ${SMARTORDER_HSTS_SECONDS:-31536000}
+      SMARTORDER_MAINTENANCE_UI: ${SMARTORDER_MAINTENANCE_UI:-0}
+    volumes:
+      - smartorder_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), timeout=3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 90s
+    networks:
+      - backend
+      - outbound
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SMARTORDER_DOMAIN: ${SMARTORDER_DOMAIN:?Set SMARTORDER_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - backend
+
+networks:
+  backend:
+    internal: true
+  outbound:
+
+volumes:
+  postgres_data:
+  smartorder_data:
+  caddy_data:
+  caddy_config:

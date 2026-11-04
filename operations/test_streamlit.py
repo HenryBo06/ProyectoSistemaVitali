@@ -130,6 +130,49 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
             call_screen("setup", key, data={"username": "otro", "password": "UnaClaveMuySegura2026"})
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    def test_native_seller_sees_commercial_forecast_separate_from_delivery_quantity(self):
+        from decimal import Decimal
+        from streamlit.testing.v1 import AppTest
+        from unittest.mock import patch
+
+        target_date = timezone.localdate() + timedelta(days=2)
+        seller_key = sign_in(self.seller.username, "ClaveDelVendedor123")
+        context = screen_context("recommendations", seller_key, {
+            "client": "Cliente A", "mode": "sale", "required_date": target_date,
+        })
+        card = {
+            **context["recommendations"][0],
+            "unit": "kg",
+            "suggested": None,
+            "commercial_forecast": Decimal("18.000"),
+            "target_date": target_date,
+            "reference_date": date(2001, 2, 3),
+            "reference_qty": Decimal("987654"),
+        }
+
+        app = AppTest.from_file(
+            str(Path(__file__).resolve().parents[1] / "streamlit_app.py"),
+            default_timeout=30,
+        ).run()
+        app.session_state["session_key"] = seller_key
+        app.session_state["workspace"] = "Productos y pedidos"
+        with patch("operations.views.recommendation_cards", return_value=[card]):
+            app.run()
+
+        self.assertFalse(app.exception)
+        forecast_table = next(
+            table.value for table in app.dataframe
+            if "Oportunidad comercial · no es cantidad de entrega" in table.value.columns
+        )
+        self.assertIn("18 kg", str(forecast_table.values))
+        self.assertNotIn("Cantidad sugerida", forecast_table.columns)
+        rendered = str([item.value for group in (app.caption, app.markdown, app.info) for item in group])
+        self.assertIn("Oportunidad · no es cantidad solicitada", rendered)
+        self.assertIn("Disponibilidad:", rendered)
+        self.assertNotIn("987654", rendered)
+        self.assertNotIn("03/02/2001", rendered)
+
+    @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
     @override_settings(SMARTORDER_SELLER_EDIT=True, SMARTORDER_SELLER_CANCEL=True)
     def test_native_future_sale_edit_cancel_and_admin_detail_match_local(self):
         from streamlit.testing.v1 import AppTest
@@ -297,6 +340,30 @@ class StreamlitBridgeTests(LocalCase, TransactionTestCase):
             self.assertFalse(app.exception, page)
         app.radio[0].set_value("Productos y pedidos").run()
         self.assertTrue(any(item.label == "Evaluación de sugerencia comercial" for item in app.expander))
+
+    @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
+    def test_seller_dashboard_shows_upcoming_delivery_details(self):
+        from streamlit.testing.v1 import AppTest
+
+        delivery = timezone.localdate() + timedelta(days=3)
+        OrderRequest.objects.create(
+            seller=self.seller, client="Cliente A", dataset=self.dataset,
+            required_date=delivery, committed_date=delivery, sale_confirmed=True,
+            status=OrderRequest.Status.REVIEWED,
+        )
+        app = AppTest.from_file(
+            str(Path(__file__).resolve().parents[1] / "streamlit_app.py"),
+            default_timeout=30,
+        )
+        app.session_state["session_key"] = sign_in(self.seller.username, "ClaveDelVendedor123")
+        app.session_state["workspace"] = "Mi trabajo"
+        app.run()
+
+        self.assertFalse(app.exception)
+        visible_text = " ".join(item.value for item in app.markdown)
+        self.assertIn("Cliente A", visible_text)
+        self.assertIn(delivery.strftime("%d/%m/%Y"), visible_text)
+        self.assertIn("Producción revisada", visible_text)
 
     @skipUnless(find_spec("streamlit"), "Install requirements-streamlit.txt for native UI checks")
     def test_native_client_stock_inbox_and_admin_planning_screens(self):

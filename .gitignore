@@ -3,12 +3,16 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .streamlit/secrets.toml
+.env
+.env.*
+!.env.example
 .local/
 .local-demo/
 .local-web/
 .local-web-lab/
 .local-web-pilot/
 .venv-web/
+staticfiles/
 .apptest-demo/
 .local-odoo/
 

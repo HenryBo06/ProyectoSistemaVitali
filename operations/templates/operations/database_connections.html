@@ -1,0 +1,82 @@
+{% extends "operations/base.html" %}
+{% block title %}Conexiones de bases de datos{% endblock %}
+{% block content %}
+<div class="page-heading"><div><p class="page-eyebrow">Administración · Fuentes externas</p>
+<h1>Conexiones de bases de datos</h1>
+<p>Configura fuentes externas sin guardar contraseñas. La prueba únicamente ejecuta SELECT 1 en una transacción de solo lectura.</p></div></div>
+<div class="alert alert-info" role="status">El registro de conexión no importa ventas ni modifica inventario. PostgreSQL es el primer adaptador disponible. El acceso de Odoo se administra de forma independiente. Los datos para inferencia solo se activarán después de validar su estructura y procedencia.</div>
+<div class="row g-3">
+  <div class="col-xl-5">
+    <section class="panel" aria-labelledby="connection-form-title">
+      <div class="panel-header"><h2 class="panel-title" id="connection-form-title">{% if edit_connection %}Editar conexión{% else %}Nueva conexión PostgreSQL{% endif %}</h2></div>
+      <div class="panel-body">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="save">
+          {% if edit_connection %}<input type="hidden" name="connection_id" value="{{ edit_connection.pk }}">{% endif %}
+          <div class="row g-2">
+            <div class="col-sm-5"><label class="form-label" for="source-alias">Alias interno</label>
+              <input class="form-control" name="alias" id="source-alias" maxlength="48" pattern="[a-z][a-z0-9_-]{2,47}" required value="{{ edit_connection.alias|default:'' }}" placeholder="ventas-vitali"></div>
+            <div class="col-sm-7"><label class="form-label" for="source-name">Nombre visible</label>
+              <input class="form-control" name="name" id="source-name" maxlength="100" required value="{{ edit_connection.name|default:'' }}" placeholder="Ventas PostgreSQL"></div>
+            <div class="col-12"><label class="form-label" for="source-purpose">Propósito</label>
+              <select class="form-select" name="purpose" id="source-purpose">
+                <option value="sales" {% if edit_connection.purpose == 'sales' %}selected{% endif %}>Histórico de ventas</option>
+                <option value="reporting" {% if edit_connection.purpose == 'reporting' %}selected{% endif %}>Consulta y reportes</option>
+                <option value="reference" {% if edit_connection.purpose == 'reference' %}selected{% endif %}>Catálogos de referencia</option>
+              </select></div>
+            <div class="col-sm-8"><label class="form-label" for="source-host">Servidor permitido</label>
+              <input class="form-control" name="host" id="source-host" maxlength="253" required value="{{ edit_connection.host|default:'' }}" placeholder="db.empresa.local"></div>
+            <div class="col-sm-4"><label class="form-label" for="source-port">Puerto</label>
+              <input class="form-control" name="port" id="source-port" type="number" min="1" max="65535" required value="{{ edit_connection.port|default:'5432' }}"></div>
+            <div class="col-sm-6"><label class="form-label" for="source-db">Base de datos</label>
+              <input class="form-control" name="database" id="source-db" maxlength="128" required value="{{ edit_connection.database|default:'' }}"></div>
+            <div class="col-sm-6"><label class="form-label" for="source-user">Usuario de lectura</label>
+              <input class="form-control" name="username" id="source-user" maxlength="128" required value="{{ edit_connection.username|default:'' }}"></div>
+            <div class="col-12"><label class="form-label" for="source-secret">Nombre de variable privada con contraseña</label>
+              <input class="form-control" name="password_env" id="source-secret" maxlength="100" required
+                     pattern="SMARTORDER_SOURCE_[A-Z0-9_]+_PASSWORD" value="{{ edit_connection.password_env|default:'' }}"
+                     placeholder="SMARTORDER_SOURCE_VENTAS_PASSWORD">
+              <div class="form-text">Nunca escribas la contraseña aquí. Colócala en los secretos del servidor; esta pantalla guarda únicamente el nombre de la variable.</div></div>
+            <div class="col-12"><label class="form-label" for="source-tls">Transporte seguro</label>
+              <select class="form-select" name="sslmode" id="source-tls">
+                <option value="require" {% if edit_connection.sslmode == 'require' %}selected{% endif %}>TLS requerido</option>
+                <option value="verify-full" {% if edit_connection.sslmode == 'verify-full' %}selected{% endif %}>TLS con verificación completa</option>
+                <option value="prefer" {% if edit_connection.sslmode == 'prefer' %}selected{% endif %}>Local únicamente (prefer)</option>
+              </select></div>
+          </div>
+          <button class="btn btn-primary mt-3" type="submit">Guardar configuración</button>
+          {% if edit_connection %}<a class="btn btn-outline-secondary mt-3" href="{% url 'database_connections' %}">Nueva conexión</a>{% endif %}
+        </form>
+      </div>
+    </section>
+  </div>
+  <div class="col-xl-7">
+    <section class="panel"><div class="panel-header"><h2 class="panel-title">Conexiones registradas</h2></div>
+      <div class="panel-body">
+        <p class="muted">Servidores permitidos por infraestructura: {{ allowed_hosts }}. Para habilitar una fuente primero comprueba su acceso. Una conexión habilitada no inicia sincronizaciones automáticamente.</p>
+        {% if connections %}
+        <div class="table-responsive">
+          <table class="table align-middle"><thead><tr><th>Fuente</th><th>Estado</th><th>Última prueba</th><th>Acciones</th></tr></thead>
+          <tbody>{% for item in connections %}<tr>
+            <td><strong>{{ item.name }}</strong><br><small class="muted">{{ item.alias }} · PostgreSQL · {{ item.get_purpose_display }}</small><br><small class="muted">{{ item.host }}:{{ item.port }}/{{ item.database }}</small></td>
+            <td>{% if item.enabled %}<span class="badge-status status-approved">Habilitada</span>{% else %}<span class="badge-status status-neutral">Deshabilitada</span>{% endif %}</td>
+            <td>{% if item.last_test_ok == None %}Sin probar{% elif item.last_test_ok %}Correcta{% else %}Fallida{% endif %}<br><small>{{ item.last_tested_at|date:'d/m/Y H:i'|default:'' }}</small></td>
+            <td><div class="d-flex flex-wrap gap-1">
+              <a class="btn btn-sm btn-outline-primary" href="?edit={{ item.pk }}">Editar</a>
+              <form method="post">{% csrf_token %}<input type="hidden" name="action" value="test"><input type="hidden" name="connection_id" value="{{ item.pk }}"><button class="btn btn-sm btn-outline-primary">Probar</button></form>
+              <form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle"><input type="hidden" name="connection_id" value="{{ item.pk }}"><input type="hidden" name="enabled" value="{% if item.enabled %}no{% else %}yes{% endif %}">
+                <button class="btn btn-sm btn-outline-secondary">{% if item.enabled %}Deshabilitar{% else %}Habilitar{% endif %}</button></form>
+            </div></td>
+          </tr>{% endfor %}</tbody></table>
+        </div>
+        {% else %}<p class="muted">No hay conexiones externas registradas. Puedes crear la primera desde el formulario.</p>{% endif %}
+      </div>
+    </section>
+    <section class="panel mt-3"><div class="panel-header"><h2 class="panel-title">Odoo y datos operativos</h2></div>
+      <div class="panel-body"><p>La integración Odoo conserva sus credenciales y controles propios; no se mezcla con conexiones SQL ni con el histórico para inferencia.</p>
+        <a class="btn btn-outline-primary" href="{% url 'odoo_settings' %}">Revisar integración Odoo</a></div>
+    </section>
+  </div>
+</div>
+{% endblock %}
