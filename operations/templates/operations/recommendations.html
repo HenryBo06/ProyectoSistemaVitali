@@ -1,7 +1,7 @@
 {% extends 'operations/base.html' %}
-{% block title %}Productos y sugerencias{% endblock %}
+{% block title %}{% if role == 'vendedor' %}IA comercial para vendedores{% else %}Consulta de productos{% endif %}{% endblock %}
 {% block content %}
-<div class="page-heading seller-page-heading"><div><p class="page-eyebrow">{% if suggestion_mode == 'client_restock' %}Existencias del cliente{% else %}Venta contextual{% endif %}</p><h1>Productos y sugerencias</h1><p>{% if suggestion_mode == 'client_restock' %}Compara el conteo de hoy con el objetivo definido por administración.{% else %}Productos, disponibilidad y tarifas para la entrega seleccionada.{% endif %}</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Crear venta{% endif %}</a>{% endif %}</div>
+<div class="page-heading seller-page-heading"><div><p class="page-eyebrow">{% if suggestion_mode == 'client_restock' %}Existencias del cliente{% else %}Venta contextual{% endif %}</p><h1>{% if role == 'vendedor' and suggestion_mode == 'sale' %}IA comercial · Qué ofrecer y qué hacer{% elif role == 'vendedor' %}Reposición del cliente{% else %}Consulta de productos{% endif %}</h1><p>{% if role == 'vendedor' and suggestion_mode == 'sale' %}Revisa qué producto ofrecer primero, la evidencia disponible y el siguiente paso con tu cliente. Tú decides y confirmas la venta.{% elif suggestion_mode == 'client_restock' %}Compara el conteo de hoy con el objetivo definido por administración.{% else %}Disponibilidad y datos operativos para la fecha seleccionada.{% endif %}</p></div>{% if role == 'vendedor' %}<a class="btn btn-primary" href="{% url 'order_create' %}?mode={{ suggestion_mode }}&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}">{% if suggestion_mode == 'client_restock' %}Preparar reposición{% else %}Crear venta{% endif %}</a>{% endif %}</div>
 {% if role == 'vendedor' %}
 <nav class="seller-mode-tabs" aria-label="Tipo de consulta comercial">
   <a class="seller-mode-tab{% if suggestion_mode == 'sale' %} is-active{% endif %}" {% if suggestion_mode == 'sale' %}aria-current="page"{% endif %} href="?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}"><span class="d-none d-sm-inline">Sugerencia de </span>Venta</a>
@@ -32,10 +32,22 @@
 {% if recommendations and suggestion_mode != 'client_restock' %}
 <p class="form-text" role="note">La prioridad de productos es orientativa. Puede usar recurrencia reciente solo si supera la histórica en una auditoría cronológica; no supone nuevas compras ni valida cantidades. Las entregas mantienen sus controles independientes.</p>
 {% endif %}
+{% if role == 'vendedor' and suggestion_mode == 'sale' and recommendations %}
+<section class="panel mb-3" aria-labelledby="seller-ai-focus">
+  <p class="page-eyebrow">Asistente comercial · orientación para el vendedor</p>
+  <h2 id="seller-ai-focus">Sugerencia de venta para este cliente</h2>
+  <p><strong>Producto para revisar primero:</strong> {{ recommendations.0.product }}.</p>
+  <p><strong>Acción sugerida:</strong> {{ recommendations.0.action_title }}.</p>
+  <p>{{ recommendations.0.action_reason }}</p>
+  <p class="form-text"><strong>Antes de comprometer una venta:</strong> {{ recommendations.0.action_checks }}</p>
+  <a class="btn btn-primary" href="{% url 'order_create' %}?mode=sale&amp;client={{ selected_client|urlencode }}&amp;required_date={{ required_date|date:'Y-m-d' }}&amp;product={{ recommendations.0.product|urlencode }}">Preparar venta de este producto</a>
+  <p class="form-text mb-0 mt-2">La IA ayuda a priorizar y actuar; no llama al cliente, no crea pedidos y no confirma cantidades ni disponibilidad.</p>
+</section>
+{% endif %}
 <div class="product-grid {% if role == 'vendedor' %}seller-recommendations{% endif %}">
 {% for item in recommendations %}
 <article class="panel product-summary decision-{{ item.state }}{% if role == 'vendedor' %} seller-product-summary{% endif %}">
-  <div class="product-summary-heading"><div><p class="page-eyebrow">{{ item.category|default:'Producto' }}</p><h2>{{ item.product }}</h2></div><span class="badge-status {% if suggestion_mode == 'client_restock' and item.suggested == None or suggestion_mode != 'client_restock' and item.commercial_forecast == None and item.suggested == None %}status-manual{% else %}status-approved{% endif %}">{% if role == 'vendedor' and suggestion_mode == 'client_restock' %}{% if item.suggested != None %}Reposición sugerida{% else %}Reposición manual{% endif %}{% elif role == 'vendedor' and item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif role == 'vendedor' and item.commercial_forecast != None %}Oportunidad{% elif role == 'vendedor' and item.suggested != None %}Cantidad sugerida{% elif role == 'vendedor' %}Sin estimación{% elif item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif item.suggested == None %}Cantidad manual{% else %}Con sugerencia{% endif %}</span></div>
+  <div class="product-summary-heading"><div><p class="page-eyebrow">{{ item.category|default:'Producto' }}</p><h2>{{ item.product }}</h2></div><span class="badge-status {% if suggestion_mode == 'client_restock' and item.suggested == None or suggestion_mode != 'client_restock' and item.commercial_forecast == None and item.suggested == None %}status-manual{% else %}status-approved{% endif %}">{% if role == 'vendedor' and suggestion_mode == 'client_restock' %}{% if item.suggested != None %}Reposición sugerida{% else %}Reposición manual{% endif %}{% elif role == 'vendedor' and item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif role == 'vendedor' and item.commercial_forecast != None %}Oportunidad{% elif role == 'vendedor' and item.suggested != None %}Cantidad sugerida{% elif role == 'vendedor' %}Sin estimación{% elif item.commercial_forecast != None and item.suggested == None %}Oportunidad comercial · entrega manual{% elif item.suggested == None %}Cantidad manual{% else %}Referencia operativa{% endif %}</span></div>
   {% if item.historical_rank and suggestion_mode != 'client_restock' %}
   <p class="form-text">Prioridad histórica {{ item.historical_rank }} de {{ item.historical_total }} · {{ item.historical_sale_days }} días con ventas registradas hasta {{ item.historical_cutoff_date|date:'d/m/Y' }}. No es una predicción.</p>
   {% if item.historical_seasonal_days %}<p class="form-text">Período de referencia comparable ({{ item.historical_seasonal_start|date:'d/m/Y' }}–{{ item.historical_seasonal_end|date:'d/m/Y' }}): {{ item.historical_seasonal_days }} días con ventas. Referencia descriptiva, no pronóstico.</p>{% endif %}
@@ -49,12 +61,17 @@
     {% elif role == 'vendedor' %}
     <div><dt>Oportunidad · no es cantidad de entrega</dt><dd>{% if item.commercial_forecast != None %}{{ item.commercial_forecast|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Sin estimación{% endif %}</dd></div>
     {% if item.suggested != None %}<div><dt>Cantidad sugerida para entrega</dt><dd>{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small></dd></div>{% endif %}
-    {% else %}<div><dt>Cantidad sugerida</dt><dd>{% if item.suggested != None %}{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div>{% endif %}
+    {% else %}<div><dt>Cantidad para revisión operativa</dt><dd>{% if item.suggested != None %}{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div>{% endif %}
     {% if role == 'vendedor' %}<div><dt>Tarifa autorizada</dt><dd>{% if item.unit_price != None %}USD {{ item.unit_price|floatformat:2 }}{% else %}Pendiente{% endif %}</dd></div>{% endif %}
   </dl>
   {% if maintenance_ui and item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
   {% if item.inventory_warning %}<div class="alert alert-warning" role="status">{{ item.inventory_warning }}</div>{% endif %}
   {% if role == 'vendedor' %}
+  <section class="alert alert-info seller-next-action" aria-label="Próxima acción comercial orientativa">
+    <strong>Acción sugerida: {{ item.action_title }}</strong>
+    <p class="mb-1 mt-2">{{ item.action_reason }}</p>
+    <p class="mb-0"><small><strong>Verificar antes de confirmar:</strong> {{ item.action_checks }}</small></p>
+  </section>
   {% if item.explanation %}<details class="seller-explanation"><summary>Ver explicación</summary><p>{{ item.explanation }}</p></details>{% endif %}
   {% else %}<p class="muted">{{ item.explanation }}</p>{% endif %}
   {% if role == 'vendedor' and suggestion_mode == 'client_restock' %}

@@ -283,3 +283,24 @@ y Streamlit. Las pruebas y métricas se ejecutan además en GitHub Actions bajo
 **Límite:** los aciertos sobre datos ficticios son una prueba técnica, no una
 estimación de acierto comercial en Vitali ni una autorización de cantidades
 automáticas. La VM permanece fuera de alcance.
+
+
+## IA comercial orientada a vendedores: producto y siguiente acción
+
+El objetivo funcional de la IA es apoyar **al vendedor**, no pedir al
+administrador que use predicciones. La página del vendedor muestra un producto
+para revisar primero, la evidencia histórica o auditada, una **acción
+comercial sugerida** y verificaciones previas (presentación, tarifa,
+disponibilidad, fecha y cantidad confirmada por el cliente). Las dos interfaces,
+Django y Streamlit, comparten el mismo asesor y el control de cartera. Este
+asesor no envía mensajes, no crea pedidos, no asegura una compra futura ni
+autoriza fabricar. Si hay ausencia de evidencia, recomienda consultar y
+confirmar con el cliente, no inventar una cantidad.
+
+La administración continúa gestionando datos, usuarios, pedidos,
+aprobaciones y controles operativos; no recibe las acciones del asesor
+de vendedores. La navegación administrativa no presenta las sugerencias
+de venta como una responsabilidad de ese rol.
+
+**Manual específico para el vendedor:**
+[docs/MANUAL_VENDEDOR_IA_ACCIONES.md](docs/MANUAL_VENDEDOR_IA_ACCIONES.md).

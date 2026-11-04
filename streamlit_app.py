@@ -269,8 +269,9 @@ def dashboard():
 
 def products():
     compact_seller_marker()
-    st.title("Productos y sugerencias", icon=":material/shopping_bag:")
-    st.caption("Oportunidades, disponibilidad y tarifas autorizadas.")
+    st.title("Consulta de productos" if user.is_staff else "IA comercial: qué ofrecer y qué hacer", icon=":material/shopping_bag:")
+    st.caption("Datos operativos para administración." if user.is_staff else
+               "Oportunidades explicables y acciones recomendadas. Tú contactas al cliente y confirmas la venta.")
     c = context("recommendations")
     source(c)
     if not c.get("clients"):
@@ -325,6 +326,15 @@ def products():
             st.info("No hay productos con ventas registradas para este cliente en la consulta actual.")
         return
     if not user.is_staff:
+        if mode == "sale":
+            first = cards[0]
+            with st.container(border=True):
+                st.subheader("Sugerencia de venta para este cliente")
+                st.markdown(f"**Producto para revisar primero:** {escape(str(first['product']))}")
+                st.write(f"**Acción sugerida:** {first['action_title']}")
+                st.write(first["action_reason"])
+                st.caption(f"Antes de confirmar: {first['action_checks']}")
+                st.caption("Apoyo comercial basado en evidencia; no crea pedidos ni contacta automáticamente.")
         warnings = dict.fromkeys(card["inventory_warning"] for card in cards
                                  if card["inventory_warning"])
         for warning in warnings:
@@ -336,6 +346,7 @@ def products():
         with st.container(key="seller-desktop-catalog"):
             table([{
                 "Producto": card["product"],
+                "Siguiente acción": card["action_title"],
                 "Prioridad histórica": (
                     f"{card['historical_rank']} de {card['historical_total']} · "
                     f"{card['historical_sale_days']} días con venta"
@@ -398,6 +409,7 @@ def products():
                                 f"{card['priority_audit_hits']} de {card['priority_audit_cases']} "
                                 "períodos con compra en auditoría. No predice cantidad."
                             )
+                    st.caption(f"Acción sugerida: {card['action_title']}")
                     st.caption(f"Oportunidad · no es cantidad solicitada: {opportunity}")
                     st.caption(f"Disponibilidad: {availability} · Tarifa autorizada: USD {tariff}")
         valid_products = [card["product"] for card in cards]
@@ -429,6 +441,8 @@ def products():
                 if line_filter != "Todas las líneas" and (card.get("category") or "Sin línea") != line_filter:
                     continue
                 st.markdown(f"**{card['product']}**")
+                st.write(f"Acción sugerida: {card['action_title']}")
+                st.caption(f"Antes de confirmar: {card['action_checks']}")
                 st.write(card["explanation"])
                 if mode == "client_restock":
                     stock = (f"{card['client_stock']} {card['unit']} en {card['client_stock_location']}"
@@ -449,7 +463,7 @@ def products():
             with st.container(border=True):
                 st.subheader(card["product"])
                 first, second = st.columns(2)
-                first.metric("Cantidad sugerida" if card["suggested"] is not None else "Cantidad para solicitar",
+                first.metric("Cantidad para revisión" if card["suggested"] is not None else "Cantidad para solicitar",
                              f"{format_number(card['suggested'])} {card['unit']}" if card["suggested"] is not None else "Decisión manual")
                 second.metric("Existencia disponible", "Sin inventario" if card["available"] is None
                               else f"{format_number(card['available'])} {card.get('stock_unit') or 'unidad por confirmar'}")

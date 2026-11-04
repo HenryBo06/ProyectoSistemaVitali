@@ -204,11 +204,19 @@ def _seller_cards(cards, *, preserve_priority: bool = False):
             return f"{text} Sugerimos revisar {card['suggested']:g} {unit} para esta entrega; puedes ajustarla."
         return f"{text} No hay evidencia suficiente para proponer una cantidad automática; revísala manualmente."
 
-    return [{**{key: card.get(key) for key in fields},
-             "state": "suggested" if card["suggested"] is not None else "manual",
-             "explanation": seller_explanation(card)}
-            for card in (cards if preserve_priority else sorted(
-                cards, key=lambda item: item["product"].casefold()))]
+    from smartorder.seller_actions import suggested_seller_action
+
+    safe_cards = []
+    for card in (cards if preserve_priority else sorted(
+            cards, key=lambda item: item["product"].casefold())):
+        safe = {key: card.get(key) for key in fields}
+        safe["state"] = "suggested" if card["suggested"] is not None else "manual"
+        safe["explanation"] = seller_explanation(card)
+        # Action guidance uses only whitelisted seller data, never internal
+        # finances, raw sale records, IDs or automatic order creation.
+        safe.update(suggested_seller_action(safe))
+        safe_cards.append(safe)
+    return safe_cards
 
 
 def _seller_order(order):
