@@ -317,6 +317,131 @@ def streamlit_smoke(browser) -> None:
     context.close()
 
 
+def django_etl_approved_load_smoke(browser) -> None:
+    """Exercise the entire staff-approved ETL lifecycle in isolated LAB browser."""
+    from concurrent.futures import ThreadPoolExecutor
+    from django.db import close_old_connections
+    from operations.models import EtlLoadRun, SalesDataset, SalesLine
+
+    def stats():
+        try:
+            return {
+                "datasets": SalesDataset.objects.count(),
+                "loads": EtlLoadRun.objects.count(),
+            }
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        before = executor.submit(stats).result()
+
+    context = browser.new_context(viewport={"width": 1280, "height": 820}, device_scale_factor=1)
+    page = context.new_page()
+    page.goto("http://127.0.0.1:8000/entrar/", wait_until="domcontentloaded")
+    page.locator('input[name="username"]').fill("lab_admin_01")
+    page.locator('input[name="password"]').fill(CREDENTIALS["lab_admin_01"])
+    page.get_by_role("button", name="Entrar a mi espacio").click()
+    page.goto("http://127.0.0.1:8000/administracion/etl/", wait_until="domcontentloaded")
+    page.get_by_role("heading", name="Preparación ETL de históricos").wait_for()
+
+    profile_form = page.locator('form:has(input[name="action"][value="save_profile"])')
+    profile_form.locator('input[name="alias"]').fill("smoke-vitali-2025")
+    profile_form.locator('input[name="name"]').fill("Contrato de ventas LAB")
+    profile_form.locator('textarea[name="mapping"]').fill(
+        '{"Fecha":"Fecha","Cliente":"Cliente","Producto":"Producto",'
+        '"Cantidad_kg_unid":"Cantidad","Precio_Unitario_USD":"Precio"}'
+    )
+    profile_form.get_by_role("button", name="Guardar nueva versión").click()
+    page.get_by_text("Perfil smoke-vitali-2025 versión 1 guardado").wait_for(timeout=20000)
+    profile_option = page.locator("#etl-profile option").filter(has_text="smoke-vitali-2025").first
+    profile_id = profile_option.get_attribute("value")
+    if not profile_id:
+        raise AssertionError("Browser ETL profile was not created.")
+
+    raw = (
+        "Fecha,Cliente,Producto,Cantidad,Precio\n"
+        f"2025-01-01,{CLIENT},Producto avícola LAB (simulado),2,4\n"
+        f"2025-01-02,{CLIENT},Producto avícola LAB (simulado),3,4\n"
+        f"2025-01-01,{CLIENT},Producto adicional LAB,800,4\n"
+    ).encode("utf-8")
+    page.locator("#etl-profile").select_option(profile_id)
+    page.locator('input[name="etl_file"]').set_input_files({
+        "name": "lab-ventas-2025.csv", "mimeType": "text/csv", "buffer": raw,
+    })
+    page.get_by_role("button", name="Inspeccionar sin cargar").click()
+    page.get_by_text("Estructura preliminar válida").wait_for(timeout=20000)
+    if page.locator('select[name="unit_value"]').count() != 2:
+        raise AssertionError("The two LAB products must require separate provisional units.")
+    page.screenshot(path=str(OUT / "django-etl-approved-inspection-desktop.png"), full_page=True)
+    inspection_selector = page.locator("#etl-load-inspection")
+    if inspection_selector.locator("option").count() < 2:
+        raise AssertionError("Successful inspection not available for approval.")
+    inspection_selector.select_option(index=1)
+    page.locator('input[name="etl_load_file"]').set_input_files({
+        "name": "lab-ventas-2025.csv", "mimeType": "text/csv", "buffer": raw,
+    })
+    for index, selector in enumerate(page.locator('select[name="unit_value"]').all()):
+        selector.select_option("lb" if index == 0 else "kg")
+    page.locator("#etl-load-provenance").select_option("simulated")
+    page.locator("#etl-load-semantics").select_option("sale_order")
+    for name in ("confirmed_origin", "confirmed_full_snapshot", "approved_load"):
+        page.locator(f'input[name="{name}"]').check()
+    page.get_by_role("button", name="Revalidar y activar histórico").click()
+    page.wait_for_url("**/ventas/**", timeout=20000)
+    feedback = page.locator(".flash-messages").inner_text()
+    if "ETL aprobado" not in feedback:
+        raise AssertionError(f"Staff-approved ETL did not complete: {feedback!r}")
+
+    def activated():
+        try:
+            new = SalesDataset.objects.get(active=True)
+            rows = list(SalesLine.objects.filter(dataset=new).values_list("client", "product", "unit"))
+            return {"datasets": SalesDataset.objects.count(),
+                    "loads": EtlLoadRun.objects.count(),
+                    "rows": rows, "verified": new.verified,
+                    "provenance": new.provenance}
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        result = executor.submit(activated).result()
+    if (result["datasets"] != before["datasets"] + 1
+            or result["loads"] != before["loads"] + 1
+            or len(result["rows"]) != 3 or result["verified"]
+            or result["provenance"] != "simulated"
+            or {r[2] for r in result["rows"]} != {"lb", "kg"}):
+        raise AssertionError(f"Approved ETL did not persist safe LAB snapshot: {result!r}")
+    context.close()
+
+    seller_context = browser.new_context(viewport={"width": 390, "height": 844})
+    seller = seller_context.new_page()
+    seller.goto("http://127.0.0.1:8000/entrar/", wait_until="domcontentloaded")
+    seller.locator('input[name="username"]').fill("lab_vendedor_01")
+    seller.locator('input[name="password"]').fill(CREDENTIALS["lab_vendedor_01"])
+    seller.get_by_role("button", name="Entrar a mi espacio").click()
+    query = urlencode({"client": CLIENT, "mode": "sale",
+                       "required_date": date.today().isoformat()})
+    seller.goto(f"http://127.0.0.1:8000/recomendaciones/?{query}", wait_until="domcontentloaded")
+    seller.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=20000)
+    rows = seller.locator(".product-summary")
+    if rows.count() != 2:
+        raise AssertionError("Seller must see the two products from the approved LAB snapshot.")
+    names = [rows.nth(i).locator("h2").inner_text() for i in range(2)]
+    if names != ["Producto avícola LAB (simulado)", "Producto adicional LAB"]:
+        raise AssertionError(f"Seller historical priority is incorrect: {names!r}")
+    text = seller.locator(".product-grid").inner_text()
+    if "Prioridad histórica 1 de 2" not in text or "3 días con ventas" in text:
+        raise AssertionError("Seller historical purchase-frequency evidence is inconsistent.")
+    if "Sin estimación" not in text:
+        raise AssertionError("Stale, provisional data must not produce automatic delivery quantities.")
+    seller.screenshot(path=str(OUT / "django-etl-approved-seller-priority-mobile.png"), full_page=True)
+    denied = seller.goto("http://127.0.0.1:8000/administracion/etl/",
+                         wait_until="domcontentloaded")
+    if denied.status != 403:
+        raise AssertionError("Seller must not access staff ETL approvals.")
+    seller_context.close()
+
+
 if __name__ == "__main__":
     seed_synthetic_restock()
     ready("http://127.0.0.1:8000/entrar/")
@@ -328,6 +453,8 @@ if __name__ == "__main__":
             django_connection_smoke(browser)
             django_etl_smoke(browser)
             streamlit_smoke(browser)
+            # This changes the active LAB snapshot, so it runs after both existing journeys.
+            django_etl_approved_load_smoke(browser)
         finally:
             browser.close()
     print("PASS: real-browser smoke: Django and Streamlit, desktop + mobile, synthetic LAB data only.")
