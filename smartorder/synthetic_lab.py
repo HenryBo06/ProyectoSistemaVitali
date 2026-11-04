@@ -224,7 +224,7 @@ def rolling_backtest(rows: list[SyntheticSale], *, as_of: date, horizon: int,
     holdout_start = first + timedelta(days=ceil(days * .65))
     cutoffs = [
         holdout_start + timedelta(days=28 * ix)
-        for ix in range(max(0, (as_of - horizon - holdout_start).days // 28 + 1))
+        for ix in range(max(0, (as_of - timedelta(days=horizon) - holdout_start).days // 28 + 1))
     ]
     grouped: dict[str, list[SyntheticSale]] = defaultdict(list)
     for row in rows:
