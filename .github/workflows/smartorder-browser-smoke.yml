@@ -35,6 +35,15 @@ jobs:
           python manage.py runserver 127.0.0.1:8000 --noreload > "$RUNNER_TEMP/django.log" 2>&1 &
           python -m streamlit run streamlit_app.py --server.headless true --server.address 127.0.0.1 --server.port 8501 > "$RUNNER_TEMP/streamlit.log" 2>&1 &
           python scripts/visual_smoke_ci.py
+      - name: Diagnose synthetic browser failures
+        if: failure()
+        run: |
+          echo "::group::Streamlit runtime errors (last 100 lines)"
+          if [ -f "$RUNNER_TEMP/streamlit.log" ]; then tail -n 100 "$RUNNER_TEMP/streamlit.log"; fi
+          echo "::endgroup::"
+          echo "::group::Django runtime errors (last 80 lines)"
+          if [ -f "$RUNNER_TEMP/django.log" ]; then tail -n 80 "$RUNNER_TEMP/django.log"; fi
+          echo "::endgroup::"
       - name: Upload synthetic browser evidence
         if: always()
         uses: actions/upload-artifact@v4
