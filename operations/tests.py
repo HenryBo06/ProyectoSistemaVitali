@@ -358,6 +358,15 @@ class LocalWorkflowTests(LocalCase, TestCase):
         DatedFlow.objects.filter(batch=stock).update(
             confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
         )
+        # A confirmed movement for another client must not affect this
+        # customer's recommendation or export commitment totals.
+        DatedFlow.objects.create(
+            batch=stock, kind=DatedFlow.Kind.INCOMING,
+            client="Cliente B", product="Alitas", unit="kg",
+            quantity=Decimal("999"), due_date=today + timedelta(days=1),
+            confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
+            created_by=self.admin,
+        )
         self._assign_seller()
         self.client.force_login(self.seller)
         response = self.client.get(reverse("recommendations"), {

@@ -889,9 +889,15 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
     if batch:
         for change in InventoryAdjustment.objects.filter(batch=batch).order_by("created_at", "pk"):
             adjustments[(change.client, change.product)] = change
-    flows = list(DatedFlow.objects.filter(
-        batch=batch, confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
-    )) if batch else []
+    flows_by_pair = {}
+    if batch:
+        flow_query = DatedFlow.objects.filter(
+            batch=batch, confirmed=True, reconciliation=DatedFlow.Reconciliation.UNIQUE,
+        )
+        if client:
+            flow_query = flow_query.filter(client=client)
+        for flow in flow_query:
+            flows_by_pair.setdefault((flow.client, flow.product), []).append(flow)
     # A historical replay must not see sales dated after the simulated decision.
     # For stale demo sources, show observations around the matching calendar
     # period of the preceding year, without claiming a predictive probability.
@@ -945,7 +951,7 @@ def recommendation_cards(dataset: SalesDataset, delivery: date, client: str,
         change = adjustments.get(key)
         available = Decimal(str(change.available if change else item.available)) if item else None
         stock_date = (change.observed_on if change else item.observed_on) if item else None
-        due_flows = [flow for flow in flows if (flow.client, flow.product) == key]
+        due_flows = flows_by_pair.get(key, ())
         incoming = sum((flow.quantity for flow in due_flows
                         if flow.kind == DatedFlow.Kind.INCOMING
                         and today <= flow.due_date <= delivery), Decimal("0"))
