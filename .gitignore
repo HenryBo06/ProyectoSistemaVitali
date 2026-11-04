@@ -22,3 +22,4 @@ staticfiles/
 *.xls
 ge.png
 info.jpg
+.local-synthetic-audit/

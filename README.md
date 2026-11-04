@@ -249,3 +249,37 @@ La prueba pública de Streamlit no convierte la app en una instalación de uso c
 ### Verificación de Streamlit
 
 Con las dependencias instaladas, `python manage.py test operations tests` también ejecuta las comprobaciones de la interfaz nativa: acceso, navegación por rol, filtros sin ventas y pantallas administrativas. La prueba del puente comprueba permisos, pedido, revisión y exportación con sesión persistida, y la invalidación de sesión al cambiar la contraseña.
+
+## Laboratorio sintético avanzado y evaluación de IA sin datos empresariales
+
+SmartOrder dispone de un laboratorio separado que genera ventas **100 % ficticias**
+y deterministas para ocho patrones de consumo: recurrencia semanal, quincenal,
+temporada alta, cambio de preferencias, intermitencia, promoción puntual,
+períodos sin cobertura y tendencia de cantidad. No consume el Excel recibido
+ni información de Vitali. Las presentaciones son **kg, lb y unidad** sin
+conversiones. Las fechas son ventas simuladas, NO entregas confirmadas.
+
+Prueba reproducible (Python con las dependencias del proyecto instaladas):
+
+~~~bash
+python -m unittest discover -s tests -p test_synthetic_lab.py -v
+python scripts/auditar_smartorder_sintetico.py --seed 20261103 --clients 16 --days 630 --export-csv --export-xlsx
+~~~
+
+La salida aparece en .local-synthetic-audit/, ignorada por Git: reporte JSON
+de comparaciones con reservas temporales, CSV y XLSX completamente simulados.
+También puede generar una prueba de volumen sin XLSX:
+
+~~~bash
+python scripts/auditar_smartorder_sintetico.py --seed 2112026 --clients 72 --days 560 --evaluation-client-limit 16
+~~~
+
+Los datos extra no se importan ni activan fuentes verificadas automáticamente.
+Este laboratorio es complementario al que verifica sesiones y pedidos en Django
+y Streamlit. Las pruebas y métricas se ejecutan además en GitHub Actions bajo
+**SmartOrder - Laboratorio sintético avanzado**. Guía completa:
+[docs/LABORATORIO_SINTETICO_AVANZADO.md](docs/LABORATORIO_SINTETICO_AVANZADO.md).
+
+**Límite:** los aciertos sobre datos ficticios son una prueba técnica, no una
+estimación de acierto comercial en Vitali ni una autorización de cantidades
+automáticas. La VM permanece fuera de alcance.

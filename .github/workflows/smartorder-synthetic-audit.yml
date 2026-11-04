@@ -1,0 +1,73 @@
+name: SmartOrder - Laboratorio sintético avanzado
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - smartorder/synthetic_lab.py
+      - smartorder/product_priority.py
+      - scripts/auditar_smartorder_sintetico.py
+      - tests/test_synthetic_lab.py
+      - .github/workflows/smartorder-synthetic-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Instalar dependencias mínimas sin red comercial
+        run: python -m pip install 'pandas>=2.2,<3' 'numpy>=2,<3' 'openpyxl>=3.1,<4'
+      - name: Validaciones de escenarios, privacidad, ETL y cortes temporales
+        run: python -m unittest discover -s tests -p 'test_synthetic_lab.py' -v
+      - name: Laboratorio normal con XLSX importable y CSV de exhibición
+        run: >
+          python scripts/auditar_smartorder_sintetico.py
+          --seed 20261103 --clients 16 --products 8 --days 630
+          --evaluation-client-limit 16
+          --export-csv --export-xlsx --output-dir .local-synthetic-audit/normal
+      - name: Prueba de volumen sin importar bases ni abrir sesiones
+        run: >
+          python scripts/auditar_smartorder_sintetico.py
+          --seed 2112026 --clients 72 --products 8 --days 560
+          --evaluation-client-limit 16
+          --output-dir .local-synthetic-audit/stress
+      - name: Comprobar contratos agregados del reporte
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for folder, count in (("normal", 16), ("stress", 72)):
+              path = Path(".local-synthetic-audit") / folder / "smartorder_auditoria_SINTETICA.json"
+              report = json.loads(path.read_text(encoding="utf-8"))
+              assert report["parametros"]["clientes"] == count
+              assert not report["datos_empresariales_utilizados"]
+              assert report["nunca_importa_xlsx_real"]
+              assert report["invariantes"]["sin_fuga_temporal"]
+              assert report["invariantes"]["unidades_separadas"]
+              assert sum(report["calidad"]["ocho_anomalias_aisladas_en_cuarentena"].values()) == 8
+              assert report["priorizacion_retroactiva"]["7"]["total"]["escenarios_evaluados"] > 0
+              assert report["priorizacion_retroactiva"]["30"]["total"]["escenarios_evaluados"] > 0
+              print(folder, report["huella_csv_sha256"], report["calidad"]["filas_validas"])
+          PY
+      - name: Evidencia sintética de exposición
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smartorder-auditoria-sintetica
+          path: |
+            .local-synthetic-audit/normal/smartorder_auditoria_SINTETICA.json
+            .local-synthetic-audit/normal/ventas_SINTETICAS.csv
+            .local-synthetic-audit/normal/ventas_SINTETICAS.xlsx
+            .local-synthetic-audit/stress/smartorder_auditoria_SINTETICA.json
+          if-no-files-found: warn
+          retention-days: 14
