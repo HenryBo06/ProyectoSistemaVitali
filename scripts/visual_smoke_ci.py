@@ -85,7 +85,9 @@ def django_smoke(browser) -> None:
         "required_date": (date.today() + timedelta(days=2)).isoformat(),
     })
     page.goto(f"http://127.0.0.1:8000/recomendaciones/?{query}", wait_until="domcontentloaded")
-    page.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=30000)
+    page.get_by_role("heading", name="IA comercial · Qué ofrecer y qué hacer").wait_for(timeout=30000)
+    page.get_by_role("heading", name="Sugerencia de venta para este cliente").wait_for(timeout=30000)
+    page.get_by_text("Acción sugerida:", exact=False).first.wait_for(timeout=30000)
     page.get_by_text("Producto avícola LAB (simulado)", exact=True).first.wait_for(timeout=30000)
     tabs = page.locator(".seller-mode-tabs")
     if not tabs.is_visible() or tabs.bounding_box()["height"] > 51:
@@ -241,9 +243,9 @@ def streamlit_smoke(browser) -> None:
         raise AssertionError("Streamlit must show the Vitali V in its sidebar.")
     page.screenshot(path=str(OUT / "streamlit-event-dashboard-desktop.png"), full_page=True)
     page.get_by_text("Productos y pedidos", exact=True).click()
-    page.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=60000)
+    page.get_by_role("heading", name="IA comercial: qué ofrecer y qué hacer").wait_for(timeout=60000)
     page.get_by_role("heading", name="Productos para ofrecer").wait_for(timeout=60000)
-    title_size = page.get_by_role("heading", name="Productos y sugerencias").evaluate(
+    title_size = page.get_by_role("heading", name="IA comercial: qué ofrecer y qué hacer").evaluate(
         "(element) => parseFloat(getComputedStyle(element).fontSize)")
     if not (18 <= title_size <= 21):
         raise AssertionError(f"Streamlit seller page heading is oversized: {title_size}px")
@@ -422,7 +424,8 @@ def django_etl_approved_load_smoke(browser) -> None:
     query = urlencode({"client": CLIENT, "mode": "sale",
                        "required_date": date.today().isoformat()})
     seller.goto(f"http://127.0.0.1:8000/recomendaciones/?{query}", wait_until="domcontentloaded")
-    seller.get_by_role("heading", name="Productos y sugerencias").wait_for(timeout=20000)
+    seller.get_by_role("heading", name="IA comercial · Qué ofrecer y qué hacer").wait_for(timeout=20000)
+    seller.get_by_role("heading", name="Sugerencia de venta para este cliente").wait_for(timeout=20000)
     rows = seller.locator(".product-summary")
     if rows.count() != 2:
         raise AssertionError("Seller must see the two products from the approved LAB snapshot.")
