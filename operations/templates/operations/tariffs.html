@@ -8,6 +8,21 @@
     <p>Precios por cliente y presentación; los pedidos anteriores conservan sus importes.</p>
   </div>
 </div>
+{% if lab_ready %}
+<section class="panel panel-body mb-4" aria-labelledby="demo-seed-title">
+  <p class="page-eyebrow">Solo laboratorio</p>
+  <h2 id="demo-seed-title" class="h5">Completar datos simulados en un paso</h2>
+  <p>El Excel de ejemplo contiene {{ lab_pair_count }} combinaciones de cliente y producto. Esta acción crea tarifas USD de dos decimales, objetivos y conteos ficticios para las combinaciones sin configurar, sin reemplazar ninguna información existente. La asignación de clientes a vendedores se gestiona por separado.</p>
+  <p class="form-text">Las presentaciones se configuran únicamente para la demo (kg, lb o unid). No se cambia ni se valida la unidad de las ventas históricas ni se desbloquean cantidades automáticas.</p>
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="seed_lab_commercial">
+    <div class="form-check mb-3"><input class="form-check-input" type="checkbox" name="confirm_lab" id="confirm-lab" value="on" required>
+      <label class="form-check-label" for="confirm-lab">Confirmo que esta instalación usa el Excel ficticio de demostración y autorizo crear solo registros LAB faltantes.</label></div>
+    <button class="btn btn-outline-primary" type="submit">Cargar datos sintéticos faltantes</button>
+  </form>
+</section>
+{% endif %}
 <section class="panel panel-body tariff-panel mb-4">
   <h2 class="h5 mb-3">Establecer tarifa</h2>
   <form method="post" id="tariff-form">

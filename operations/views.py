@@ -52,6 +52,7 @@ from .services import (
 User = get_user_model()
 from . import odoo as odoo_service
 from . import commercial
+from . import demo_catalog
 from .models import PriceTariff, SourceSync
 
 
@@ -1209,6 +1210,8 @@ def recommendations(request):
         source_status=_source_status(dataset) if request.user.is_staff else "",
         source_name=dataset.filename if dataset and request.user.is_staff else "",
         latest_sale_date=dataset.last_date if dataset and request.user.is_staff else None,
+        demo_lab_active=bool(dataset and AccessEvent.objects.filter(
+            action="lab_commercial_seed", target=str(dataset.pk)).exists()),
     ))
 
 
@@ -1946,6 +1949,16 @@ def tariffs(request):
     products = list(dataset.lines.values_list("product", flat=True).distinct().order_by("product")) if dataset else []
     if request.method == "POST":
         try:
+            if request.POST.get("action") == "seed_lab_commercial":
+                if request.POST.get("confirm_lab") != "on":
+                    raise ValueError("Confirma que esta instancia y sus datos son exclusivamente de laboratorio.")
+                result = demo_catalog.seed_demo_commercial(dataset, request.user)
+                messages.success(
+                    request, "Datos simulados preparados: "
+                    f"{result['tariffs']} tarifas, {result['targets']} objetivos y "
+                    f"{result['counts']} conteos de laboratorio nuevos. "
+                    "Se conservaron todos los datos existentes.")
+                return redirect("tariffs")
             client, product = request.POST.get("client"), request.POST.get("product")
             if client not in clients or product not in products:
                 raise ValueError("Seleccione un cliente y producto del catálogo.")
@@ -1987,9 +2000,12 @@ def tariffs(request):
         except (ValueError, IntegrityError) as exc:
             messages.error(request, str(exc))
     rates = list(PriceTariff.objects.order_by("client", "product"))
+    lab_ready = demo_catalog.demo_allowed(dataset)
+    lab_pair_count = len(demo_catalog.demo_pairs(dataset)) if lab_ready else 0
     return TemplateResponse(request, "operations/tariffs.html", _base(
         request,
         clients=clients, products=products, tariffs=rates,
+        lab_ready=lab_ready, lab_pair_count=lab_pair_count,
         exceptions=list(OrderRequest.objects.filter(sale_confirmed=False)
                         .exclude(exception_reason="").exclude(status="cancelled")),
     ))
