@@ -127,6 +127,20 @@
             </fieldset>
             <button class="btn btn-outline-primary" type="submit">Guardar clientes</button>
           </form>
+          {% if item.is_active and lab_portfolio_available %}
+          <form method="post" class="mt-3 p-3 rounded border" aria-label="Preparación LAB de cartera para {{ item.username }}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="seed_demo_seller">
+            <input type="hidden" name="user_id" value="{{ item.id }}">
+            <div class="fw-semibold">Seeder de cartera para el vendedor (LAB)</div>
+            <p class="form-text mt-1">Asigna clientes libres del Excel ficticio activo para que {{ item.username }} pueda consultar las recomendaciones de IA. Conserva su contraseña, su cartera y las carteras de otros vendedores.</p>
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="checkbox" name="confirm_lab" value="on" id="seed-seller-{{ item.id }}" required>
+              <label class="form-check-label" for="seed-seller-{{ item.id }}">Confirmo que esta es una demostración con datos simulados.</label>
+            </div>
+            <button class="btn btn-outline-primary" type="submit">Preparar cartera LAB de {{ item.username }}</button>
+          </form>
+          {% endif %}
           {% if item.is_active and unassigned_clients %}
           <form method="post" class="mt-3">
             {% csrf_token %}

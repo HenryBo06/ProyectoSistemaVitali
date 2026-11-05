@@ -12,7 +12,7 @@ from statistics import median
 from django.db import transaction
 from django.utils import timezone
 
-from .models import AccessEvent, ClientStockCount, PriceTariff, RestockTarget, SalesDataset, SalesLine
+from .models import AccessEvent, Assignment, ClientStockCount, PriceTariff, RestockTarget, SalesDataset, SalesLine
 
 
 LAB_FILE = "Demo_Ventas_Avicola_2025_IA_Pedidos_v2.xlsx"
@@ -108,3 +108,60 @@ def seed_demo_commercial(dataset: SalesDataset, actor) -> dict[str, int]:
                          "location": LAB_LOCATION},
             )
     return count
+
+
+def seed_demo_seller_portfolio(dataset: SalesDataset, seller, actor, *, dry_run=False) -> dict:
+    """Assign only unowned clients of the current synthetic LAB source.
+
+    Preserves the existing user, password, seller ownership and all source data.
+    Safe to run again after restarting the local VM, or after reimporting the
+    demo spreadsheet. Previously assigned customers are never transferred.
+    """
+    if not demo_allowed(dataset):
+        raise ValueError("Solo se permite preparar carteras con el Excel ficticio de demostración activo.")
+    if not actor or not actor.is_active or not actor.is_staff:
+        raise ValueError("Solo administración activa puede preparar carteras LAB.")
+    if not seller or not seller.is_active or seller.is_staff:
+        raise ValueError("Selecciona una cuenta vendedora activa; no se crearán usuarios.")
+    with transaction.atomic():
+        # Rows are selected from the *currently active* source rather than
+        # fabricated, ensuring the seller can consult actual demo history.
+        clients = list(
+            dataset.lines.values_list("client", flat=True).distinct().order_by("client")
+        )
+        if not clients:
+            raise ValueError("El histórico de demostración no contiene clientes.")
+        # Lock known assignments before computing available customers.
+        assignments = list(
+            Assignment.objects.select_for_update().filter(
+                client__in=clients
+            ).values_list("client", "user_id")
+        )
+        owners = dict(assignments)
+        available = [client for client in clients if client not in owners]
+        retained = [client for client in clients if owners.get(client) == seller.pk]
+        added = 0
+        if not dry_run:
+            for client in available:
+                _, created = Assignment.objects.get_or_create(
+                    client=client, defaults={"user": seller}
+                )
+                added += int(created)
+            if added:
+                AccessEvent.objects.create(
+                    actor=actor, action="lab_seller_portfolio_seed",
+                    target=str(seller.pk),
+                    details={
+                        "dataset_id": dataset.pk, "source_sha256": dataset.digest,
+                        "seller": seller.username, "added": added,
+                        "mode": "synthetic_portfolio_preserve_other_owners",
+                    },
+                )
+        return {
+            "seller": seller.username,
+            "source_clients": len(clients),
+            "new": len(available) if dry_run else added,
+            "already_owned": len(retained),
+            "owned_by_others": len(clients) - len(retained) - len(available),
+            "dry_run": dry_run,
+        }

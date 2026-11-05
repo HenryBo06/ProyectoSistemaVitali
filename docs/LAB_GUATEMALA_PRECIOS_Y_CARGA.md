@@ -60,3 +60,20 @@ Si la migración falla, revisar `sudo docker compose --env-file .env logs --tail
 ## Alcance
 
 **Esta función es para la exposición académica/VM local.** No es una aprobación comercial de precios ni validación de inventario o predicción de demanda real.
+
+
+## Seeder de cartera para vendedores existentes
+
+Para que el vendedor no vea el selector vacío, el administrador puede ir a `/usuarios/`, localizar la cuenta vendedora activa (por ejemplo, `vendedor`), marcar la confirmación **LAB** y pulsar **Preparar cartera LAB de vendedor**. El sistema asigna los clientes *sin propietario* del histórico ficticio activo.
+
+Alternativamente, en la VM con Docker (sustituye los nombres por los reales):
+
+```bash
+cd ~/ProyectoSistemaVitali
+sudo docker compose --env-file .env exec -T web python manage.py seed_demo_seller --username vendedor --actor admin --dry-run
+sudo docker compose --env-file .env exec -T web python manage.py seed_demo_seller --username vendedor --actor admin
+```
+
+Este proceso **no crea usuarios**, no modifica contraseñas, no reemplaza históricos, no altera tarifas ni inventa nuevas ventas. Los clientes ya asignados a otro vendedor se respetan. Repetir el comando no duplica la cartera y los clientes siguen asociados tras reiniciar la VM. Si luego se importa un Excel ficticio con un conjunto distinto de clientes, vuelve a ejecutar el seeder; nunca se apropian clientes nuevos automáticamente.
+
+El seeder **da acceso al historial para la inferencia**; no modifica el cálculo de recomendaciones. Se necesitan registros de ventas para ese cliente y las unidades no verificadas continúan bajo revisión. Para probar: entrar como vendedor, abrir `/recomendaciones/`, seleccionar un cliente, confirmar producto prioritario, explicación y siguiente acción comercial.

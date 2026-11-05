@@ -1066,6 +1066,17 @@ def users(request):
                     selected = request.POST.getlist("clients") if role == "vendedor" else []
                     _assign(user, selected, client_options)
                     messages.success(request, f"Cuenta {username} creada.")
+                elif action == "seed_demo_seller":
+                    user = get_object_or_404(User, pk=request.POST.get("user_id"))
+                    if request.POST.get("confirm_lab") != "on":
+                        raise ValueError("Confirma la preparación de cartera para la demostración LAB.")
+                    result = demo_catalog.seed_demo_seller_portfolio(dataset, user, request.user)
+                    messages.success(
+                        request, "Cartera LAB de " + result["seller"] + ": "
+                        f"{result['new']} clientes nuevos, "
+                        f"{result['already_owned']} que ya tenía y "
+                        f"{result['owned_by_others']} asignados a otros vendedores. "
+                        "La cuenta y la contraseña no cambiaron.")
                 elif action == "assign_unassigned":
                     # Explicit onboarding without taking clients from another seller.
                     user = get_object_or_404(User.objects.select_for_update(),
@@ -1156,6 +1167,7 @@ def users(request):
         access_events=AccessEvent.objects.select_related("actor").order_by("-created_at")[:50],
         clients=client_options, client_options=client_options,
         unassigned_clients=unassigned_clients,
+        lab_portfolio_available=demo_catalog.demo_allowed(dataset),
     ))
 
 
