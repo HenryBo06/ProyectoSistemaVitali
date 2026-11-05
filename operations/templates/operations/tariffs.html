@@ -74,10 +74,10 @@
       <tbody>{% for rate in tariffs %}
         <tr>
           <td>{{ rate.client }}</td><td>{{ rate.product }}</td><td>{{ rate.unit }}</td>
-          <td>{% if rate.pricing_currency == "GTQ" %}Q {{ rate.quoted_price|floatformat:2 }}{% else %}$ {{ rate.unit_price|floatformat:2 }}{% endif %}</td>
-          <td>$ {{ rate.unit_price|floatformat:2 }}</td>
-          <td>{{ rate.discount_percent|floatformat:2 }} %</td>
-          <td>{% if rate.pricing_currency == "GTQ" and rate.fx_rate %}Q {{ rate.fx_rate }} / USD · {{ rate.fx_date|date:'d/m/Y' }}{% else %}—{% endif %}</td>
+          <td>{% if rate.pricing_currency == "GTQ" %}Q {{ rate.quoted_price|floatformat:'2u' }}{% else %}$ {{ rate.unit_price|floatformat:'2u' }}{% endif %}</td>
+          <td>$ {{ rate.unit_price|floatformat:'2u' }}</td>
+          <td>{{ rate.discount_percent|floatformat:'2u' }} %</td>
+          <td>{% if rate.pricing_currency == "GTQ" and rate.fx_rate %}Q {{ rate.fx_rate|floatformat:'6u' }} / USD · {{ rate.fx_date|date:'d/m/Y' }}{% else %}—{% endif %}</td>
         </tr>
       {% empty %}<tr><td colspan="7">Todavía no hay tarifas comerciales. Puedes crear una o preparar datos de laboratorio.</td></tr>{% endfor %}</tbody>
     </table>

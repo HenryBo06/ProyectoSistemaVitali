@@ -67,7 +67,7 @@
     <div><dt>Oportunidad · no es cantidad de entrega</dt><dd>{% if item.commercial_forecast != None %}{{ item.commercial_forecast|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Sin estimación{% endif %}</dd></div>
     {% if item.suggested != None %}<div><dt>Cantidad sugerida para entrega</dt><dd>{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small></dd></div>{% endif %}
     {% else %}<div><dt>Cantidad para revisión operativa</dt><dd>{% if item.suggested != None %}{{ item.suggested|floatformat:"-3" }} <small>{{ item.unit }}</small>{% else %}Decisión manual{% endif %}</dd></div>{% endif %}
-    {% if role == 'vendedor' %}<div><dt>Tarifa autorizada</dt><dd>{% if item.unit_price != None %}USD {{ item.unit_price|floatformat:2 }}{% if item.tariff_currency == 'GTQ' and item.tariff_quoted_price != None %}<small> · Q {{ item.tariff_quoted_price|floatformat:2 }} referencia</small>{% endif %}{% else %}Pendiente{% endif %}</dd></div>{% endif %}
+    {% if role == 'vendedor' %}<div><dt>Tarifa autorizada</dt><dd>{% if item.unit_price != None %}USD {{ item.unit_price|floatformat:2 }}{% if item.tariff_currency == 'GTQ' and item.tariff_quoted_price != None %}<small> · Q {{ item.tariff_quoted_price|floatformat:'2u' }} referencia</small>{% endif %}{% else %}Pendiente{% endif %}</dd></div>{% endif %}
   </dl>
   {% if maintenance_ui and item.stock_date %}<p class="form-text">Corte de inventario: {{ item.stock_date|date:'d/m/Y' }}</p>{% endif %}
   {% if item.inventory_warning %}<div class="alert alert-warning" role="status">{{ item.inventory_warning }}</div>{% endif %}

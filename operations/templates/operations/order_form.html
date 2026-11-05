@@ -70,7 +70,7 @@
       <span><strong>Oportunidad comercial · no es cantidad pedida:</strong> {% if item.commercial_forecast != None %}{{ item.commercial_forecast|floatformat:"-3" }} {{ item.unit }}{% else %}Sin estimación{% endif %}</span>
       {% if item.suggested != None %}<span><strong>Cantidad sugerida para entrega:</strong> {{ item.suggested|floatformat:"-3" }} {{ item.unit }}</span>{% endif %}
       {% endif %}
-      <span><strong>Tarifa:</strong> {% if item.unit_price != None %}USD {{ item.unit_price|floatformat:2 }}{% if item.tariff_currency == 'GTQ' and item.tariff_quoted_price != None %} · Referencia Q {{ item.tariff_quoted_price|floatformat:2 }}{% endif %}{% else %}Pendiente{% endif %}</span>
+      <span><strong>Tarifa:</strong> {% if item.unit_price != None %}USD {{ item.unit_price|floatformat:2 }}{% if item.tariff_currency == 'GTQ' and item.tariff_quoted_price != None %} · Referencia Q {{ item.tariff_quoted_price|floatformat:'2u' }}{% endif %}{% else %}Pendiente{% endif %}</span>
     </div>
     {% if item.explanation and item.suggested != None or item.explanation and item.commercial_forecast != None %}<details class="seller-explanation"><summary>Ver explicación</summary><p>{{ item.explanation }}</p></details>{% endif %}
     {% if item.client_stock != None %}<p class="helper-block mb-2">Conteo de hoy en {{ item.client_stock_location }}: {{ item.client_stock }} {{ item.unit }} · objetivo de administración: {{ item.client_stock_target }} {{ item.unit }}.</p>{% endif %}
