@@ -663,6 +663,15 @@ class PriceTariff(models.Model):
     product = models.CharField(max_length=255)
     unit = models.CharField(max_length=50)
     unit_price = models.DecimalField(max_digits=18, decimal_places=4)
+    # USD remains the accounting and order currency. Original GTQ quote and its
+    # manually reviewed FX reference are retained for commercial transparency.
+    pricing_currency = models.CharField(
+        max_length=3, choices=[("USD", "Dólar estadounidense"), ("GTQ", "Quetzal guatemalteco")],
+        default="USD",
+    )
+    quoted_price = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    fx_rate = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    fx_date = models.DateField(null=True, blank=True)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     updated_at = models.DateTimeField(auto_now=True)

@@ -1,5 +1,5 @@
 """Commercial controls shared by Django and Streamlit."""
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import date, timedelta
 from hashlib import sha256
 import json
@@ -8,6 +8,38 @@ import uuid
 from django.core import signing
 from django.utils import timezone
 from .models import PriceTariff
+
+
+def normalize_quoted_tariff(price_input, currency, fx_input="", fx_day=""):
+    """Return USD accounting price (4dp), quoted price (2dp), FX and its date.
+
+    No automatic exchange-rate discovery or settlement in GTQ is implied.
+    """
+    from datetime import date
+    from django.utils import timezone
+    from .services import nonnegative_decimal
+    if currency not in {"USD", "GTQ"}:
+        raise ValueError("Selecciona USD o GTQ para la tarifa.")
+    quoted = nonnegative_decimal(price_input, "Precio", positive=True, places=2)
+    if quoted < Decimal("0.01"):
+        raise ValueError("El precio comercial mínimo es 0.01 en la moneda elegida.")
+    if currency == "USD":
+        return quoted.quantize(Decimal("0.0001")), quoted, None, None
+    if not fx_input or not fx_day:
+        raise ValueError("Para GTQ indica el tipo de cambio y su fecha de referencia.")
+    rate = nonnegative_decimal(fx_input, "Quetzales por dólar", positive=True, places=6)
+    if not Decimal("1") <= rate <= Decimal("100"):
+        raise ValueError("Revisa el tipo de cambio GTQ por USD (de 1 a 100).")
+    try:
+        rate_date = date.fromisoformat(str(fx_day))
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Introduce una fecha de tipo de cambio válida.") from exc
+    if rate_date > timezone.localdate():
+        raise ValueError("La fecha del tipo de cambio no puede ser futura.")
+    usd = (quoted / rate).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+    if usd <= 0:
+        raise ValueError("La conversión no da un precio USD válido.")
+    return usd, quoted, rate, rate_date
 
 
 def salvadoran_event_candidates(year):
@@ -80,6 +112,10 @@ def decorate_cards(cards, client):
             and card["unit"].strip().casefold() != rate.unit.strip().casefold()
         )
         card.update(unit_price=rate.unit_price if rate else None,
+                    tariff_currency=rate.pricing_currency if rate else "USD",
+                    tariff_quoted_price=rate.quoted_price if rate else None,
+                    tariff_fx_rate=rate.fx_rate if rate else None,
+                    tariff_fx_date=rate.fx_date if rate else None,
                     discount_percent=rate.discount_percent if rate else Decimal(0),
                     order_unit=rate.unit if rate else "",
                     unit_mismatch=unit_mismatch,

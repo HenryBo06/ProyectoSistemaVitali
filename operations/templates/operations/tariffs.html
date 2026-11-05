@@ -3,39 +3,43 @@
 {% block content %}
 <div class="page-heading">
   <div>
-    <p class="page-eyebrow">Precios</p>
+    <p class="page-eyebrow">Precios comerciales</p>
     <h1>Clientes y tarifas</h1>
-    <p>Los pedidos existentes conservan su precio.</p>
+    <p>Precios por cliente y presentación; los pedidos anteriores conservan sus importes.</p>
   </div>
 </div>
 <section class="panel panel-body tariff-panel mb-4">
-  <form method="post">
+  <h2 class="h5 mb-3">Establecer tarifa</h2>
+  <form method="post" id="tariff-form">
     {% csrf_token %}
     <div class="tariff-fields">
-      <div>
-        <label class="form-label" for="rate-client">Cliente</label>
-        <select class="form-select" id="rate-client" name="client">{% for item in clients %}<option>{{ item }}</option>{% endfor %}</select>
-      </div>
-      <div>
-        <label class="form-label" for="rate-product">Producto</label>
-        <select class="form-select" id="rate-product" name="product">{% for item in products %}<option>{{ item }}</option>{% endfor %}</select>
-      </div>
-      <div>
-        <label class="form-label" for="rate-unit">Unidad</label>
-        <select class="form-select" id="rate-unit" name="unit"><option>kg</option><option>unid</option></select>
-      </div>
-      <div>
-        <label class="form-label" for="rate-price">Precio USD</label>
-        <input id="rate-price" class="form-control" type="number" step="0.0001" min="0.0001" name="unit_price" required>
-      </div>
-      <div>
-        <label class="form-label" for="rate-discount">Descuento %</label>
-        <input id="rate-discount" class="form-control" type="number" step="0.01" min="0" max="99.99" name="discount_percent" value="0" required>
-      </div>
-      <div class="tariff-submit">
-        <button class="btn btn-primary">Guardar tarifa</button>
-      </div>
+      <div><label class="form-label" for="rate-client">Cliente</label>
+        <select class="form-select" id="rate-client" name="client" required>{% for item in clients %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
+      <div><label class="form-label" for="rate-product">Producto</label>
+        <select class="form-select" id="rate-product" name="product" required>{% for item in products %}<option value="{{ item }}">{{ item }}</option>{% endfor %}</select></div>
+      <div><label class="form-label" for="rate-unit">Presentación</label>
+        <select class="form-select" id="rate-unit" name="unit"><option value="kg">kg</option><option value="lb">lb</option><option value="unid">unidad (unid)</option></select></div>
+      <div><label class="form-label" for="rate-currency">Moneda cotizada</label>
+        <select class="form-select" id="rate-currency" name="price_currency"><option value="USD">USD — dólar</option><option value="GTQ">GTQ — quetzal (Q)</option></select></div>
+      <div><label class="form-label" for="rate-price">Precio en moneda seleccionada</label>
+        <input id="rate-price" class="form-control" type="number" step="0.01" min="0.01" name="unit_price" required placeholder="10.50">
+        <small class="form-text">Máximo dos decimales; no se aceptan tarifas como 0.0006.</small></div>
+      <div><label class="form-label" for="rate-discount">Descuento %</label>
+        <input id="rate-discount" class="form-control" type="number" step="0.01" min="0" max="99.99" name="discount_percent" value="0" required></div>
     </div>
+    <fieldset class="border rounded p-3 mt-3" id="gtq-fields">
+      <legend class="float-none w-auto px-2 fs-6">Referencia cambiaria para precios en GTQ</legend>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label" for="rate-fx">GTQ por 1 USD</label>
+          <input class="form-control" id="rate-fx" name="gtq_per_usd" type="number" min="1" max="100" step="0.000001" placeholder="Consulta Banco de Guatemala"></div>
+        <div class="col-md-6"><label class="form-label" for="rate-fx-date">Fecha de referencia</label>
+          <input class="form-control" id="rate-fx-date" name="fx_date" type="date" max="{% now 'Y-m-d' %}"></div>
+      </div>
+      <p class="form-text mb-0 mt-2">Para una tarifa en GTQ se guardan el precio Q y el cambio utilizado. El importe contable y los pedidos siguen en USD.
+        <a href="https://www.banguat.gob.gt/tipo_cambio/" target="_blank" rel="noopener noreferrer">Consultar referencia oficial de Banco de Guatemala</a>.
+        No se realiza una liquidación en GTQ.</p>
+    </fieldset>
+    <button class="btn btn-primary mt-3" type="submit" {% if not clients or not products %}disabled{% endif %}>Guardar tarifa</button>
   </form>
 </section>
 <section class="panel panel-body mb-4">
@@ -45,34 +49,41 @@
     <div><a class="fw-bold" href="{% url 'order_detail' order.pk %}">Pedido {{ order.pk }} · {{ order.client }}</a> · {{ order.exception_reason }}</div>
     <a class="btn btn-sm btn-outline-primary" href="{% url 'order_detail' order.pk %}">Revisar</a>
   </div>
-  {% empty %}
-  <p class="muted mb-0">Sin excepciones pendientes.</p>
-  {% endfor %}
+  {% empty %}<p class="muted mb-0">Sin excepciones pendientes.</p>{% endfor %}
 </section>
-<div class="panel table-responsive mt-3">
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Cliente</th>
-        <th>Producto</th>
-        <th>Unidad</th>
-        <th>Precio USD</th>
-        <th>Descuento %</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for rate in tariffs %}
-      <tr>
-        <td>{{ rate.client }}</td>
-        <td>{{ rate.product }}</td>
-        <td>{{ rate.unit }}</td>
-        <td>{{ rate.unit_price }}</td>
-        <td>{{ rate.discount_percent }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="5">Define las tarifas antes de confirmar ventas.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<section class="panel mt-3">
+  <div class="panel-header"><h2 class="panel-title">Tarifas registradas</h2><p class="panel-subtitle">Precio cotizado con dos decimales. USD es la moneda contable; las tarifas en GTQ conservan su tipo de cambio.</p></div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead><tr><th>Cliente</th><th>Producto</th><th>Presentación</th><th>Cotización</th><th>Equivalente USD</th><th>Descuento</th><th>Tipo de cambio</th></tr></thead>
+      <tbody>{% for rate in tariffs %}
+        <tr>
+          <td>{{ rate.client }}</td><td>{{ rate.product }}</td><td>{{ rate.unit }}</td>
+          <td>{% if rate.pricing_currency == "GTQ" %}Q {{ rate.quoted_price|floatformat:2 }}{% else %}$ {{ rate.unit_price|floatformat:2 }}{% endif %}</td>
+          <td>$ {{ rate.unit_price|floatformat:2 }}</td>
+          <td>{{ rate.discount_percent|floatformat:2 }} %</td>
+          <td>{% if rate.pricing_currency == "GTQ" and rate.fx_rate %}Q {{ rate.fx_rate }} / USD · {{ rate.fx_date|date:'d/m/Y' }}{% else %}—{% endif %}</td>
+        </tr>
+      {% empty %}<tr><td colspan="7">Todavía no hay tarifas comerciales. Puedes crear una o preparar datos de laboratorio.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  (() => {
+    const currency = document.getElementById("rate-currency");
+    const fields = document.getElementById("gtq-fields");
+    const fx = document.getElementById("rate-fx");
+    const day = document.getElementById("rate-fx-date");
+    const sync = () => {
+      const enabled = currency.value === "GTQ";
+      fields.hidden = !enabled;
+      fx.required = day.required = enabled;
+      fx.disabled = day.disabled = !enabled;
+    };
+    currency.addEventListener("change", sync);
+    sync();
+  })();
+</script>
 {% endblock %}

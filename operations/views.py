@@ -134,6 +134,7 @@ def _invalidate_sessions(user):
 def _seller_cards(cards, *, preserve_priority: bool = False):
     fields = (
         "product", "category", "unit", "unit_confirmed", "suggested", "unit_price",
+        "tariff_currency", "tariff_quoted_price", "tariff_fx_rate", "tariff_fx_date",
         "commercial_forecast", "target_date",
         "historical_sale_days", "historical_rank", "historical_total",
         "priority_rank", "priority_method", "priority_method_label",
@@ -1949,24 +1950,49 @@ def tariffs(request):
             if client not in clients or product not in products:
                 raise ValueError("Seleccione un cliente y producto del catálogo.")
             unit = request.POST.get("unit", "").strip()
-            if unit not in {"kg", "unid"}:
-                raise ValueError("Seleccione kg o unid; otras conversiones requieren revisión.")
-            price = nonnegative_decimal(request.POST.get("unit_price"), "Precio", positive=True, places=4)
+            if unit not in {"kg", "lb", "unid"}:
+                raise ValueError("Seleccione kg, lb o unid; no se convierten presentaciones.")
+            price, quoted, fx, fx_date = commercial.normalize_quoted_tariff(
+                request.POST.get("unit_price"), request.POST.get("price_currency", "USD"),
+                request.POST.get("gtq_per_usd", ""), request.POST.get("fx_date", ""),
+            )
             discount = nonnegative_decimal(request.POST.get("discount_percent", "0"), "Descuento")
             if discount >= 100 or discount != discount.quantize(Decimal("0.01")):
                 raise ValueError("Descuento menor de 100 %, con hasta dos decimales.")
             with transaction.atomic():
-                rate, _ = PriceTariff.objects.update_or_create(client=client, product=product,
-                    defaults={"unit": unit, "unit_price": price, "discount_percent": discount, "updated_by": request.user})
-                AccessEvent.objects.create(actor=request.user, action="tariff_set", target=str(rate.pk),
-                    details={"client": client, "product": product, "price": str(price), "discount": str(discount), "unit": unit})
-            messages.success(request, "Tarifa guardada. Los pedidos existentes conservan su precio.")
+                rate, _ = PriceTariff.objects.update_or_create(
+                    client=client, product=product,
+                    defaults={
+                        "unit": unit, "unit_price": price,
+                        "pricing_currency": request.POST.get("price_currency", "USD"),
+                        "quoted_price": quoted, "fx_rate": fx, "fx_date": fx_date,
+                        "discount_percent": discount, "updated_by": request.user,
+                    },
+                )
+                AccessEvent.objects.create(
+                    actor=request.user, action="tariff_set", target=str(rate.pk),
+                    details={
+                        "client": client, "product": product, "usd_price": str(price),
+                        "quoted_price": str(quoted), "pricing_currency": rate.pricing_currency,
+                        "fx_rate": str(fx) if fx else "",
+                        "fx_date": fx_date.isoformat() if fx_date else "",
+                        "discount": str(discount), "unit": unit,
+                    },
+                )
+            messages.success(
+                request, "Tarifa guardada. El pedido se calcula en USD; "
+                "la cotización GTQ es una referencia documentada. "
+                "Los pedidos anteriores conservan sus precios.")
             return redirect("tariffs")
         except (ValueError, IntegrityError) as exc:
             messages.error(request, str(exc))
-    return TemplateResponse(request, "operations/tariffs.html", _base(request,
-        clients=clients, products=products, tariffs=list(PriceTariff.objects.order_by("client", "product")),
-        exceptions=list(OrderRequest.objects.filter(sale_confirmed=False).exclude(exception_reason="").exclude(status="cancelled"))))
+    rates = list(PriceTariff.objects.order_by("client", "product"))
+    return TemplateResponse(request, "operations/tariffs.html", _base(
+        request,
+        clients=clients, products=products, tariffs=rates,
+        exceptions=list(OrderRequest.objects.filter(sale_confirmed=False)
+                        .exclude(exception_reason="").exclude(status="cancelled")),
+    ))
 
 
 @admin_required
