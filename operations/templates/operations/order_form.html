@@ -88,7 +88,7 @@
       </div>
       <div>
         <label class="form-label" for="price-{{ forloop.counter }}">Precio USD</label>
-        <input class="form-control fixed-price" id="price-{{ forloop.counter }}" name="unit_price" type="number" min="0.0001" step="0.0001" value="{% if item.entered_unit_price %}{{ item.entered_unit_price }}{% else %}{{ item.unit_price|default_if_none:''|unlocalize }}{% endif %}" readonly>
+        <input class="form-control fixed-price" id="price-{{ forloop.counter }}" name="unit_price" type="number" min="0.01" step="0.01" value="{% if item.entered_unit_price %}{{ item.entered_unit_price }}{% elif item.unit_price != None %}{{ item.unit_price|floatformat:'2u' }}{% endif %}" readonly>
       </div>
       <div>
         <label class="form-label" for="discount-{{ forloop.counter }}">Descuento %</label>
@@ -135,7 +135,7 @@
         </div>
         <div>
           <label class="form-label" for="extra-price">Precio solicitado USD</label>
-          <input class="form-control fixed-price" id="extra-price" name="unit_price" type="number" step="0.0001" min="0.0001" value="{{ extra_line.unit_price }}" readonly>
+          <input class="form-control fixed-price" id="extra-price" name="unit_price" type="number" step="0.01" min="0.01" value="{{ extra_line.unit_price }}" readonly>
         </div>
         <div>
           <label class="form-label" for="extra-discount">Descuento solicitado %</label>

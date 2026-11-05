@@ -57,6 +57,24 @@ class DemoPricingTests(LocalCase, TestCase):
         self.assertContains(response, f"$ {usd:.2f}")
         self.assertEqual(rate.unit, "lb")
 
+    def test_cents_display_is_accepted_but_order_uses_exact_usd(self):
+        self.client.force_login(self.admin)
+        self.client.post(reverse("tariffs"), {
+            "client": "Cliente A", "product": "Alitas", "unit": "kg",
+            "unit_price": "76.41", "price_currency": "GTQ",
+            "gtq_per_usd": "7.640820",
+            "fx_date": timezone.localdate().isoformat(), "discount_percent": "0",
+        })
+        saved = PriceTariff.objects.get(client="Cliente A", product="Alitas")
+        exact, discount = commercial.commercial_price(
+            "Cliente A", "Alitas", "kg", "10.00", "0")
+        self.assertEqual(exact, saved.unit_price)
+        self.assertNotEqual(saved.unit_price, Decimal("10.00"))
+        self.assertEqual(discount, Decimal("0.00"))
+        with self.assertRaisesMessage(ValueError, "alterado"):
+            commercial.commercial_price(
+                "Cliente A", "Alitas", "kg", "10.01", "0")
+
     def test_gtq_without_explicit_rate_is_rejected(self):
         self.client.force_login(self.admin)
         response = self.client.post(reverse("tariffs"), {

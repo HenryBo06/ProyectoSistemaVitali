@@ -134,15 +134,23 @@ def commercial_price(client, product, unit, price, discount, exception_reason=""
     from .services import nonnegative_decimal
     rate = PriceTariff.objects.filter(client=client, product=product).first()
     if exception_reason:
-        price = nonnegative_decimal(price, "Precio solicitado", positive=True, places=4)
+        price = nonnegative_decimal(price, "Precio solicitado", positive=True, places=2)
         discount = nonnegative_decimal(discount or "0", "Descuento solicitado")
         if discount >= 100 or discount != discount.quantize(Decimal("0.01")):
             raise ValueError("El descuento solicitado debe ser menor de 100 %, con hasta dos decimales.")
         return price, discount
     if rate is None or rate.unit != unit:
         raise ValueError(f"{product}: administración debe definir una tarifa para esta unidad o revisar una excepción.")
-    if price not in (None, "") and nonnegative_decimal(price, "Precio", places=4) != rate.unit_price:
-        raise ValueError("La tarifa cambió o el precio fue alterado. Revise el pedido nuevamente.")
+    if price not in (None, ""):
+        visible_price = nonnegative_decimal(price, "Precio", places=2)
+        # GTQ conversion can require four USD decimals internally, while the
+        # seller must only read/submit cents. Always charge the exact stored
+        # canonical USD price, never the rounded field sent by the browser.
+        quoted_usd = rate.unit_price.quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        if visible_price != quoted_usd:
+            raise ValueError("La tarifa cambió o el precio fue alterado. Revise el pedido nuevamente.")
     if discount not in (None, "") and nonnegative_decimal(discount, "Descuento") != rate.discount_percent:
         raise ValueError("El descuento lo define administración; solicite una excepción.")
     return rate.unit_price, rate.discount_percent
