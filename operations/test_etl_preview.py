@@ -19,6 +19,14 @@ class EtlPreviewTests(TestCase):
         cls.seller = U.objects.create_user(username="etl_seller", password="secretpass-1")
 
 
+    def test_etl_page_title_has_no_stray_html(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(reverse("etl_preview"))
+        self.assertEqual(response.status_code, 200)
+        title = response.content.decode("utf-8").split("<title>", 1)[1].split("</title>", 1)[0]
+        self.assertEqual(title, "ETL · Preparar fuentes · Vitali Alimentos")
+
+
     def _sample_quick_xlsx(self, *, product="Alitas LAB"):
         from datetime import date
         book = Workbook()
