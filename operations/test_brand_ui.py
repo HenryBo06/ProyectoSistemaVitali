@@ -25,6 +25,15 @@ class BrandPresentationTests(SimpleTestCase):
         self.assertIn("vitali-symbol", streamlit)
         self.assertIn("--v-spectrum", local_css)
 
+    def test_django_uses_official_vitali_company_symbol(self):
+        official_mark = "https://www.vitalialimentos.com/wp-content/uploads/2021/06/Favicon.svg"
+        for filename in ("base.html", "login.html", "navigation.html"):
+            with self.subTest(filename=filename):
+                html = (ROOT / "operations/templates/operations" / filename).read_text(encoding="utf-8")
+                self.assertIn(official_mark, html)
+        base = (ROOT / "operations/templates/operations/base.html").read_text(encoding="utf-8")
+        self.assertIn('<link rel="icon" href="' + official_mark + '"', base)
+
     def test_django_and_streamlit_share_juice_flight_tokens(self):
         django_css = (ROOT / "operations/static/operations/css/app.css").read_text(encoding="utf-8")
         streamlit_css = (ROOT / "operations/static/operations/css/streamlit.css").read_text(encoding="utf-8")
